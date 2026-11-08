@@ -39,6 +39,8 @@ namespace
 		case EUISimIncidentType::PitLaneSpeeding: return TEXT("Speeding Boxengasse");
 		case EUISimIncidentType::UnsafeRelease: return TEXT("Unsafe Release");
 		case EUISimIncidentType::TrackLimits: return TEXT("Track Limits");
+		case EUISimIncidentType::CompoundRule: return TEXT("Mischungspflicht");
+		case EUISimIncidentType::PitEntryClosed: return TEXT("Boxengasse gesperrt");
 		}
 		return FString();
 	}
@@ -185,7 +187,7 @@ void UUIIncidentWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTim
 	else
 	{
 		const int32 Accused = Race->AccusedSide() == 0 ? Incident.Car : Incident.OtherCar;
-		VerdictLine = FString::Printf(TEXT("Urteil gegen %s [Tab wechselt]:\n0 keine  1 Verwarnung  2 5s  3 10s  4 DT  5 S&G"),
+		VerdictLine = FString::Printf(TEXT("Urteil gegen %s [Tab wechselt]:\n0 keine  1 Verwarnung  2 5s  3 10s  4 DT  5 S&G  6 DSQ"),
 			*Entries[Accused].Code);
 	}
 	ReviewControls->SetText(FText::FromString(VerdictLine +

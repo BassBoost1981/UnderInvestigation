@@ -25,6 +25,8 @@ struct RaceConfig {
     double accidentChanceScale = 1.0;
     // Chance that a lapped driver ignores the blue flags for one lapping episode.
     double blueFlagIgnoreChance = 0.05;
+    // Chance per car that the team overlooks B6.3.6 and finishes on one dry compound (M8.3).
+    double compoundRuleMissChance = 0.01;
     // Scales follow-up accidents and punctures at accident sites (M6.4); 0 isolates scenarios.
     double followUpChanceScale = 1.0;
 };
@@ -55,7 +57,9 @@ struct Command {
         Restart,         // after a red flag: restart behind the Safety Car
         IssueVerdict,    // steward decision on an incident (one per incident)
         InjectAccident,  // scenario/test tool: `car` has an accident of type `accident`
-        LappedCarsMayOvertake // under the SC: lapped cars pass and rejoin the back (B5.13.4 c, M8.2)
+        LappedCarsMayOvertake, // under the SC: lapped cars pass and rejoin the back (B5.13.4 c, M8.2)
+        ClosePitEntry,   // B1.6.4: planned stops wait, penalties are not served (M8.3)
+        OpenPitEntry
     };
     Type type = Type::SetSectorFlag;
     int sector = 0;          // SetSectorFlag only
@@ -102,7 +106,9 @@ struct Incident {
         Accident,                 // spin/off-track/crash without contact (otherCar == car); review only, no one at fault
         PitLaneSpeeding,          // otherCar == car; measure = km/h over the limit (M7.5)
         UnsafeRelease,            // car released into the path of otherCar; measure = gap in metres (M7.5)
-        TrackLimits               // otherCar == car; offence after the black-and-white flag, measure = offence number (M7.6)
+        TrackLimits,              // otherCar == car; offence after the black-and-white flag, measure = offence number (M7.6)
+        CompoundRule,             // otherCar == car; finished without two dry compounds (B6.3.6), measure = compounds used (M8.3)
+        PitEntryClosed            // otherCar == car; entered the pit lane while the entry was closed (B1.6.4 b, M8.3)
     };
     int id = 0;          // 1-based, in order of occurrence
     Type type = Type::Collision;
@@ -211,6 +217,8 @@ private:
         double boxOffset = 0.0;       // own team's pit box, metres from the line
         bool unlapping = false;       // released under the SC, passing the queue and the SC (M8.2)
         bool rejoining = false;       // past the SC, on the way to the back of the queue
+        bool forgetsCompoundRule = false; // strategy error: no second compound (M8.3)
+        bool disqualified = false;
         double stopTimer = 0.0;
         double spinTimer = 0.0; // > 0: spun, stationary
         bool retired = false;
@@ -292,6 +300,7 @@ private:
     std::array<double, 3> boundaries_{}; // s1 start, s2 start, lap length
     double time_ = 0.0;
     bool chequered_ = false;
+    bool pitEntryClosed_ = false; // B1.6.4 (M8.3)
     RaceState state_ = RaceState::Green;
     SafetyCar safetyCar_;
     std::vector<Flag> sectorFlags_;

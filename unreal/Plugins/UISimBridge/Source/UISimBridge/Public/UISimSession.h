@@ -4,7 +4,7 @@
 
 namespace uisim { class Sim; }
 
-enum class EUISimPenalty : uint8 { None, Warning, FiveSeconds, TenSeconds, DriveThrough, StopAndGo };
+enum class EUISimPenalty : uint8 { None, Warning, FiveSeconds, TenSeconds, DriveThrough, StopAndGo, Disqualification };
 
 // Unreal-side copies of the core snapshot (see core/include/uisim/Snapshot.h).
 struct FUISimCar
@@ -71,7 +71,9 @@ enum class EUISimIncidentType : uint8
 	Accident, // spin/off-track/crash without contact: Car == OtherCar, review only
 	PitLaneSpeeding, // Car == OtherCar
 	UnsafeRelease,
-	TrackLimits // Car == OtherCar, offence after the black-and-white flag
+	TrackLimits, // Car == OtherCar, offence after the black-and-white flag
+	CompoundRule, // Car == OtherCar, finished without two dry compounds
+	PitEntryClosed // Car == OtherCar, entered the closed pit lane
 };
 
 struct FUISimIncident

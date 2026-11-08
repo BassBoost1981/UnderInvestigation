@@ -78,6 +78,10 @@ ExpectedVerdict expectedVerdict(const Incident& incident) {
     }
     case Type::TrackLimits: // Penalty Guidelines: 5 s for the offence after the black-and-white flag and each further one
         return {incident.car, Penalty::FiveSeconds};
+    case Type::CompoundRule: // B6.3.6
+        return {incident.car, Penalty::Disqualification};
+    case Type::PitEntryClosed: // B1.6.4 b (data/rules: pit_entry_closed_penalty)
+        return {incident.car, RaceRules{}.pitEntryClosedPenalty};
     case Type::UnsafeRelease: // 5 s (unsafe_release_penalty_seconds), 10 s if it nearly ended in contact
         return {incident.car, incident.measure < 10.0 ? Penalty::TenSeconds : Penalty::FiveSeconds};
     }

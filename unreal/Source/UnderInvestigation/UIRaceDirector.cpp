@@ -691,7 +691,7 @@ void AUIRaceDirector::HandleReviewInput(APlayerController* Player)
 	{
 		Accused = 1 - Accused;
 	}
-	const FKey PenaltyKeys[] = {EKeys::Zero, EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::Five};
+	const FKey PenaltyKeys[] = {EKeys::Zero, EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::Five, EKeys::Six};
 	for (int32 Index = 0; Index < UE_ARRAY_COUNT(PenaltyKeys); ++Index)
 	{
 		if (Player->WasInputKeyJustPressed(PenaltyKeys[Index]) && !SimSession.VerdictFor(Incident.Id))
@@ -715,6 +715,7 @@ FString AUIRaceDirector::PenaltyName(EUISimPenalty Penalty)
 	case EUISimPenalty::TenSeconds: return TEXT("10 s");
 	case EUISimPenalty::DriveThrough: return TEXT("Drive-Through");
 	case EUISimPenalty::StopAndGo: return TEXT("Stop-and-Go");
+	case EUISimPenalty::Disqualification: return TEXT("Disqualifikation");
 	}
 	return FString();
 }

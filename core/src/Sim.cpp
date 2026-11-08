@@ -76,6 +76,7 @@ constexpr double kSpeedingMinKmh = 1.0;
 constexpr double kSpeedingMaxKmh = 20.0;
 constexpr double kReleaseWindow = 30.0;    // m: a car this close behind in the fast lane is traffic
 constexpr double kUnsafeReleaseChance = 0.25; // the team releases anyway instead of waiting
+constexpr double kClosedEntryIgnoreChance = 0.05; // a car due to stop enters the closed pit lane anyway (M8.3)
 // Track limits (M7.6).
 constexpr double kTrackLimitsChance = 0.02; // per pass of a track-limits corner, times aggression^4 (a few drivers keep running wide)
 constexpr double kTrackLimitsTyreWear = 0.02; // worn tyres: more running wide, per lap of age
@@ -165,6 +166,11 @@ Sim::Sim(Track track, std::vector<Entry> entries, RaceConfig config)
         car.compound = slot < n / 2 ? Compound::Medium : slot < n - 4 ? Compound::Hard : Compound::Soft;
         car.compoundsUsed = 1u << static_cast<int>(car.compound);
     }
+    // Strategy errors on their own random stream, so the main sequence stays as it was (M8.3).
+    Pcg32 strategyRng(config_.seed, 77u);
+    for (Car& car : cars_) {
+        car.forgetsCompoundRule = strategyRng.uniform() < config_.compoundRuleMissChance;
+    }
     for (int i = 0; i < n; ++i) {
         planNextStop(i);
     }
@@ -240,6 +246,12 @@ void Sim::applyCommands() {
         case Type::IssueVerdict:
             applyVerdict(c);
             break;
+        case Type::ClosePitEntry:
+            pitEntryClosed_ = true;
+            break;
+        case Type::OpenPitEntry:
+            pitEntryClosed_ = false;
+            break;
         case Type::LappedCarsMayOvertake:
             if (state_ == RaceState::SafetyCar && config_.rules.lappedCarsMayOvertake && !safetyCar_.inThisLap &&
                 !safetyCar_.lappedCarsReleased) {
@@ -288,6 +300,9 @@ void Sim::applyVerdict(const Command& c) {
         } else {
             car.pendingPenalty = c.penalty;
         }
+        break;
+    case Penalty::Disqualification:
+        car.disqualified = true; // removed from the results
         break;
     case Penalty::None:
     case Penalty::Warning:
@@ -560,7 +575,7 @@ Compound Sim::chooseCompound(int i) const {
         }
     }
     // B6.3.6: a second, different compound if only one was used so far.
-    if (car.compoundsUsed == (1u << static_cast<int>(choice))) {
+    if (!car.forgetsCompoundRule && car.compoundsUsed == (1u << static_cast<int>(choice))) {
         choice = choice == Compound::Hard ? Compound::Medium : Compound::Hard;
     }
     return choice;
@@ -579,7 +594,7 @@ void Sim::planNextStop(int i) {
     const double margin = rng_.uniform(kStintMarginMin, kStintMarginMax);
     const int stint = std::max(1, static_cast<int>(track_.compounds()[static_cast<int>(car.compound)].cliffLap - margin -
                                                    car.tyreWear));
-    const bool ruleMet =
+    const bool ruleMet = car.forgetsCompoundRule ||
         std::bitset<3>(car.compoundsUsed).count() >= static_cast<std::size_t>(config_.rules.minDryCompounds);
     if (remaining <= stint) {
         car.plannedStopLap = ruleMet ? std::numeric_limits<int>::max()
@@ -1095,8 +1110,14 @@ void Sim::step() {
         if (!atEntry || outOfRace(i) || car.spinTimer > 0.0) {
             continue;
         }
-        const bool serve = mustServe && state_ == RaceState::Green;
-        const bool tyres = !serve && wantsTyreStop(i);
+        const bool serve = mustServe && state_ == RaceState::Green && !pitEntryClosed_; // B1.6.4: penalties wait
+        bool tyres = !serve && wantsTyreStop(i);
+        if (tyres && pitEntryClosed_) {
+            tyres = rng_.uniform() < kClosedEntryIgnoreChance; // usually the stop waits
+            if (tyres) {
+                addIncident(Incident::Type::PitEntryClosed, i, i, 1.0);
+            }
+        }
         if (serve || tyres) {
             car.tyreStop = tyres;
             car.inPit = true;
@@ -1272,6 +1293,12 @@ void Sim::processTimingLines(int i, double previousDistance) {
             chequered_ = true;
             car.finished = true;
             car.speed = 0.0;
+            // B6.3.6: two dry compounds, otherwise disqualification (no wet tyres in the sim yet).
+            const auto used = static_cast<int>(std::bitset<3>(car.compoundsUsed).count());
+            if (used < config_.rules.minDryCompounds) {
+                addIncident(Incident::Type::CompoundRule, i, i, 1.0);
+                incidents_.back().measure = used;
+            }
         }
     }
 }
@@ -1289,6 +1316,9 @@ void Sim::buildSnapshot() {
     std::sort(rank.begin(), rank.end(), [&](int a, int b) {
         const Car& ca = cars_[a];
         const Car& cb = cars_[b];
+        if (ca.disqualified != cb.disqualified) {
+            return cb.disqualified; // listed after everyone else
+        }
         if (ca.retired != cb.retired) {
             return cb.retired;
         }
@@ -1331,6 +1361,7 @@ void Sim::buildSnapshot() {
     snapshot_.sectorFlags = sectorFlags_;
     snapshot_.safetyCarOnTrack = safetyCar_.onTrack;
     snapshot_.safetyCarInThisLap = safetyCar_.inThisLap;
+    snapshot_.pitEntryClosed = pitEntryClosed_;
     snapshot_.lappedCarsReleased = safetyCar_.lappedCarsReleased;
     snapshot_.safetyCarDistance = safetyCar_.distance;
     snapshot_.cars.resize(n);
@@ -1365,6 +1396,7 @@ void Sim::buildSnapshot() {
         cs.compoundsUsed = static_cast<int>(std::bitset<3>(car.compoundsUsed).count());
         cs.trackLimitStrikes = car.trackLimitStrikes;
         cs.unlapping = car.unlapping;
+        cs.disqualified = car.disqualified;
         cs.blackWhiteFlag = car.trackLimitStrikes >= config_.rules.trackLimitsBlackWhiteAt;
         cs.detectionGap = car.detectionGap;
         cs.gapToLeader = 0.0;

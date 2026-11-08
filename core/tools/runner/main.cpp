@@ -92,7 +92,9 @@ int main(int argc, char** argv) {
         for (const CarState& car : snap.cars) {
             const Entry& entry = sim.entries()[car.entryIndex];
             std::string result;
-            if (car.position == 1) {
+            if (car.disqualified) {
+                result = "DSQ";
+            } else if (car.position == 1) {
                 result = formatTime(car.lastLineTime);
             } else if (car.retired) {
                 result = "DNF";

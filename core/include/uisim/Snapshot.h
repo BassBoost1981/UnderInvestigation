@@ -10,7 +10,7 @@ namespace uisim {
 enum class Flag { Green, Yellow, DoubleYellow }; // per marshal sector
 enum class RaceState { Green, VirtualSafetyCar, SafetyCar, RedFlag };
 // Steward penalties, ordered by severity.
-enum class Penalty { None, Warning, FiveSeconds, TenSeconds, DriveThrough, StopAndGo };
+enum class Penalty { None, Warning, FiveSeconds, TenSeconds, DriveThrough, StopAndGo, Disqualification };
 
 // Spin: stops briefly and rejoins. OffTrack: stranded beside the track, retired.
 // Crash: stopped on the track with debris, retired.
@@ -53,6 +53,7 @@ struct CarState {
     bool inPitLane = false;
     bool spinning = false;
     bool retired = false; // out of the race (accident); classified after the finishers
+    bool disqualified = false; // removed from the results, listed last (M8.3)
     bool blueFlag = false; // being lapped: must let the faster car by
     bool overtakeActive = false; // Overtake mode (B7.2) usable this lap
     Compound compound = Compound::Medium;
@@ -75,6 +76,7 @@ struct SimSnapshot {
     RaceState state = RaceState::Green;
     std::vector<Flag> sectorFlags; // one per marshal sector
     bool safetyCarOnTrack = false;
+    bool pitEntryClosed = false; // B1.6.4 (M8.3)
     bool safetyCarInThisLap = false;
     double safetyCarDistance = 0.0; // metres, same scale as CarState::distance
     bool lappedCarsReleased = false; // "LAPPED CARS MAY NOW OVERTAKE" sent in this SC period
