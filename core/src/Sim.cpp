@@ -27,7 +27,8 @@ double acceleration(double v, double topSpeed) {
 constexpr double kFollowGap = 12.0;   // closer than this: blocked unless overtaking
 constexpr double kMinGap = 3.0;       // hard separation
 constexpr double kSlipstreamGap = 40.0;
-constexpr double kSlipstreamBonus = 0.04; // top-speed gain right behind another car
+constexpr double kSlipstreamBonus = 0.02; // top-speed gain right behind another car
+constexpr double kOvertakeBoost = 0.03;    // Overtake mode (B7.2): extra electrical power on the straights
 constexpr double kDirtyAirGap = 25.0;
 constexpr double kDirtyAirFactor = 0.99;  // corner-speed loss right behind another car
 constexpr double kFastSegment = 250.0 / 3.6;
@@ -170,6 +171,10 @@ void Sim::applyCommands() {
             if (state_ != RaceState::RedFlag) {
                 state_ = RaceState::RedFlag;
                 safetyCar_ = SafetyCar{};
+                overtakeEnabled_ = false; // re-enabled after the restart behind the Safety Car
+                for (Car& car : cars_) {
+                    car.overtakeActive = false;
+                }
                 cancelAttacks();
                 if (config_.rules.redFlagFreeTyreChange) {
                     for (Car& car : cars_) {
@@ -386,6 +391,51 @@ void Sim::updateHazards() {
                    hazards_.end());
 }
 
+void Sim::updateOvertakeMode(const std::vector<int>& racing, const std::vector<int>& ahead,
+                             const std::vector<double>& previous) {
+    const double detection = track_.overtakeDetectionLine();
+    const double activation = track_.overtakeActivationLine();
+    if (detection < 0.0 || activation < 0.0) {
+        return; // track without Overtake lines
+    }
+    // B7.2.2 c: after the Safety Car, enabled once every car has crossed the Control Line.
+    if (overtakeAfterSafetyCar_ && state_ == RaceState::Green &&
+        std::none_of(cars_.begin(), cars_.end(), [](const Car& c) { return c.holdUntilLine && !c.finished && !c.retired; })) {
+        overtakeAfterSafetyCar_ = false;
+        overtakeEnabled_ = true;
+    }
+    int leader = -1;
+    for (int i : racing) {
+        if (leader < 0 || cars_[i].distance > cars_[leader].distance) {
+            leader = i;
+        }
+    }
+    auto crossed = [&](int i, double line) {
+        const double from = track_.wrap(previous[i]);
+        const double to = track_.wrap(cars_[i].distance);
+        return from <= to ? (from < line && line <= to) : (line > from || line <= to);
+    };
+    for (int i : racing) {
+        Car& car = cars_[i];
+        if (car.inPit || car.spinTimer > 0.0 || car.retired) {
+            continue;
+        }
+        if (crossed(i, detection)) {
+            // Gap in time to the car ahead on the road when both crossed the Detection Line.
+            const int a = ahead[i];
+            car.detectionGap = a >= 0 ? time_ - cars_[a].lastDetectionTime : 1e9;
+            car.lastDetectionTime = time_;
+            car.overtakeEligible = car.detectionGap < config_.rules.overtakeDetectionGapSeconds;
+            if (i == leader && !overtakeEnabled_ && !overtakeAfterSafetyCar_ && state_ == RaceState::Green) {
+                overtakeEnabled_ = true; // B7.2.2 b: after the start, once the leader crossed the Detection Line
+            }
+        }
+        if (crossed(i, activation)) {
+            car.overtakeActive = overtakeEnabled_ && car.overtakeEligible; // B7.2.3 c
+        }
+    }
+}
+
 bool Sim::yieldsTo(int lapped, int lapper) const {
     const Car& car = cars_[lapped];
     return car.blueLapper == lapper && !car.blueIgnoring;
@@ -485,6 +535,11 @@ void Sim::deploySafetyCar(bool inThisLap) {
     safetyCar_.distance = cars_[front].distance + kSafetyCarLead;
     safetyCar_.speed = 0.6 * cars_[front].speed;
     state_ = RaceState::SafetyCar;
+    overtakeEnabled_ = false; // B7.2.2 c
+    overtakeAfterSafetyCar_ = true;
+    for (Car& car : cars_) {
+        car.overtakeActive = false;
+    }
     cancelAttacks();
     for (Car& car : cars_) {
         car.holdUntilLine = false;
@@ -595,6 +650,9 @@ double Sim::speedCap(int i, double gapAhead) const {
     const TrackSegment& seg = track_.segments()[car.segment];
     double cap = seg.speed * paceFactor(i);
     if (state_ == RaceState::Green) {
+        if (car.overtakeActive && seg.speed >= kFastSegment) {
+            cap *= 1.0 + kOvertakeBoost;
+        }
         if (gapAhead < kSlipstreamGap && seg.speed >= kFastSegment) {
             cap *= 1.0 + kSlipstreamBonus * (1.0 - gapAhead / kSlipstreamGap);
         } else if (gapAhead < kDirtyAirGap && seg.speed < kFastSegment) {
@@ -855,6 +913,7 @@ void Sim::step() {
         }
     }
 
+    updateOvertakeMode(order, ahead, previous);
     checkHazardPasses(order, previous);
     order.insert(order.end(), inPitLane.begin(), inPitLane.end());
     for (int i : order) {
@@ -1001,6 +1060,7 @@ void Sim::buildSnapshot() {
     snapshot_.chequered = chequered_;
     snapshot_.finished = allFinished;
     snapshot_.hazards = hazards_;
+    snapshot_.overtakeEnabled = overtakeEnabled_;
     snapshot_.state = state_;
     snapshot_.sectorFlags = sectorFlags_;
     snapshot_.safetyCarOnTrack = safetyCar_.onTrack;
@@ -1031,6 +1091,8 @@ void Sim::buildSnapshot() {
         cs.spinning = car.spinTimer > 0.0;
         cs.retired = car.retired;
         cs.blueFlag = car.blueLapper >= 0;
+        cs.overtakeActive = car.overtakeActive;
+        cs.detectionGap = car.detectionGap;
         cs.gapToLeader = 0.0;
         cs.lapsDown = 0;
         cs.interval = 0.0;

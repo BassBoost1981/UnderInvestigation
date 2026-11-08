@@ -198,6 +198,11 @@ private:
         bool blueReported = false;
         int blueSectors = 0;      // marshal sectors passed under blue
         int blueLastSector = -1;
+        // Overtake mode (M6.8).
+        double lastDetectionTime = -1e9;
+        double detectionGap = 1e9;
+        bool overtakeEligible = false;
+        bool overtakeActive = false;
         // Timing: sector boundaries are crossed in order s1, s2, line.
         int boundaryIndex = 0;
         int lapsCompleted = 0;
@@ -230,6 +235,7 @@ private:
     void maybeAccident(int car, double crashChance, double offTrackChance, double spinChance, bool fromCollision);
     void updateHazards();
     void updateBlueFlags(const std::vector<int>& order);
+    void updateOvertakeMode(const std::vector<int>& racing, const std::vector<int>& ahead, const std::vector<double>& previous);
     bool yieldsTo(int lapped, int lapper) const;
     bool recoveryAllowed(const HazardState& hazard) const;
     bool outOfRace(int car) const { return cars_[car].finished || cars_[car].retired; }
@@ -264,6 +270,8 @@ private:
     std::vector<Verdict> verdicts_;
     std::vector<Accident> accidents_;
     std::vector<HazardState> hazards_;
+    bool overtakeEnabled_ = false;
+    bool overtakeAfterSafetyCar_ = false; // re-enable once everyone crossed the line after the SC
     std::vector<RadioMessage> radio_;
     std::vector<RadioMessage> pendingRadio_; // reports still "on their way" (marshal delay)
     double neutralisedTime_ = 0.0;

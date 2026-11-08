@@ -51,6 +51,8 @@ struct CarState {
     bool spinning = false;
     bool retired = false; // out of the race (accident); classified after the finishers
     bool blueFlag = false; // being lapped: must let the faster car by
+    bool overtakeActive = false; // Overtake mode (B7.2) usable this lap
+    double detectionGap = 0.0;   // seconds behind the car ahead at the last Detection Line crossing
     bool finished = false;
 };
 
@@ -66,6 +68,7 @@ struct SimSnapshot {
     bool safetyCarInThisLap = false;
     double safetyCarDistance = 0.0; // metres, same scale as CarState::distance
     std::vector<HazardState> hazards; // not yet recovered
+    bool overtakeEnabled = false;     // Overtake mode enabled by race control rules (B7.2.2)
     std::vector<CarState> cars; // sorted by position
 };
 

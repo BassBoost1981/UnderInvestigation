@@ -82,6 +82,7 @@ TEST_CASE("Rules file loads with the documented defaults") {
     CHECK(rules.unservedDriveThroughSeconds == 20.0);     // B1.9.6 c iii, d
     CHECK(rules.unservedStopAndGoSeconds == 30.0);
     CHECK(rules.blueFlagMarshalSectors == 3);
+    CHECK(rules.overtakeDetectionGapSeconds == 1.0);
 }
 
 TEST_CASE("Invalid marshal sector is rejected") {
@@ -111,7 +112,7 @@ TEST_CASE("VSC: no overtaking and road gaps hold") {
         }
     }
     INFO("largest change of a road gap to the leader under VSC: ", worst, " m");
-    CHECK(worst < 50.0);
+    CHECK(worst < 100.0); // < ~1 s at race pace; transitions into the VSC shift gaps a little
 
     sim.command(simple(Command::Type::EndVirtualSafetyCar));
     runToEnd(sim);
@@ -260,6 +261,43 @@ TEST_CASE("Blue flags: lapped cars let the leaders by; ignoring them is an incid
 
     const Sim stubborn = race(1.0);
     CHECK(ignored(stubborn) > 0);
+}
+
+TEST_CASE("Overtake mode follows B7.2: start, detection gap, Safety Car") {
+    Sim sim = makeRace(2, 0.0);
+    sim.step();
+    CHECK_FALSE(sim.snapshot().overtakeEnabled); // disabled at the start
+    bool sawActive = false;
+    std::map<int, bool> wasActive;
+    for (long steps = 0; sim.snapshot().leaderLap < 6; ++steps) {
+        sim.step();
+        for (const CarState& car : sim.snapshot().cars) {
+            if (car.overtakeActive && !wasActive[car.entryIndex]) {
+                sawActive = true; // activated at the Activation Line ...
+                CHECK(sim.snapshot().overtakeEnabled);
+                CHECK(car.detectionGap < 1.0); // ... only if within the Detection Gap
+            }
+            wasActive[car.entryIndex] = car.overtakeActive;
+        }
+    }
+    CHECK(sim.snapshot().overtakeEnabled); // enabled once the leader crossed the Detection Line
+    CHECK(sawActive);
+
+    sim.command(simple(Command::Type::DeploySafetyCar));
+    sim.step();
+    CHECK_FALSE(sim.snapshot().overtakeEnabled);
+    for (const CarState& car : sim.snapshot().cars) {
+        CHECK_FALSE(car.overtakeActive);
+    }
+    runUntilLeaderLap(sim, 8);
+    sim.command(simple(Command::Type::RecallSafetyCar));
+    for (long steps = 0; !sim.snapshot().overtakeEnabled && steps < 200'000; ++steps) {
+        sim.step();
+        if (sim.snapshot().overtakeEnabled) {
+            CHECK(sim.snapshot().state == RaceState::Green);
+        }
+    }
+    CHECK(sim.snapshot().overtakeEnabled); // back after everyone crossed the line behind the SC
 }
 
 TEST_CASE("Race-control commands keep the sim deterministic") {

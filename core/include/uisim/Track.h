@@ -36,6 +36,11 @@ public:
 
     // Marshal sectors (flag zones) split the lap into equal parts.
     int marshalSectorCount() const { return marshalSectors_; }
+
+    // Overtake mode lines (B7.2, set per event): distance within the lap, < 0 = not used.
+    void setOvertakeLines(double detection, double activation) { detectionLine_ = detection; activationLine_ = activation; }
+    double overtakeDetectionLine() const { return detectionLine_; }
+    double overtakeActivationLine() const { return activationLine_; }
     int marshalSectorAt(double distance) const;
 
     const std::string& name() const { return name_; }
@@ -68,6 +73,8 @@ private:
     std::vector<TrackSegment> segments_;
     double length_ = 0.0;
     int marshalSectors_ = 20;
+    double detectionLine_ = -1.0;
+    double activationLine_ = -1.0;
     std::array<double, kSectorCount> sectorStarts_{};
     std::vector<TrackPose> centerline_;
     std::vector<double> sampleDistances_; // s of each centre-line sample

@@ -44,7 +44,11 @@ Track loadTrack(const std::filesystem::path& path) {
             seg.turn = js.value("turn_deg", 0.0) * (3.14159265358979323846 / 180.0);
             segments.push_back(seg);
         }
-        return Track(root.at("name").get<std::string>(), std::move(segments), root.value("marshal_sectors", 20));
+        Track track(root.at("name").get<std::string>(), std::move(segments), root.value("marshal_sectors", 20));
+        if (root.contains("overtake_detection_m") && root.contains("overtake_activation_m")) {
+            track.setOvertakeLines(root.at("overtake_detection_m").get<double>(), root.at("overtake_activation_m").get<double>());
+        }
+        return track;
     } catch (const json::exception& e) {
         throw std::runtime_error("Bad track data in " + displayName(path) + ": " + e.what());
     } catch (const std::invalid_argument& e) {
@@ -93,6 +97,7 @@ RaceRules loadRules(const std::filesystem::path& path) {
         rules.unservedDriveThroughSeconds = number("unserved_drive_through_seconds");
         rules.unservedStopAndGoSeconds = number("unserved_stop_and_go_seconds");
         rules.blueFlagMarshalSectors = static_cast<int>(number("blue_flag_marshal_sectors"));
+        rules.overtakeDetectionGapSeconds = number("overtake_detection_gap_seconds");
         return rules;
     } catch (const json::exception& e) {
         throw std::runtime_error("Bad rules data in " + displayName(path) + ": " + e.what());
