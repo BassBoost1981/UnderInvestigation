@@ -71,6 +71,8 @@ constexpr double kCrashLateral = 0.3;
 constexpr double kSpinLateral = 0.5;
 constexpr double kHazardSightDistance = 40.0; // drivers lift when they see a car on the track
 constexpr double kHazardCautionFactor = 0.6;
+constexpr double kRadioReportDelay = 5.0;      // marshal post to race control
+constexpr double kRecoveryRequestAfter = 15.0; // marshals radio for a flag after waiting this long
 
 // Follow-up accidents (M6.4): chance per car passing an accident site, before flag and speed factors.
 constexpr double kPassRiskCrashSite = 0.04;    // stopped car on the racing line
@@ -299,6 +301,7 @@ void Sim::startAccident(int i, AccidentType type, bool fromCollision, int caused
         car.spinTimer = rng_.uniform(kSpinMin, kSpinMax);
         car.lateral = kSpinLateral;
         ++stats_.spins;
+        radioReport(RadioMessage::Type::Spin, i, accident.id, car.distance, kRadioReportDelay, false);
         return;
     }
 
@@ -319,6 +322,30 @@ void Sim::startAccident(int i, AccidentType type, bool fromCollision, int caused
         car.lateral = rng_.uniform() < 0.5 ? kOffTrackLateral : -kOffTrackLateral;
     }
     hazards_.push_back(hazard);
+    radioReport(hazard.onTrack ? RadioMessage::Type::CarOnTrack : RadioMessage::Type::CarOffTrack, i, accident.id,
+                car.distance, kRadioReportDelay, hazard.onTrack);
+}
+
+void Sim::radioReport(RadioMessage::Type type, int car, int accidentId, double distance, double delay, bool onTrack) {
+    RadioMessage message;
+    message.time = time_ + delay;
+    message.type = type;
+    message.marshalPost = track_.marshalSectorAt(distance) + 1;
+    message.car = car;
+    message.accidentId = accidentId;
+    message.onTrack = onTrack;
+    pendingRadio_.push_back(message);
+}
+
+void Sim::deliverRadio() {
+    // Pending reports are queued in time order per delay; deliver everything that is due.
+    std::stable_sort(pendingRadio_.begin(), pendingRadio_.end(),
+                     [](const RadioMessage& a, const RadioMessage& b) { return a.time < b.time; });
+    std::size_t due = 0;
+    while (due < pendingRadio_.size() && pendingRadio_[due].time <= time_) {
+        radio_.push_back(pendingRadio_[due++]);
+    }
+    pendingRadio_.erase(pendingRadio_.begin(), pendingRadio_.begin() + static_cast<std::ptrdiff_t>(due));
 }
 
 bool Sim::recoveryAllowed(const HazardState& hazard) const {
@@ -335,6 +362,14 @@ void Sim::updateHazards() {
             hazard.recoveryLeft -= kDt;
         } else {
             hazard.waitingTime += kDt; // marshals cannot go out yet
+            if (!hazard.recoveryRequested && hazard.waitingTime >= kRecoveryRequestAfter) {
+                hazard.recoveryRequested = true;
+                radioReport(RadioMessage::Type::RecoveryNeedsFlag, hazard.car, hazard.id,
+                            hazard.trackPosition, 0.0, hazard.onTrack);
+            }
+        }
+        if (hazard.recoveryLeft <= 0.0) {
+            radioReport(RadioMessage::Type::TrackClear, hazard.car, hazard.id, hazard.trackPosition, 0.0, hazard.onTrack);
         }
     }
     hazards_.erase(std::remove_if(hazards_.begin(), hazards_.end(),
@@ -770,6 +805,7 @@ void Sim::step() {
             }
         }
     }
+    deliverRadio();
     buildSnapshot();
     if (snapshot_.finished) {
         finishTime_ = time_;

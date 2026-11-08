@@ -218,6 +218,45 @@ TEST_CASE("Unprotected accident sites cause follow-up accidents, flags prevent t
     CHECK(doubleYellow * 4 < none);
 }
 
+TEST_CASE("Marshals radio every accident with place and situation") {
+    Sim sim = makeRace(3);
+    runSeconds(sim, 400.0);
+    const int car = victim(sim);
+    inject(sim, car, AccidentType::Crash);
+    const HazardState hazard = sim.snapshot().hazards.front();
+
+    runSeconds(sim, 4.0);
+    CHECK(sim.radio().empty()); // the report takes a few seconds
+    runSeconds(sim, 2.0);
+    REQUIRE(sim.radio().size() == 1);
+    const RadioMessage& report = sim.radio().front();
+    CHECK(report.type == RadioMessage::Type::CarOnTrack);
+    CHECK(report.car == car);
+    CHECK(report.accidentId == hazard.id);
+    CHECK(report.marshalPost == hazard.marshalSector + 1);
+
+    runSeconds(sim, 15.0); // still green: marshals ask for the flag they need
+    REQUIRE(sim.radio().size() == 2);
+    CHECK(sim.radio()[1].type == RadioMessage::Type::RecoveryNeedsFlag);
+
+    setFlag(sim, hazard.marshalSector, Flag::DoubleYellow);
+    runSeconds(sim, 185.0);
+    REQUIRE(sim.radio().size() == 3);
+    CHECK(sim.radio()[2].type == RadioMessage::Type::TrackClear);
+    CHECK(sim.radio()[2].accidentId == hazard.id);
+}
+
+TEST_CASE("Spins and off-track excursions are reported too") {
+    Sim sim = makeRace(3);
+    runSeconds(sim, 400.0);
+    inject(sim, sim.snapshot().cars[4].entryIndex, AccidentType::Spin);
+    inject(sim, sim.snapshot().cars[12].entryIndex, AccidentType::OffTrack);
+    runSeconds(sim, 6.0);
+    REQUIRE(sim.radio().size() == 2);
+    CHECK(sim.radio()[0].type == RadioMessage::Type::Spin);
+    CHECK(sim.radio()[1].type == RadioMessage::Type::CarOffTrack);
+}
+
 TEST_CASE("Accidents keep the sim deterministic") {
     auto race = [] {
         Sim sim = makeRace(4);

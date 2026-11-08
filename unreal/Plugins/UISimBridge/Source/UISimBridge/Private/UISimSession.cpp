@@ -154,6 +154,19 @@ void FUISimSession::IssueVerdict(int32 IncidentId, int32 Car, EUISimPenalty Pena
 	}
 }
 
+void FUISimSession::InjectCrash(int32 Car)
+{
+	if (!Sim)
+	{
+		return;
+	}
+	uisim::Command Command;
+	Command.type = uisim::Command::Type::InjectAccident;
+	Command.car = Car;
+	Command.accident = uisim::AccidentType::Crash;
+	Sim->command(Command);
+}
+
 const FUISimVerdict* FUISimSession::VerdictFor(int32 IncidentId) const
 {
 	return VerdictList.FindByPredicate([IncidentId](const FUISimVerdict& V) { return V.IncidentId == IncidentId; });
@@ -262,6 +275,11 @@ void FUISimSession::CopySnapshot()
 	{
 		const uisim::Verdict& Verdict = Sim->verdicts()[Index];
 		VerdictList.Add({Verdict.incidentId, Verdict.car, static_cast<EUISimPenalty>(Verdict.penalty), Verdict.afterRace});
+	}
+	for (std::size_t Index = static_cast<std::size_t>(RadioList.Num()); Index < Sim->radio().size(); ++Index)
+	{
+		const uisim::RadioMessage& M = Sim->radio()[Index];
+		RadioList.Add({M.time, static_cast<EUISimRadio>(M.type), M.marshalPost, M.car, M.accidentId, M.onTrack});
 	}
 	CurrentSnapshot.bSafetyCarOnTrack = In.safetyCarOnTrack;
 	CurrentSnapshot.bSafetyCarInThisLap = In.safetyCarInThisLap;

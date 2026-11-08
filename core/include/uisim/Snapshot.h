@@ -24,6 +24,7 @@ struct HazardState {
     bool onTrack = false;     // on the racing line: recovery needs double yellow, VSC, SC or red
     double recoveryLeft = 0.0; // seconds of marshal work still needed
     double waitingTime = 0.0;  // seconds the marshals had to wait for a sufficient flag
+    bool recoveryRequested = false; // marshals have radioed for the flag they need
 };
 
 // Read-only state of one car after a sim step. Flat and copyable so the UE

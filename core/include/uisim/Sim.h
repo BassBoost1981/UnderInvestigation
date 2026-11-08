@@ -100,6 +100,23 @@ struct Incident {
     double blame = 0.0;  // ground truth: share of fault of `car`, 0..1 (rest: otherCar)
 };
 
+// Marshal radio to race control (M6.5). Structured; the presentation layer words it.
+struct RadioMessage {
+    enum class Type {
+        Spin,              // car spun, continuing
+        CarOffTrack,       // car stopped beside the track, driver ok
+        CarOnTrack,        // car stopped on the track, debris
+        RecoveryNeedsFlag, // recovery ready, waiting for the flag it needs
+        TrackClear         // car recovered, sector clear
+    };
+    double time = 0.0;  // race time when race control receives it
+    Type type = Type::Spin;
+    int marshalPost = 1; // 1-based = marshal sector + 1
+    int car = 0;         // entry index
+    int accidentId = 0;
+    bool onTrack = false; // the car stands on the racing line (recovery needs double yellow)
+};
+
 // Recorded state per tick for replays (compact: ~16 bytes per car).
 struct ReplayFrame {
     double time = 0.0;
@@ -129,6 +146,7 @@ public:
     const std::vector<Incident>& incidents() const { return incidents_; }
     const std::vector<Verdict>& verdicts() const { return verdicts_; }
     const std::vector<Accident>& accidents() const { return accidents_; }
+    const std::vector<RadioMessage>& radio() const { return radio_; } // marshal radio log, oldest first
     double neutralisedTime() const { return neutralisedTime_; } // seconds under VSC, SC or red flag
     double finishTime() const { return finishTime_; }           // race time when the last car finished
 
@@ -203,6 +221,8 @@ private:
     void movePitCar(int car);
     void convertUnservedPenalties();
     void recordReplayFrame();
+    void radioReport(RadioMessage::Type type, int car, int accidentId, double distance, double delay, bool onTrack);
+    void deliverRadio();
     double paceFactor(int car) const; // performance or the neutralised share of the reference speed
     Flag flagAt(double distance) const { return sectorFlags_[track_.marshalSectorAt(distance)]; }
     double performance(int car) const;
@@ -229,6 +249,8 @@ private:
     std::vector<Verdict> verdicts_;
     std::vector<Accident> accidents_;
     std::vector<HazardState> hazards_;
+    std::vector<RadioMessage> radio_;
+    std::vector<RadioMessage> pendingRadio_; // reports still "on their way" (marshal delay)
     double neutralisedTime_ = 0.0;
     double finishTime_ = 0.0;
     std::vector<ReplayFrame> replayFrames_;

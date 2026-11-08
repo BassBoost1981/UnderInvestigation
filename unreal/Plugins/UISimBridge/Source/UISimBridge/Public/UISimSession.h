@@ -91,6 +91,19 @@ struct FUISimRating
 	TArray<FUISimIncidentRating> Incidents;
 };
 
+enum class EUISimRadio : uint8 { Spin, CarOffTrack, CarOnTrack, RecoveryNeedsFlag, TrackClear };
+
+// Marshal radio message (core/include/uisim/Sim.h RadioMessage).
+struct FUISimRadio
+{
+	double Time = 0.0;
+	EUISimRadio Type = EUISimRadio::Spin;
+	int32 MarshalPost = 1;
+	int32 Car = 0;
+	int32 AccidentId = 0;
+	bool bOnTrack = false;
+};
+
 struct FUISimReplayCar
 {
 	double Distance = 0.0;
@@ -137,6 +150,11 @@ public:
 	// Incidents so far, in order of occurrence.
 	const TArray<FUISimIncident>& Incidents() const { return IncidentList; }
 
+	// Marshal radio log, oldest first.
+	const TArray<FUISimRadio>& Radio() const { return RadioList; }
+	// Scenario/test tool: `Car` (entry index) crashes on the racing line at the next step.
+	void InjectCrash(int32 Car);
+
 	// Steward decisions (one per incident) and the rating against the ground truth.
 	void IssueVerdict(int32 IncidentId, int32 Car, EUISimPenalty Penalty);
 	const FUISimVerdict* VerdictFor(int32 IncidentId) const;
@@ -172,4 +190,5 @@ private:
 	TArray<FUISimEntry> EntryList;
 	TArray<FUISimIncident> IncidentList;
 	TArray<FUISimVerdict> VerdictList;
+	TArray<FUISimRadio> RadioList;
 };

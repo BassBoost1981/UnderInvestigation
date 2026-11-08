@@ -17,6 +17,7 @@
 #include "UnrealClient.h"
 #include "UIIncidentWidget.h"
 #include "UIRatingWidget.h"
+#include "UIRadioWidget.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "Engine/TextureRenderTarget2D.h"
 
@@ -70,6 +71,7 @@ void AUIRaceDirector::BeginPlay()
 	FParse::Value(CommandLine, TEXT("UISimScreenshotAt="), ScreenshotAtSeconds);         // saves the game viewport
 	FParse::Value(CommandLine, TEXT("UISimReviewAt="), ReviewAtSeconds);                 // scripted incident review
 	bTestVerdicts = FParse::Param(CommandLine, TEXT("UISimTestVerdicts"));
+	FParse::Value(CommandLine, TEXT("UISimCrashAt="), CrashAtSeconds);
 
 	const FString DataDir = FPaths::ConvertRelativePathToFull(FPaths::Combine(FPaths::ProjectDir(), TEXT("../data")));
 	const FString TrackPath = FPaths::Combine(DataDir, TEXT("tracks/testring.json"));
@@ -290,6 +292,9 @@ void AUIRaceDirector::Tick(float DeltaSeconds)
 		RatingPanel = CreateWidget<UUIRatingWidget>(Player, UUIRatingWidget::StaticClass());
 		RatingPanel->SetRaceDirector(this);
 		RatingPanel->AddToViewport();
+		RadioPanel = CreateWidget<UUIRadioWidget>(Player, UUIRadioWidget::StaticClass());
+		RadioPanel->SetRaceDirector(this);
+		RadioPanel->AddToViewport();
 
 		// Free mouse: visible cursor, never locked to the window.
 		FInputModeGameAndUI InputMode;
@@ -318,6 +323,13 @@ void AUIRaceDirector::Tick(float DeltaSeconds)
 			ReviewTime = SimSession.Incidents()[Latest].Time;
 		}
 		UE_LOG(LogUISim, Display, TEXT("Scripted review: %d incidents so far"), Latest + 1);
+	}
+
+	if (CrashAtSeconds > 0.0 && SimSession.Snapshot().Time >= CrashAtSeconds && SimSession.Snapshot().Cars.Num() > 8)
+	{
+		CrashAtSeconds = 0.0;
+		SimSession.InjectCrash(SimSession.Snapshot().Cars[8].EntryIndex);
+		UE_LOG(LogUISim, Display, TEXT("Scripted crash at %s"), *FormatRaceTime(SimSession.Snapshot().Time));
 	}
 
 	while (bTestVerdicts && IncidentsHandledByTest < SimSession.Incidents().Num())

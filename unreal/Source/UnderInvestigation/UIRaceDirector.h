@@ -14,6 +14,7 @@ class UStaticMeshComponent;
 class UUITimingTowerWidget;
 class UUIIncidentWidget;
 class UUIRatingWidget;
+class UUIRadioWidget;
 class USceneCaptureComponent2D;
 class UTextureRenderTarget2D;
 
@@ -27,6 +28,7 @@ class UTextureRenderTarget2D;
 // Incidents: Up/Down select, Enter review, Space pause, Left/Right -/+1 s, C camera, Backspace end.
 // Verdict while reviewing: Tab accused car, 0 none, 1 warning, 2 5 s, 3 10 s, 4 drive-through, 5 stop-and-go.
 //               -UISimTestVerdicts (5 s for every attacker, automated checks only)
+//               -UISimCrashAt=<seconds> (scripted crash, automated checks only)
 // Keys: 1-5 cameras, +/- time scale.
 // Race control: V = VSC on/off, S = Safety Car out / in this lap, R = red flag / restart,
 //               Q/E = select marshal sector, Y = cycle its flag (green, yellow, double yellow).
@@ -136,6 +138,9 @@ private:
 	int32 IncidentsHandledByTest = 0;
 	UPROPERTY()
 	TObjectPtr<UUIRatingWidget> RatingPanel;
+	UPROPERTY()
+	TObjectPtr<UUIRadioWidget> RadioPanel;
+	double CrashAtSeconds = 0.0; // -UISimCrashAt: scripted crash of the car in P9 (checks only)
 	TArray<FUISimReplayCar> ReplayCars;
 
 	UPROPERTY()

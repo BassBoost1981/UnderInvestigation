@@ -95,7 +95,11 @@ void UUITimingTowerWidget::NativeTick(const FGeometry& MyGeometry, float InDelta
 		}
 		const FUISimCar& Car = Snapshot.Cars[Index];
 		FString Gap;
-		if (Index == 0)
+		if (Car.bRetired)
+		{
+			Gap = TEXT("OUT");
+		}
+		else if (Index == 0)
 		{
 			Gap = TEXT("Leader");
 		}
