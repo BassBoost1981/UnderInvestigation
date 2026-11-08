@@ -19,6 +19,7 @@
 #include "UIRatingWidget.h"
 #include "UIRadioWidget.h"
 #include "UITrackMapWidget.h"
+#include "UIControlPanelWidget.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "Engine/TextureRenderTarget2D.h"
 
@@ -378,6 +379,9 @@ void AUIRaceDirector::Tick(float DeltaSeconds)
 		TrackMap = CreateWidget<UUITrackMapWidget>(Player, UUITrackMapWidget::StaticClass());
 		TrackMap->SetRaceDirector(this);
 		TrackMap->AddToViewport();
+		ControlPanel = CreateWidget<UUIControlPanelWidget>(Player, UUIControlPanelWidget::StaticClass());
+		ControlPanel->SetRaceDirector(this);
+		ControlPanel->AddToViewport();
 
 		// Free mouse: visible cursor, never locked to the window.
 		FInputModeGameAndUI InputMode;
@@ -616,21 +620,26 @@ void AUIRaceDirector::HandleInput()
 		}
 	}
 
-	int32 Current = 0;
-	while (Current + 1 < UE_ARRAY_COUNT(TimeScales) && TimeScales[Current] < SimTimeScale)
-	{
-		++Current;
-	}
 	if (Player->WasInputKeyJustPressed(EKeys::Add) || Player->WasInputKeyJustPressed(EKeys::Equals))
 	{
-		Run(EUICommand::SetTimeScale, 0, TimeScales[FMath::Min(Current + 1, static_cast<int32>(UE_ARRAY_COUNT(TimeScales)) - 1)]);
+		Run(EUICommand::SetTimeScale, 0, StepTimeScale(SimTimeScale, 1));
 	}
 	if (Player->WasInputKeyJustPressed(EKeys::Subtract) || Player->WasInputKeyJustPressed(EKeys::Hyphen))
 	{
-		Run(EUICommand::SetTimeScale, 0, TimeScales[FMath::Max(Current - 1, 0)]);
+		Run(EUICommand::SetTimeScale, 0, StepTimeScale(SimTimeScale, -1));
 	}
 	HandleRaceControlInput(Player);
 	HandleReviewInput(Player);
+}
+
+double AUIRaceDirector::StepTimeScale(double Current, int32 Direction)
+{
+	int32 Index = 0;
+	while (Index + 1 < UE_ARRAY_COUNT(TimeScales) && TimeScales[Index] < Current)
+	{
+		++Index;
+	}
+	return TimeScales[FMath::Clamp(Index + (Direction > 0 ? 1 : -1), 0, static_cast<int32>(UE_ARRAY_COUNT(TimeScales)) - 1)];
 }
 
 int32 AUIRaceDirector::SelectedIncident() const

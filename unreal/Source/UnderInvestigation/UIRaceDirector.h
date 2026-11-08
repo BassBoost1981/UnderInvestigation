@@ -16,6 +16,7 @@ class UUIIncidentWidget;
 class UUIRatingWidget;
 class UUIRadioWidget;
 class UUITrackMapWidget;
+class UUIControlPanelWidget;
 class USceneCaptureComponent2D;
 class UTextureRenderTarget2D;
 class FSlateVirtualUserHandle;
@@ -85,6 +86,9 @@ public:
 	const FUISimSession& Session() const { return SimSession; }
 	FString ActiveCameraName() const;
 	double TimeScale() const { return SimTimeScale; }
+	int32 ActiveCameraIndex() const { return ActiveCamera; }
+	// Next (Direction > 0) or previous step of the time scale (1, 2, 5, 10, 20, 50).
+	static double StepTimeScale(double Current, int32 Direction);
 	int32 SelectedSector() const { return SelectedMarshalSector; }
 
 	// Incident review (M4). Index into Session().Incidents(), -1 = none yet.
@@ -197,6 +201,8 @@ private:
 	TObjectPtr<UUIRadioWidget> RadioPanel;
 	UPROPERTY()
 	TObjectPtr<UUITrackMapWidget> TrackMap;
+	UPROPERTY()
+	TObjectPtr<UUIControlPanelWidget> ControlPanel;
 	int32 FollowedEntry = -1; // TV camera target, -1 = the leader
 	double CrashAtSeconds = 0.0; // -UISimCrashAt: scripted crash of the car in P9 (checks only)
 	bool bCrashReact = false;     // -UISimCrashReact: double yellow 10 s after the scripted crash

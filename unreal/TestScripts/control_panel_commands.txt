@@ -1,0 +1,14 @@
+# M8.6 check: the commands behind control_panel_clicks.txt, without clicks.
+30 vsc
+50 vsc_end
+60 lapped
+100 sc
+250 lapped
+260 sc_in
+600 pit_close
+700 pit_open
+901 red
+1000 restart
+1100 camera 3
+1110 timescale 20
+1111 timescale 50
