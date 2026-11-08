@@ -40,7 +40,8 @@ TEST_CASE("Collisions are recorded with a ground truth") {
             const Incident& incident = sim.incidents()[k];
             CHECK(incident.id == static_cast<int>(k) + 1);
             CHECK(incident.time >= previousTime);
-            CHECK((incident.type == Incident::Type::Accident) == (incident.car == incident.otherCar));
+            const bool single = incident.type == Incident::Type::Accident || incident.type == Incident::Type::PitLaneSpeeding;
+            CHECK(single == (incident.car == incident.otherCar));
             CHECK(incident.blame >= 0.0);
             CHECK(incident.blame <= 1.0);
             previousTime = incident.time;
@@ -50,7 +51,10 @@ TEST_CASE("Collisions are recorded with a ground truth") {
         }
         const auto soloAccidents = std::count_if(sim.accidents().begin(), sim.accidents().end(),
             [](const Accident& a) { return !a.fromCollision; });
-        CHECK(sim.stats().collisions + sim.stats().flagViolations + sim.stats().blueFlagsIgnored + soloAccidents ==
+        const auto pitLane = std::count_if(sim.incidents().begin(), sim.incidents().end(), [](const Incident& v) {
+            return v.type == Incident::Type::PitLaneSpeeding || v.type == Incident::Type::UnsafeRelease;
+        });
+        CHECK(sim.stats().collisions + sim.stats().flagViolations + sim.stats().blueFlagsIgnored + soloAccidents + pitLane ==
               static_cast<long long>(sim.incidents().size()));
     }
     INFO("collisions in 5 races: ", collisions);
@@ -96,6 +100,9 @@ TEST_CASE("Replay shows the cars at the incident location") {
         // Together on the road (also when lapping: then a full lap apart in total distance).
         const double road = std::min(sim.track().wrap(a - b), sim.track().wrap(b - a));
         // Blue flags: logged after the lapped car held the faster one up for a while (within ~1 s).
-        CHECK(road < (incident.type == Incident::Type::IgnoringBlueFlags ? 100.0 : 20.0));
+        const double limit = incident.type == Incident::Type::IgnoringBlueFlags ? 100.0
+                           : incident.type == Incident::Type::UnsafeRelease    ? 30.0 // release window in the pit lane
+                                                                               : 20.0;
+        CHECK(road < limit);
     }
 }

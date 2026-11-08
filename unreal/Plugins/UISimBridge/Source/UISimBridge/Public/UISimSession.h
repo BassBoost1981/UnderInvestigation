@@ -63,7 +63,9 @@ struct FUISimSnapshot
 enum class EUISimIncidentType : uint8
 {
 	Collision, OvertakeUnderYellow, OvertakeUnderVsc, OvertakeUnderSafetyCar, OvertakeUnderRedFlag, OvertakeBeforeRestartLine, IgnoringBlueFlags,
-	Accident // spin/off-track/crash without contact: Car == OtherCar, review only
+	Accident, // spin/off-track/crash without contact: Car == OtherCar, review only
+	PitLaneSpeeding, // Car == OtherCar
+	UnsafeRelease
 };
 
 struct FUISimIncident

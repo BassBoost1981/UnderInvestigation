@@ -68,6 +68,12 @@ constexpr double kSlowStopMax = 8.0;
 constexpr double kStintMarginMin = 1.0;    // laps before the cliff a team plans to stop
 constexpr double kStintMarginMax = 4.0;
 constexpr int kNeutralisedStopWindow = 10; // under SC/VSC a stop this many laps early is worth it
+// Pit lane offences (M7.5).
+constexpr double kSpeedingChance = 0.02;   // limiter fault per pit lane visit
+constexpr double kSpeedingMinKmh = 1.0;
+constexpr double kSpeedingMaxKmh = 20.0;
+constexpr double kReleaseWindow = 30.0;    // m: a car this close behind in the fast lane is traffic
+constexpr double kUnsafeReleaseChance = 0.25; // the team releases anyway instead of waiting
 
 // Accidents (M6.3). Chances per driver error / per collision (for the car that was hit).
 constexpr double kErrorCrashChance = 0.02;
@@ -567,13 +573,45 @@ bool Sim::wantsTyreStop(int i) const {
            (neutralised && car.plannedStopLap - inLap <= kNeutralisedStopWindow && config_.laps - inLap > 3);
 }
 
+// End of a stop: a car approaching in the fast lane means wait, unless the team gets it wrong.
+void Sim::releaseFromBox(int i) {
+    Car& car = cars_[i];
+    int traffic = -1;
+    double gap = kReleaseWindow;
+    for (int j = 0; j < static_cast<int>(cars_.size()); ++j) {
+        const Car& other = cars_[j];
+        if (j == i || !other.inPit || other.stopTimer > 0.0 || other.speed < 1.0) {
+            continue;
+        }
+        const double behind = track_.wrap(car.distance - other.distance);
+        if (behind > 0.0 && behind < gap) {
+            gap = behind;
+            traffic = j;
+        }
+    }
+    if (traffic < 0) {
+        return;
+    }
+    if (!car.releaseChecked && rng_.uniform() < kUnsafeReleaseChance) {
+        car.releaseChecked = true;
+        addIncident(Incident::Type::UnsafeRelease, i, traffic, 1.0); // B1.6.2 a: the team's responsibility
+        incidents_.back().measure = gap;
+        return;
+    }
+    car.releaseChecked = true;
+    car.stopTimer = kDt; // hold the car until the lane is clear
+}
+
 void Sim::movePitCar(int i) {
     Car& car = cars_[i];
     const double lapLength = track_.length();
-    const double pitSpeed = config_.rules.pitLaneSpeedKmh / 3.6;
+    const double pitSpeed = (config_.rules.pitLaneSpeedKmh + car.pitSpeedExcess) / 3.6;
     const double before = track_.wrap(car.distance);
     if (car.stopTimer > 0.0) {
         car.stopTimer = std::max(0.0, car.stopTimer - kDt);
+        if (car.stopTimer == 0.0) {
+            releaseFromBox(i);
+        }
         car.speed = 0.0;
     } else if (car.speed > pitSpeed) {
         car.speed = std::max(pitSpeed, car.speed - kBrake * kDt);
@@ -607,6 +645,11 @@ void Sim::movePitCar(int i) {
         planNextStop(i);
     }
     if (before < kPitExitAfterLine && after >= kPitExitAfterLine) {
+        if (car.pitSpeedExcess > 0.0) { // measured over the whole pit lane
+            addIncident(Incident::Type::PitLaneSpeeding, i, i, 1.0);
+            incidents_.back().measure = car.pitSpeedExcess;
+            car.pitSpeedExcess = 0.0;
+        }
         car.inPit = false;
         car.pendingPenalty = Penalty::None; // served
         car.lateral = 0.0;
@@ -972,6 +1015,8 @@ void Sim::step() {
             car.tyreStop = tyres;
             car.inPit = true;
             car.stopDone = false;
+            car.releaseChecked = false;
+            car.pitSpeedExcess = rng_.uniform() < kSpeedingChance ? rng_.uniform(kSpeedingMinKmh, kSpeedingMaxKmh) : 0.0;
             car.overtakeTarget = -1;
             car.lateral = kPitLateral;
         }

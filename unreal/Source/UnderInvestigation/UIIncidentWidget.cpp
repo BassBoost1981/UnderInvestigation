@@ -36,6 +36,8 @@ namespace
 		case EUISimIncidentType::OvertakeBeforeRestartLine: return TEXT("Ueberholt vor Linie");
 		case EUISimIncidentType::IgnoringBlueFlags: return TEXT("Blau ignoriert");
 		case EUISimIncidentType::Accident: return TEXT("Unfall");
+		case EUISimIncidentType::PitLaneSpeeding: return TEXT("Speeding Boxengasse");
+		case EUISimIncidentType::UnsafeRelease: return TEXT("Unsafe Release");
 		}
 		return FString();
 	}

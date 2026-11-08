@@ -97,7 +97,9 @@ struct Incident {
         OvertakeUnderRedFlag,
         OvertakeBeforeRestartLine,
         IgnoringBlueFlags,        // lapped car did not let the faster car by in time
-        Accident                  // spin/off-track/crash without contact (otherCar == car); review only, no one at fault
+        Accident,                 // spin/off-track/crash without contact (otherCar == car); review only, no one at fault
+        PitLaneSpeeding,          // otherCar == car; measure = km/h over the limit (M7.5)
+        UnsafeRelease             // car released into the path of otherCar; measure = gap in metres (M7.5)
     };
     int id = 0;          // 1-based, in order of occurrence
     Type type = Type::Collision;
@@ -106,6 +108,7 @@ struct Incident {
     int otherCar = 0;    // entry index: defender / car passed
     double distance = 0.0; // total distance of `car` at the incident
     double blame = 0.0;  // ground truth: share of fault of `car`, 0..1 (rest: otherCar)
+    double measure = 0.0; // ground truth detail: speeding km/h over the limit, unsafe release gap in metres
 };
 
 // Marshal radio to race control (M6.5). Structured; the presentation layer words it.
@@ -197,6 +200,8 @@ private:
         int stops = 0;
         unsigned compoundsUsed = 0; // bit per Compound (B6.3.6)
         double servablePenalty = 0.0; // 5 s / 10 s still to serve at the next stop (B1.9.6 b)
+        double pitSpeedExcess = 0.0;  // km/h over the limit on this pit lane visit (limiter fault)
+        bool releaseChecked = false;  // the team decided about traffic at the end of this stop
         double stopTimer = 0.0;
         double spinTimer = 0.0; // > 0: spun, stationary
         bool retired = false;
@@ -252,6 +257,7 @@ private:
     void fitTyres(int car, Compound compound);
     void planNextStop(int car);
     bool wantsTyreStop(int car) const;
+    void releaseFromBox(int car);
     void convertUnservedPenalties();
     void recordReplayFrame();
     void radioReport(RadioMessage::Type type, int car, int accidentId, double distance, double delay, bool onTrack);
