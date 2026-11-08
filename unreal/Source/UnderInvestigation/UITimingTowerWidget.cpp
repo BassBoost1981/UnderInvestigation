@@ -117,6 +117,10 @@ void UUITimingTowerWidget::NativeTick(const FGeometry& MyGeometry, float InDelta
 		{
 			Penalty = TEXT("PIT");
 		}
+		else if (Car.bBlueFlag)
+		{
+			Penalty = TEXT("BLUE");
+		}
 		else if (Car.PendingPenalty == EUISimPenalty::DriveThrough)
 		{
 			Penalty = TEXT("DT");

@@ -16,6 +16,7 @@ struct RaceRules {
     double stopAndGoSeconds = 10.0;
     double unservedDriveThroughSeconds = 20.0; // added if not served before the end / imposed afterwards
     double unservedStopAndGoSeconds = 30.0;
+    int blueFlagMarshalSectors = 3; // a lapped car must let the faster car by within this many sectors
 };
 
 } // namespace uisim

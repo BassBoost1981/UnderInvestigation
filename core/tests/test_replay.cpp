@@ -48,7 +48,8 @@ TEST_CASE("Collisions are recorded with a ground truth") {
                 ++collisions;
             }
         }
-        CHECK(sim.stats().collisions + sim.stats().flagViolations == static_cast<int>(sim.incidents().size()));
+        CHECK(sim.stats().collisions + sim.stats().flagViolations + sim.stats().blueFlagsIgnored ==
+              static_cast<int>(sim.incidents().size()));
     }
     INFO("collisions in 5 races: ", collisions);
     CHECK(collisions >= 5);  // something to investigate in a typical race

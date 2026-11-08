@@ -13,6 +13,7 @@ struct FUISimCar
 	EUISimPenalty PendingPenalty = EUISimPenalty::None;
 	bool bInPitLane = false;
 	bool bRetired = false;
+	bool bBlueFlag = false;
 	int32 EntryIndex = 0;
 	int32 Position = 0;
 	int32 GridPosition = 0;
@@ -49,7 +50,7 @@ struct FUISimSnapshot
 
 enum class EUISimIncidentType : uint8
 {
-	Collision, OvertakeUnderYellow, OvertakeUnderVsc, OvertakeUnderSafetyCar, OvertakeUnderRedFlag, OvertakeBeforeRestartLine
+	Collision, OvertakeUnderYellow, OvertakeUnderVsc, OvertakeUnderSafetyCar, OvertakeUnderRedFlag, OvertakeBeforeRestartLine, IgnoringBlueFlags
 };
 
 struct FUISimIncident

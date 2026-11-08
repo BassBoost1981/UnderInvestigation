@@ -74,6 +74,10 @@ constexpr double kHazardCautionFactor = 0.6;
 constexpr double kRadioReportDelay = 5.0;      // marshal post to race control
 constexpr double kRecoveryRequestAfter = 15.0; // marshals radio for a flag after waiting this long
 
+// Blue flags (M6.7).
+constexpr double kBlueFlagRange = 80.0;       // metres: a lapping car this close behind gets a blue flag shown
+constexpr double kBlueYieldFactor = 0.93;     // the lapped car lifts to let it by
+
 // Follow-up accidents (M6.4): chance per car passing an accident site, before flag and speed factors.
 constexpr double kPassRiskCrashSite = 0.04;    // stopped car on the racing line
 constexpr double kPassRiskOffTrackSite = 0.01; // stranded beside the track
@@ -382,6 +386,49 @@ void Sim::updateHazards() {
                    hazards_.end());
 }
 
+bool Sim::yieldsTo(int lapped, int lapper) const {
+    const Car& car = cars_[lapped];
+    return car.blueLapper == lapper && !car.blueIgnoring;
+}
+
+void Sim::updateBlueFlags(const std::vector<int>& order) {
+    const int m = static_cast<int>(order.size());
+    const double lapLength = track_.length();
+    for (int k = 0; k < m; ++k) {
+        Car& car = cars_[order[k]];
+        int lapper = -1;
+        if (m > 1 && state_ == RaceState::Green) {
+            const int behind = order[(k - 1 + m) % m]; // physically behind on the road
+            const Car& other = cars_[behind];
+            const bool close = track_.wrap(car.distance - other.distance) < kBlueFlagRange;
+            const bool lapping = other.distance - car.distance > lapLength / 2.0; // at least a lap ahead in the race
+            if (close && lapping) {
+                lapper = behind;
+            }
+        }
+        if (lapper < 0) {
+            car.blueLapper = -1;
+            continue;
+        }
+        const int sector = track_.marshalSectorAt(car.distance);
+        if (car.blueLapper != lapper) { // a new blue flag episode
+            car.blueLapper = lapper;
+            car.blueIgnoring = rng_.uniform() < config_.blueFlagIgnoreChance;
+            car.blueReported = false;
+            car.blueSectors = 0;
+            car.blueLastSector = sector;
+        } else if (sector != car.blueLastSector) {
+            ++car.blueSectors;
+            car.blueLastSector = sector;
+        }
+        if (car.blueIgnoring && !car.blueReported && car.blueSectors >= config_.rules.blueFlagMarshalSectors) {
+            car.blueReported = true;
+            ++stats_.blueFlagsIgnored;
+            addIncident(Incident::Type::IgnoringBlueFlags, order[k], lapper, 1.0); // entirely the lapped driver's fault
+        }
+    }
+}
+
 void Sim::movePitCar(int i) {
     Car& car = cars_[i];
     const double lapLength = track_.length();
@@ -563,6 +610,9 @@ double Sim::speedCap(int i, double gapAhead) const {
     if (car.errorTimer > 0.0) {
         cap *= kErrorSpeedFactor;
     }
+    if (car.blueLapper >= 0 && !car.blueIgnoring) {
+        cap *= kBlueYieldFactor; // blue flag: let the faster car by
+    }
     for (const HazardState& hazard : hazards_) {
         if (hazard.onTrack && track_.wrap(hazard.trackPosition - car.distance) < kHazardSightDistance) {
             cap *= kHazardCautionFactor; // a car on the racing line ahead: lift and go around
@@ -670,6 +720,8 @@ void Sim::step() {
         }
     }
 
+    updateBlueFlags(order);
+
     // Phase A: what each driver wants to do on a free track.
     std::vector<double> cap(n, 0.0);
     std::vector<double> speed(n, 0.0);
@@ -697,6 +749,11 @@ void Sim::step() {
             if (scGap < kFollowGap) {
                 speed[i] = std::min(speed[i], safetyCar_.speed);
             }
+            continue;
+        }
+        if (a >= 0 && car.overtakeTarget != a && gap[i] < kFollowGap && yieldsTo(a, i)) {
+            car.overtakeTarget = a; // the lapped car moves over: a free pass, no contest
+            car.overtakeTimer = kOvertakeTimeout;
             continue;
         }
         if (a < 0 || car.overtakeTarget == a) {
@@ -826,7 +883,7 @@ void Sim::onSegmentEntered(int i) {
 
     // An attack is decided at corner entry: alongside = contest the corner, else give up.
     // A contested corner can end in contact.
-    if (car.overtakeTarget >= 0 && seg.speed < kFastSegment) {
+    if (car.overtakeTarget >= 0 && seg.speed < kFastSegment && !yieldsTo(car.overtakeTarget, i)) {
         const int target = car.overtakeTarget;
         Car& defender = cars_[target];
         const double gap = track_.wrap(defender.distance - car.distance);
@@ -973,6 +1030,7 @@ void Sim::buildSnapshot() {
         cs.inPitLane = car.inPit;
         cs.spinning = car.spinTimer > 0.0;
         cs.retired = car.retired;
+        cs.blueFlag = car.blueLapper >= 0;
         cs.gapToLeader = 0.0;
         cs.lapsDown = 0;
         cs.interval = 0.0;

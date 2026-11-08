@@ -92,6 +92,7 @@ RaceRules loadRules(const std::filesystem::path& path) {
         rules.stopAndGoSeconds = number("stop_and_go_seconds");
         rules.unservedDriveThroughSeconds = number("unserved_drive_through_seconds");
         rules.unservedStopAndGoSeconds = number("unserved_stop_and_go_seconds");
+        rules.blueFlagMarshalSectors = static_cast<int>(number("blue_flag_marshal_sectors"));
         return rules;
     } catch (const json::exception& e) {
         throw std::runtime_error("Bad rules data in " + displayName(path) + ": " + e.what());

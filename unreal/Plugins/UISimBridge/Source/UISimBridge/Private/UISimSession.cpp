@@ -309,5 +309,6 @@ void FUISimSession::CopySnapshot()
 		Out.PendingPenalty = static_cast<EUISimPenalty>(Car.pendingPenalty);
 		Out.bInPitLane = Car.inPitLane;
 		Out.bRetired = Car.retired;
+		Out.bBlueFlag = Car.blueFlag;
 	}
 }

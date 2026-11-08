@@ -34,6 +34,7 @@ namespace
 		case EUISimIncidentType::OvertakeUnderSafetyCar: return TEXT("Ueberholt unter SC");
 		case EUISimIncidentType::OvertakeUnderRedFlag: return TEXT("Ueberholt unter Rot");
 		case EUISimIncidentType::OvertakeBeforeRestartLine: return TEXT("Ueberholt vor Linie");
+		case EUISimIncidentType::IgnoringBlueFlags: return TEXT("Blau ignoriert");
 		}
 		return FString();
 	}

@@ -81,6 +81,7 @@ TEST_CASE("Rules file loads with the documented defaults") {
     CHECK(rules.stopAndGoSeconds == defaults.stopAndGoSeconds);
     CHECK(rules.unservedDriveThroughSeconds == 20.0);     // B1.9.6 c iii, d
     CHECK(rules.unservedStopAndGoSeconds == 30.0);
+    CHECK(rules.blueFlagMarshalSectors == 3);
 }
 
 TEST_CASE("Invalid marshal sector is rejected") {
@@ -213,6 +214,52 @@ TEST_CASE("Yellow flags: no overtaking; rule-breakers are recorded") {
         CHECK(yellowPasses > 0);
         CHECK(sim.stats().flagViolations == yellowPasses);
     }
+}
+
+TEST_CASE("Blue flags: lapped cars let the leaders by; ignoring them is an incident") {
+    auto race = [](double ignoreChance) {
+        RaceConfig config;
+        config.laps = 50;
+        config.seed = 2;
+        config.accidentChanceScale = 0.0; // keep the field intact
+        config.followUpChanceScale = 0.0;
+        config.blueFlagIgnoreChance = ignoreChance;
+        config.rules = loadRules(dataDir() / "rules" / "fia-f1-2026.json");
+        Sim sim(loadTrack(dataDir() / "tracks" / "testring.json"),
+                loadEntries(dataDir() / "entries" / "fictional-grid.json"), config);
+        bool sawBlue = false;
+        for (long steps = 0; !sim.finished() && steps < 2'000'000; ++steps) {
+            sim.step();
+            for (const CarState& car : sim.snapshot().cars) {
+                sawBlue = sawBlue || car.blueFlag;
+            }
+        }
+        REQUIRE(sim.finished());
+        CHECK(sawBlue);
+        return sim;
+    };
+    auto ignored = [](const Sim& sim) {
+        int count = 0;
+        for (const Incident& incident : sim.incidents()) {
+            if (incident.type == Incident::Type::IgnoringBlueFlags) {
+                ++count;
+                CHECK(incident.blame == 1.0);
+                CHECK(sim.snapshot().cars.size() > 0);
+            }
+        }
+        return count;
+    };
+
+    const Sim disciplined = race(0.0);
+    CHECK(ignored(disciplined) == 0);
+    int lapped = 0;
+    for (const CarState& car : disciplined.snapshot().cars) {
+        lapped += car.lapsDown > 0 ? 1 : 0;
+    }
+    CHECK(lapped > 0); // the leaders did get past the backmarkers
+
+    const Sim stubborn = race(1.0);
+    CHECK(ignored(stubborn) > 0);
 }
 
 TEST_CASE("Race-control commands keep the sim deterministic") {

@@ -23,6 +23,8 @@ struct RaceConfig {
     // Scales the chance that errors and collisions escalate into accidents (0 = none;
     // for tests and scenarios that place accidents themselves).
     double accidentChanceScale = 1.0;
+    // Chance that a lapped driver ignores the blue flags for one lapping episode.
+    double blueFlagIgnoreChance = 0.05;
     // Scales follow-up accidents and punctures at accident sites (M6.4); 0 isolates scenarios.
     double followUpChanceScale = 1.0;
 };
@@ -37,6 +39,7 @@ struct RaceStats {
     int accidents = 0; // off-track and crashes (retirements)
     int followUpAccidents = 0; // spins/crashes at an insufficiently flagged accident site
     int punctures = 0;         // from debris
+    int blueFlagsIgnored = 0;
 };
 
 // Race-control action, applied at the start of the next step.
@@ -92,7 +95,8 @@ struct Incident {
         OvertakeUnderVsc,
         OvertakeUnderSafetyCar,
         OvertakeUnderRedFlag,
-        OvertakeBeforeRestartLine
+        OvertakeBeforeRestartLine,
+        IgnoringBlueFlags         // lapped car did not let the faster car by in time
     };
     int id = 0;          // 1-based, in order of occurrence
     Type type = Type::Collision;
@@ -188,6 +192,12 @@ private:
         double stopTimer = 0.0;
         double spinTimer = 0.0; // > 0: spun, stationary
         bool retired = false;
+        // Blue flags (M6.7): being lapped by `blueLapper`.
+        int blueLapper = -1;
+        bool blueIgnoring = false;
+        bool blueReported = false;
+        int blueSectors = 0;      // marshal sectors passed under blue
+        int blueLastSector = -1;
         // Timing: sector boundaries are crossed in order s1, s2, line.
         int boundaryIndex = 0;
         int lapsCompleted = 0;
@@ -219,6 +229,8 @@ private:
     void checkHazardPasses(const std::vector<int>& cars, const std::vector<double>& previousDistance);
     void maybeAccident(int car, double crashChance, double offTrackChance, double spinChance, bool fromCollision);
     void updateHazards();
+    void updateBlueFlags(const std::vector<int>& order);
+    bool yieldsTo(int lapped, int lapper) const;
     bool recoveryAllowed(const HazardState& hazard) const;
     bool outOfRace(int car) const { return cars_[car].finished || cars_[car].retired; }
     void movePitCar(int car);

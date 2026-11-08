@@ -62,6 +62,8 @@ ExpectedVerdict expectedVerdict(const Incident& incident) {
         return {incident.car, Penalty::TenSeconds};
     case Type::OvertakeUnderRedFlag:
         return {incident.car, Penalty::DriveThrough};
+    case Type::IgnoringBlueFlags:
+        return {incident.car, Penalty::FiveSeconds};
     case Type::OvertakeBeforeRestartLine:
         return {incident.car, Penalty::FiveSeconds};
     }

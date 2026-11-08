@@ -50,6 +50,7 @@ struct CarState {
     bool inPitLane = false;
     bool spinning = false;
     bool retired = false; // out of the race (accident); classified after the finishers
+    bool blueFlag = false; // being lapped: must let the faster car by
     bool finished = false;
 };
 
