@@ -15,6 +15,11 @@ struct FUISimCar
 	bool bRetired = false;
 	bool bBlueFlag = false;
 	bool bOvertakeActive = false; // Overtake mode (B7.2) usable this lap
+	int32 Compound = 1;      // 0 soft, 1 medium, 2 hard
+	int32 TyreAge = 0;       // laps on the current set
+	int32 PitStops = 0;
+	int32 TrackLimitStrikes = 0;
+	bool bBlackWhiteFlag = false;
 	int32 EntryIndex = 0;
 	int32 Position = 0;
 	int32 GridPosition = 0;
@@ -165,6 +170,8 @@ public:
 	int32 Overtakes() const;
 	int32 FlagViolations() const;
 	int32 MarshalSectorCount() const;
+	// Metres from the line of the pit box of an entry's team.
+	double BoxOffset(int32 EntryIndex) const;
 
 	// Incidents so far, in order of occurrence.
 	const TArray<FUISimIncident>& Incidents() const { return IncidentList; }

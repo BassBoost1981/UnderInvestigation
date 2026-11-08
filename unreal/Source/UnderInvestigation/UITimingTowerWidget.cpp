@@ -137,8 +137,15 @@ void UUITimingTowerWidget::NativeTick(const FGeometry& MyGeometry, float InDelta
 		{
 			Penalty += FString::Printf(TEXT("+%.0fs"), Car.TimePenalty);
 		}
-		Row->SetText(FText::FromString(FString::Printf(TEXT("%2d %-3s %9s  %9s %s %s"),
-			Car.Position, *Entries[Car.EntryIndex].Code, *Gap, *Last, Car.bFinished ? TEXT("F") : TEXT(" "), *Penalty)));
+		static const TCHAR* const CompoundLetters[] = {TEXT("S"), TEXT("M"), TEXT("H")};
+		const FString Tyre = FString::Printf(TEXT("%s%-2d %d"), CompoundLetters[FMath::Clamp(Car.Compound, 0, 2)], Car.TyreAge,
+			Car.PitStops);
+		if (Car.bBlackWhiteFlag)
+		{
+			Penalty += FString::Printf(TEXT(" SW%d"), Car.TrackLimitStrikes); // black-and-white flag, track limits
+		}
+		Row->SetText(FText::FromString(FString::Printf(TEXT("%2d %-3s %9s  %9s %s %s %s"),
+			Car.Position, *Entries[Car.EntryIndex].Code, *Gap, *Last, *Tyre, Car.bFinished ? TEXT("F") : TEXT(" "), *Penalty)));
 		Row->SetVisibility(ESlateVisibility::HitTestInvisible);
 	}
 

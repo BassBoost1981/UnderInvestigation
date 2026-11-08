@@ -316,5 +316,15 @@ void FUISimSession::CopySnapshot()
 		Out.bRetired = Car.retired;
 		Out.bBlueFlag = Car.blueFlag;
 		Out.bOvertakeActive = Car.overtakeActive;
+		Out.Compound = static_cast<int32>(Car.compound);
+		Out.TyreAge = Car.tyreAge;
+		Out.PitStops = Car.pitStops;
+		Out.TrackLimitStrikes = Car.trackLimitStrikes;
+		Out.bBlackWhiteFlag = Car.blackWhiteFlag;
 	}
+}
+
+double FUISimSession::BoxOffset(int32 EntryIndex) const
+{
+	return Sim ? Sim->boxOffset(EntryIndex) : 0.0;
 }

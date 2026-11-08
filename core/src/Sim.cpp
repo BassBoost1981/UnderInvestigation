@@ -68,6 +68,7 @@ constexpr double kSlowStopMax = 8.0;
 constexpr double kStintMarginMin = 1.0;    // laps before the cliff a team plans to stop
 constexpr double kStintMarginMax = 4.0;
 constexpr int kNeutralisedStopWindow = 10; // under SC/VSC a stop this many laps early is worth it
+constexpr double kBoxSpacing = 12.0;       // metres between team boxes, centred on the line
 // Pit lane offences (M7.5).
 constexpr double kSpeedingChance = 0.02;   // limiter fault per pit lane visit
 constexpr double kSpeedingMinKmh = 1.0;
@@ -139,6 +140,19 @@ Sim::Sim(Track track, std::vector<Entry> entries, RaceConfig config)
     });
 
     cars_.resize(n);
+    std::vector<std::string> teams; // in order of appearance; one pit box each
+    std::vector<int> teamIndex(n);
+    for (int i = 0; i < n; ++i) {
+        auto it = std::find(teams.begin(), teams.end(), entries_[i].team);
+        if (it == teams.end()) {
+            teams.push_back(entries_[i].team);
+            it = teams.end() - 1;
+        }
+        teamIndex[i] = static_cast<int>(it - teams.begin());
+    }
+    for (int i = 0; i < n; ++i) {
+        cars_[i].boxOffset = (teamIndex[i] - (static_cast<double>(teams.size()) - 1.0) / 2.0) * kBoxSpacing;
+    }
     for (int slot = 0; slot < n; ++slot) {
         Car& car = cars_[rating[slot].second];
         car.gridPosition = slot + 1;
@@ -626,13 +640,17 @@ void Sim::movePitCar(int i) {
     const double after = track_.wrap(car.distance);
 
     // Stop-and-go: the box is at the line.
-    if (car.pendingPenalty == Penalty::StopAndGo && !car.stopDone && before > lapLength / 2.0 && after < lapLength / 2.0) {
+    // The stop is at the team's own box.
+    const double boxBefore = track_.wrap(before - car.boxOffset);
+    const double boxAfter = track_.wrap(after - car.boxOffset);
+    const bool atBox = boxBefore > lapLength / 2.0 && boxAfter < lapLength / 2.0;
+    if (car.pendingPenalty == Penalty::StopAndGo && !car.stopDone && atBox) {
         car.stopDone = true;
         car.stopTimer = config_.rules.stopAndGoSeconds;
         car.speed = 0.0;
     }
     // Tyre stop: the box is at the line too; a 5 s / 10 s penalty is served before any work.
-    if (car.tyreStop && !car.stopDone && before > lapLength / 2.0 && after < lapLength / 2.0) {
+    if (car.tyreStop && !car.stopDone && atBox) {
         car.stopDone = true;
         double stationary = kStopTime + rng_.uniform(0.0, kStopTimeSpread);
         if (rng_.uniform() < kSlowStopChance) {

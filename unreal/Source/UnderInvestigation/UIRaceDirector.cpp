@@ -161,6 +161,15 @@ void AUIRaceDirector::BuildTrack()
 	FinishLine->SetWorldTransform(FTransform(LineTransform.GetRotation(),
 		LineTransform.GetLocation() + FVector(0, 0, RoadHeight), FVector(0.5, RoadWidthMetres, 0.02)));
 
+	// Pit lane: 20 m right of the racing line, 300 m either side of the line (core Sim.cpp kPit*).
+	for (double D = -300.0; D < 300.0; D += 20.0)
+	{
+		const FTransform At = SimSession.TrackTransform(D + 10.0, -20.0);
+		UStaticMeshComponent* Lane = AddMesh(CubeMesh, FLinearColor(0.25f, 0.25f, 0.27f));
+		Lane->SetWorldTransform(FTransform(At.GetRotation(), At.GetLocation() + FVector(0, 0, RoadHeight),
+			FVector(0.2, 0.08, 0.01)));
+	}
+
 	// Ground under the whole circuit.
 	const FBox Bounds(Line);
 	UStaticMeshComponent* Ground = AddMesh(PlaneMesh, FLinearColor(0.08f, 0.2f, 0.06f));
@@ -185,6 +194,20 @@ void AUIRaceDirector::SpawnCars()
 	}
 	UpdateCars(1.0);
 
+	// One garage per team behind its pit box (M7.8).
+	TArray<FString> BoxTeams;
+	for (int32 Entry = 0; Entry < SimSession.Entries().Num(); ++Entry)
+	{
+		const FString& Team = SimSession.Entries()[Entry].Team;
+		if (BoxTeams.Contains(Team))
+		{
+			continue;
+		}
+		BoxTeams.Add(Team);
+		const FTransform At = SimSession.TrackTransform(SimSession.BoxOffset(Entry), -28.0);
+		UStaticMeshComponent* Garage = AddMesh(CubeMesh, TeamColor(Teams.IndexOfByKey(Team), Teams.Num()));
+		Garage->SetWorldTransform(FTransform(At.GetRotation(), At.GetLocation() + FVector(0, 0, 200.0), FVector(0.1, 0.06, 0.04)));
+	}
 	SafetyCarMesh = AddMesh(CubeMesh, FLinearColor(1.0f, 0.45f, 0.0f));
 	SafetyCarMesh->SetWorldScale3D(CarScale * FVector(1.1, 1.05, 1.3));
 	SafetyCarMesh->SetVisibility(false);

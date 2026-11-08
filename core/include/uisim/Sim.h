@@ -174,6 +174,8 @@ public:
     const SimSnapshot& snapshot() const { return snapshot_; }
     const RaceStats& stats() const { return stats_; }
     const Track& track() const { return track_; }
+    // Metres from the line (negative = before it) of the pit box of an entry's team (M7.8).
+    double boxOffset(int entryIndex) const { return cars_[static_cast<std::size_t>(entryIndex)].boxOffset; }
     const std::vector<Entry>& entries() const { return entries_; }
 
 private:
@@ -205,6 +207,7 @@ private:
         double pitSpeedExcess = 0.0;  // km/h over the limit on this pit lane visit (limiter fault)
         bool releaseChecked = false;  // the team decided about traffic at the end of this stop
         int trackLimitStrikes = 0;    // offences counted by race control (M7.6)
+        double boxOffset = 0.0;       // own team's pit box, metres from the line
         double stopTimer = 0.0;
         double spinTimer = 0.0; // > 0: spun, stationary
         bool retired = false;
