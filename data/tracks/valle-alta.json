@@ -1,0 +1,159 @@
+{
+  "name": "Valle Alta Circuit",
+  "comment": "Fictional second track (M7.7): hill circuit with more slow corners, shorter straights and an abrasive surface. Field meanings as in testring.json; straight lengths solved so the loop closes.",
+  "overtake_detection_m": 4245,
+  "overtake_activation_m": 4505,
+  "tyres": {
+    "comment": "Abrasive surface: more wear and earlier cliffs than the testring.",
+    "soft": {
+      "pace": 1.0,
+      "wear_per_lap": 0.0012,
+      "cliff_lap": 15,
+      "cliff_loss_per_lap": 0.004
+    },
+    "medium": {
+      "pace": 0.997,
+      "wear_per_lap": 0.0007,
+      "cliff_lap": 26,
+      "cliff_loss_per_lap": 0.004
+    },
+    "hard": {
+      "pace": 0.994,
+      "wear_per_lap": 0.0005,
+      "cliff_lap": 38,
+      "cliff_loss_per_lap": 0.004
+    }
+  },
+  "segments": [
+    {
+      "name": "Main straight",
+      "length_m": 830,
+      "speed_kmh": 310,
+      "overtake": 1.0,
+      "sector": 1,
+      "turn_deg": 0
+    },
+    {
+      "name": "T1 hairpin",
+      "length_m": 90,
+      "speed_kmh": 75,
+      "overtake": 0.4,
+      "sector": 1,
+      "turn_deg": 170
+    },
+    {
+      "name": "Lake straight",
+      "length_m": 250,
+      "speed_kmh": 260,
+      "overtake": 0.3,
+      "sector": 1,
+      "turn_deg": 0
+    },
+    {
+      "name": "T2-3 chicane",
+      "length_m": 140,
+      "speed_kmh": 110,
+      "overtake": 0.1,
+      "sector": 1,
+      "turn_deg": -20
+    },
+    {
+      "name": "Quarry straight",
+      "length_m": 300,
+      "speed_kmh": 270,
+      "overtake": 0.3,
+      "sector": 1,
+      "turn_deg": 0
+    },
+    {
+      "name": "T4",
+      "length_m": 120,
+      "speed_kmh": 120,
+      "overtake": 0.1,
+      "sector": 1,
+      "turn_deg": 70
+    },
+    {
+      "name": "Uphill esses",
+      "length_m": 450,
+      "speed_kmh": 170,
+      "overtake": 0.0,
+      "sector": 2,
+      "turn_deg": 30
+    },
+    {
+      "name": "T6 hairpin",
+      "length_m": 100,
+      "speed_kmh": 70,
+      "overtake": 0.3,
+      "sector": 2,
+      "turn_deg": -120
+    },
+    {
+      "name": "Back straight",
+      "length_m": 715,
+      "speed_kmh": 300,
+      "overtake": 0.8,
+      "sector": 2,
+      "turn_deg": 0
+    },
+    {
+      "name": "T7",
+      "length_m": 150,
+      "speed_kmh": 140,
+      "overtake": 0.2,
+      "sector": 2,
+      "turn_deg": 90
+    },
+    {
+      "name": "Woods",
+      "length_m": 350,
+      "speed_kmh": 200,
+      "overtake": 0.0,
+      "sector": 2,
+      "turn_deg": 20
+    },
+    {
+      "name": "T9",
+      "length_m": 130,
+      "speed_kmh": 105,
+      "overtake": 0.1,
+      "sector": 3,
+      "turn_deg": 110
+    },
+    {
+      "name": "Village straight",
+      "length_m": 400,
+      "speed_kmh": 270,
+      "overtake": 0.3,
+      "sector": 3,
+      "turn_deg": 0
+    },
+    {
+      "name": "T10",
+      "length_m": 220,
+      "speed_kmh": 210,
+      "overtake": 0.0,
+      "sector": 3,
+      "turn_deg": 5,
+      "track_limits": true
+    },
+    {
+      "name": "Last corner",
+      "length_m": 160,
+      "speed_kmh": 130,
+      "overtake": 0.1,
+      "sector": 3,
+      "turn_deg": 5,
+      "track_limits": true
+    },
+    {
+      "name": "Run to the line",
+      "length_m": 250,
+      "speed_kmh": 280,
+      "overtake": 0.2,
+      "sector": 3,
+      "turn_deg": 0
+    }
+  ]
+}
