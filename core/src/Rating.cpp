@@ -76,6 +76,8 @@ ExpectedVerdict expectedVerdict(const Incident& incident) {
         return {incident.car, incident.measure >= rules.pitSpeedingDriveThroughFromKmh ? Penalty::DriveThrough
                                                                                       : Penalty::FiveSeconds};
     }
+    case Type::TrackLimits: // Penalty Guidelines: 5 s for the offence after the black-and-white flag and each further one
+        return {incident.car, Penalty::FiveSeconds};
     case Type::UnsafeRelease: // 5 s (unsafe_release_penalty_seconds), 10 s if it nearly ended in contact
         return {incident.car, incident.measure < 10.0 ? Penalty::TenSeconds : Penalty::FiveSeconds};
     }

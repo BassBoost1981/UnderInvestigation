@@ -146,6 +146,10 @@ TEST_CASE("Safety Car: field closes up, no overtaking, racing resumes") {
     runUntilLeaderLap(sim, 6);
     const int overtakesBefore = sim.stats().overtakes;
 
+    std::map<int, int> stopsBefore; // cars that pit under the Safety Car rejoin later (M7.4)
+    for (const CarState& car : sim.snapshot().cars) {
+        stopsBefore[car.entryIndex] = car.pitStops;
+    }
     sim.command(simple(Command::Type::DeploySafetyCar));
     runUntilLeaderLap(sim, 9);
     const SimSnapshot& snap = sim.snapshot();
@@ -156,7 +160,8 @@ TEST_CASE("Safety Car: field closes up, no overtaking, racing resumes") {
     // One compact queue behind the Safety Car: sort by road distance behind it.
     std::vector<double> behind;
     for (const CarState& car : snap.cars) {
-        if (!car.finished) {
+        // Lapped cars waved past under the SC are not modelled yet (rules note): lead-lap queue only.
+        if (!car.finished && !car.inPitLane && car.lapsDown == 0 && car.pitStops == stopsBefore[car.entryIndex]) {
             behind.push_back(sim.track().wrap(snap.safetyCarDistance - car.distance));
         }
     }

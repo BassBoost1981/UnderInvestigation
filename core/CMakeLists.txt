@@ -53,7 +53,8 @@ if(UISIM_BUILD_TESTS)
         tests/test_penalties.cpp
         tests/test_accidents.cpp
         tests/test_tyres.cpp
-        tests/test_pitlane.cpp)
+        tests/test_pitlane.cpp
+        tests/test_track_limits.cpp)
     target_link_libraries(uisim_tests PRIVATE uisim uisim_datadir doctest::doctest)
 
     enable_testing()

@@ -40,7 +40,8 @@ TEST_CASE("Collisions are recorded with a ground truth") {
             const Incident& incident = sim.incidents()[k];
             CHECK(incident.id == static_cast<int>(k) + 1);
             CHECK(incident.time >= previousTime);
-            const bool single = incident.type == Incident::Type::Accident || incident.type == Incident::Type::PitLaneSpeeding;
+            const bool single = incident.type == Incident::Type::Accident || incident.type == Incident::Type::PitLaneSpeeding ||
+                                incident.type == Incident::Type::TrackLimits;
             CHECK(single == (incident.car == incident.otherCar));
             CHECK(incident.blame >= 0.0);
             CHECK(incident.blame <= 1.0);
@@ -52,7 +53,8 @@ TEST_CASE("Collisions are recorded with a ground truth") {
         const auto soloAccidents = std::count_if(sim.accidents().begin(), sim.accidents().end(),
             [](const Accident& a) { return !a.fromCollision; });
         const auto pitLane = std::count_if(sim.incidents().begin(), sim.incidents().end(), [](const Incident& v) {
-            return v.type == Incident::Type::PitLaneSpeeding || v.type == Incident::Type::UnsafeRelease;
+            return v.type == Incident::Type::PitLaneSpeeding || v.type == Incident::Type::UnsafeRelease ||
+                   v.type == Incident::Type::TrackLimits;
         });
         CHECK(sim.stats().collisions + sim.stats().flagViolations + sim.stats().blueFlagsIgnored + soloAccidents + pitLane ==
               static_cast<long long>(sim.incidents().size()));

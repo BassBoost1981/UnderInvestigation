@@ -59,6 +59,8 @@ struct CarState {
     int tyreAge = 0; // laps on the current set
     int pitStops = 0;
     int compoundsUsed = 0; // number of different dry compounds so far
+    int trackLimitStrikes = 0;
+    bool blackWhiteFlag = false; // shown after the warning offence (track limits)
     double detectionGap = 0.0;   // seconds behind the car ahead at the last Detection Line crossing
     bool finished = false;
 };

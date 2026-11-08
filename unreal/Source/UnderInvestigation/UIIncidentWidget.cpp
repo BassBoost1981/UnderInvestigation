@@ -38,6 +38,7 @@ namespace
 		case EUISimIncidentType::Accident: return TEXT("Unfall");
 		case EUISimIncidentType::PitLaneSpeeding: return TEXT("Speeding Boxengasse");
 		case EUISimIncidentType::UnsafeRelease: return TEXT("Unsafe Release");
+		case EUISimIncidentType::TrackLimits: return TEXT("Track Limits");
 		}
 		return FString();
 	}

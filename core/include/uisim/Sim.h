@@ -40,6 +40,7 @@ struct RaceStats {
     int followUpAccidents = 0; // spins/crashes at an insufficiently flagged accident site
     int punctures = 0;         // from debris
     int blueFlagsIgnored = 0;
+    int trackLimitOffences = 0; // every time a car left the track (lap deleted)
 };
 
 // Race-control action, applied at the start of the next step.
@@ -99,7 +100,8 @@ struct Incident {
         IgnoringBlueFlags,        // lapped car did not let the faster car by in time
         Accident,                 // spin/off-track/crash without contact (otherCar == car); review only, no one at fault
         PitLaneSpeeding,          // otherCar == car; measure = km/h over the limit (M7.5)
-        UnsafeRelease             // car released into the path of otherCar; measure = gap in metres (M7.5)
+        UnsafeRelease,            // car released into the path of otherCar; measure = gap in metres (M7.5)
+        TrackLimits               // otherCar == car; offence after the black-and-white flag, measure = offence number (M7.6)
     };
     int id = 0;          // 1-based, in order of occurrence
     Type type = Type::Collision;
@@ -202,6 +204,7 @@ private:
         double servablePenalty = 0.0; // 5 s / 10 s still to serve at the next stop (B1.9.6 b)
         double pitSpeedExcess = 0.0;  // km/h over the limit on this pit lane visit (limiter fault)
         bool releaseChecked = false;  // the team decided about traffic at the end of this stop
+        int trackLimitStrikes = 0;    // offences counted by race control (M7.6)
         double stopTimer = 0.0;
         double spinTimer = 0.0; // > 0: spun, stationary
         bool retired = false;

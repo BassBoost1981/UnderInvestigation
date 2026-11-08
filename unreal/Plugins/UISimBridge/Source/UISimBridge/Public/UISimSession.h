@@ -65,7 +65,8 @@ enum class EUISimIncidentType : uint8
 	Collision, OvertakeUnderYellow, OvertakeUnderVsc, OvertakeUnderSafetyCar, OvertakeUnderRedFlag, OvertakeBeforeRestartLine, IgnoringBlueFlags,
 	Accident, // spin/off-track/crash without contact: Car == OtherCar, review only
 	PitLaneSpeeding, // Car == OtherCar
-	UnsafeRelease
+	UnsafeRelease,
+	TrackLimits // Car == OtherCar, offence after the black-and-white flag
 };
 
 struct FUISimIncident

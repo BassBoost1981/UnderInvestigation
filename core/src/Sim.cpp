@@ -33,7 +33,7 @@ constexpr double kOvertakeBoost = 0.03;    // Overtake mode (B7.2): extra electr
 constexpr double kDirtyAirGap = 25.0;
 constexpr double kDirtyAirFactor = 0.99;  // corner-speed loss right behind another car
 constexpr double kFastSegment = 250.0 / 3.6;
-constexpr double kOvertakeAdvantageScale = 1.25; // m/s of potential for the full chance (M7.4: fresh-tyre passes)
+constexpr double kOvertakeAdvantageScale = 1.35; // m/s of potential for the full chance (M7.4: fresh-tyre passes)
 constexpr double kOvertakeTimeout = 8.0;
 constexpr double kOvertakeLateral = 0.6;
 constexpr double kLateBrakeFactor = 1.15; // an attacker brakes later than usual
@@ -74,6 +74,9 @@ constexpr double kSpeedingMinKmh = 1.0;
 constexpr double kSpeedingMaxKmh = 20.0;
 constexpr double kReleaseWindow = 30.0;    // m: a car this close behind in the fast lane is traffic
 constexpr double kUnsafeReleaseChance = 0.25; // the team releases anyway instead of waiting
+// Track limits (M7.6).
+constexpr double kTrackLimitsChance = 0.02; // per pass of a track-limits corner, times aggression^4 (a few drivers keep running wide)
+constexpr double kTrackLimitsTyreWear = 0.02; // worn tyres: more running wide, per lap of age
 
 // Accidents (M6.3). Chances per driver error / per collision (for the car that was hit).
 constexpr double kErrorCrashChance = 0.02;
@@ -1095,6 +1098,18 @@ void Sim::onSegmentEntered(int i) {
     Car& car = cars_[i];
     const TrackSegment& seg = track_.segments()[car.segment];
 
+    // Track limits (B1.8.6): every offence deletes the lap and counts; the warning offence brings
+    // the black-and-white flag, every one after it is an incident for the stewards.
+    if (seg.trackLimits && state_ == RaceState::Green && !outOfRace(i) && car.spinTimer <= 0.0 &&
+        rng_.uniform() < kTrackLimitsChance * std::pow(entries_[i].aggression, 4.0) * (1.0 + kTrackLimitsTyreWear * car.tyreWear)) {
+        ++stats_.trackLimitOffences;
+        ++car.trackLimitStrikes;
+        if (car.trackLimitStrikes >= config_.rules.trackLimitsPenaltyFrom) {
+            addIncident(Incident::Type::TrackLimits, i, i, 1.0);
+            incidents_.back().measure = car.trackLimitStrikes;
+        }
+    }
+
     // An attack is decided at corner entry: alongside = contest the corner, else give up.
     // A contested corner can end in contact.
     if (car.overtakeTarget >= 0 && seg.speed < kFastSegment && !yieldsTo(car.overtakeTarget, i)) {
@@ -1251,6 +1266,8 @@ void Sim::buildSnapshot() {
         cs.tyreAge = static_cast<int>(car.tyreWear);
         cs.pitStops = car.stops;
         cs.compoundsUsed = static_cast<int>(std::bitset<3>(car.compoundsUsed).count());
+        cs.trackLimitStrikes = car.trackLimitStrikes;
+        cs.blackWhiteFlag = car.trackLimitStrikes >= config_.rules.trackLimitsBlackWhiteAt;
         cs.detectionGap = car.detectionGap;
         cs.gapToLeader = 0.0;
         cs.lapsDown = 0;

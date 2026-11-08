@@ -15,6 +15,7 @@ struct TrackSegment {
     double overtakeChance = 0.0; // relative, 0 = no overtaking possible
     int sector = 0;              // timing sector, 0-based
     double turn = 0.0;           // heading change over the segment, radians, positive = left
+    bool trackLimits = false;    // drivers may run wide here (B1.8.6, M7.6)
     double start = 0.0;          // distance from the line, computed by Track
 };
 

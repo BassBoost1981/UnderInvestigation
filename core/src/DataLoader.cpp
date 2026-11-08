@@ -42,6 +42,7 @@ Track loadTrack(const std::filesystem::path& path) {
             seg.overtakeChance = js.value("overtake", 0.0);
             seg.sector = js.at("sector").get<int>() - 1;
             seg.turn = js.value("turn_deg", 0.0) * (3.14159265358979323846 / 180.0);
+            seg.trackLimits = js.value("track_limits", false);
             segments.push_back(seg);
         }
         Track track(root.at("name").get<std::string>(), std::move(segments), root.value("marshal_sectors", 20));
