@@ -99,30 +99,25 @@ TEST_CASE("Time penalty changes the final classification") {
         }
     });
     REQUIRE_FALSE(sim.incidents().empty());
-    CHECK(sim.snapshot().cars[0].entryIndex != winner);
-    CHECK(stateOf(sim, winner).timePenalty == 10.0);
-    CHECK(stateOf(sim, winner).gapToLeader == doctest::Approx(10.0 - margin).epsilon(0.01));
+    // B1.9.6 b: served at the next stop before any work, so nothing is left on the race time.
+    CHECK(stateOf(sim, winner).timePenalty == 0.0);
+    CHECK(stateOf(sim, winner).pitStops >= 1);
+    const double lost = stateOf(sim, winner).lastLineTime - stateOf(clean, winner).lastLineTime;
+    INFO("time lost by serving 10 s: ", lost);
+    CHECK(lost > 7.0);
+    CHECK(lost < 15.0);
 }
 
-TEST_CASE("Time penalties do not change how the race is driven") {
-    // With accidents and follow-ups active: a time penalty must not change a single tick.
-    const std::filesystem::path data(UISIM_DATA_DIR);
-    auto withAccidents = [&] {
-        RaceConfig config;
-        config.laps = 50;
-        config.seed = 1;
-        return Sim(loadTrack(data / "tracks" / "testring.json"),
-                   loadEntries(data / "entries" / "fictional-grid.json"), config);
-    };
-    Sim clean = withAccidents();
-    runToEnd(clean);
-    Sim penalised = withAccidents();
-    runToEnd(penalised, [](Sim& s, const Incident& incident) {
-        s.command(verdict(incident.id, incident.car, Penalty::FiveSeconds));
-    });
-    for (const CarState& car : clean.snapshot().cars) {
-        CHECK(stateOf(penalised, car.entryIndex).lastLineTime == car.lastLineTime);
+TEST_CASE("A time penalty after the last stop is added to the race time") {
+    Sim sim = makeRace(1);
+    for (long steps = 0; !sim.finished() && sim.snapshot().leaderLap < sim.snapshot().totalLaps - 2; ++steps) {
+        sim.step();
     }
+    REQUIRE_FALSE(sim.incidents().empty());
+    const int entry = sim.snapshot().cars[0].entryIndex; // leader: no stop left this late
+    sim.command(verdict(sim.incidents().front().id, entry, Penalty::FiveSeconds));
+    runToEnd(sim);
+    CHECK(stateOf(sim, entry).timePenalty == 5.0); // B1.9.6 b ii
 }
 
 TEST_CASE("Drive-through is served in the pit lane and costs about 20 s") {
@@ -139,7 +134,7 @@ TEST_CASE("Drive-through is served in the pit lane and costs about 20 s") {
     const double lostStopGo = timeLost(Penalty::StopAndGo, entry);
     INFO("stop-and-go cost ", lostStopGo, " s");
     CHECK(lostStopGo - lost > 6.0);
-    CHECK(lostStopGo - lost < 15.0);
+    CHECK(lostStopGo - lost < 17.0); // 10 s stationary plus stopping and pulling away
 }
 
 TEST_CASE("Penalties after the flag become time; one verdict per incident") {

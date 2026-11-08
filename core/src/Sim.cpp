@@ -1,6 +1,7 @@
 #include "uisim/Sim.h"
 
 #include <algorithm>
+#include <bitset>
 #include <cmath>
 #include <limits>
 #include <numeric>
@@ -32,7 +33,7 @@ constexpr double kOvertakeBoost = 0.03;    // Overtake mode (B7.2): extra electr
 constexpr double kDirtyAirGap = 25.0;
 constexpr double kDirtyAirFactor = 0.99;  // corner-speed loss right behind another car
 constexpr double kFastSegment = 250.0 / 3.6;
-constexpr double kOvertakeAdvantageScale = 1.0; // m/s of potential for the full chance
+constexpr double kOvertakeAdvantageScale = 1.25; // m/s of potential for the full chance (M7.4: fresh-tyre passes)
 constexpr double kOvertakeTimeout = 8.0;
 constexpr double kOvertakeLateral = 0.6;
 constexpr double kLateBrakeFactor = 1.15; // an attacker brakes later than usual
@@ -57,6 +58,16 @@ constexpr double kRedFlagStopOffset = 2.0;    // red flag: cars stop this far be
 // (kPitEntryBeforeLine before the line) to the exit after the line.
 constexpr double kPitLateral = -5.0;          // snapshot lateral units: 20 m right of the racing line
 constexpr double kPitExitAfterLine = 300.0;
+
+// Pit stops (M7.4).
+constexpr double kStopTime = 2.4;          // stationary time of a good stop, seconds
+constexpr double kStopTimeSpread = 0.6;
+constexpr double kSlowStopChance = 0.04;   // wheel gun trouble and the like
+constexpr double kSlowStopMin = 3.0;
+constexpr double kSlowStopMax = 8.0;
+constexpr double kStintMarginMin = 1.0;    // laps before the cliff a team plans to stop
+constexpr double kStintMarginMax = 4.0;
+constexpr int kNeutralisedStopWindow = 10; // under SC/VSC a stop this many laps early is worth it
 
 // Accidents (M6.3). Chances per driver error / per collision (for the car that was hit).
 constexpr double kErrorCrashChance = 0.02;
@@ -92,7 +103,6 @@ constexpr double kPunctureChance = 0.02;       // per pass over crash debris at 
 constexpr double kPunctureDuration = 20.0;     // limping, seconds
 
 // Long-run effects (no pit stops in M1).
-constexpr double kTyreLossPerLap = 0.0006;
 constexpr double kFuelStartFactor = 0.985;
 constexpr double kFormSpread = 0.002;
 
@@ -127,6 +137,12 @@ Sim::Sim(Track track, std::vector<Entry> entries, RaceConfig config)
         car.segment = track_.segmentIndexAt(track_.wrap(car.distance));
         car.startDelay = rng_.uniform(0.2, 0.5);
         car.form = rollForm();
+        // Start tyres (sim strategy): front half on medium, then hard, the last four gamble on soft.
+        car.compound = slot < n / 2 ? Compound::Medium : slot < n - 4 ? Compound::Hard : Compound::Soft;
+        car.compoundsUsed = 1u << static_cast<int>(car.compound);
+    }
+    for (int i = 0; i < n; ++i) {
+        planNextStop(i);
     }
     sectorFlags_.assign(track_.marshalSectorCount(), Flag::Green);
     buildSnapshot();
@@ -178,9 +194,12 @@ void Sim::applyCommands() {
                     car.overtakeActive = false;
                 }
                 cancelAttacks();
-                if (config_.rules.redFlagFreeTyreChange) {
-                    for (Car& car : cars_) {
-                        car.tyreWear = 0.0;
+                if (config_.rules.redFlagFreeTyreChange) { // B5.14.4 a vii
+                    for (int k = 0; k < static_cast<int>(cars_.size()); ++k) {
+                        if (!outOfRace(k)) {
+                            fitTyres(k, chooseCompound(k));
+                            planNextStop(k);
+                        }
                     }
                 }
             }
@@ -218,11 +237,14 @@ void Sim::applyVerdict(const Command& c) {
     Car& car = cars_[c.car];
     switch (c.penalty) {
     case Penalty::FiveSeconds:
-        car.timePenalty += 5.0;
+    case Penalty::TenSeconds: {
+        const double seconds = c.penalty == Penalty::FiveSeconds ? 5.0 : 10.0;
+        car.timePenalty += seconds; // stays race time unless served at a stop
+        if (!car.finished && config_.rules.timePenaltyServedAtNextStop) {
+            car.servablePenalty += seconds;
+        }
         break;
-    case Penalty::TenSeconds:
-        car.timePenalty += 10.0;
-        break;
+    }
     case Penalty::DriveThrough:
     case Penalty::StopAndGo:
         // Served at the next pit entry; after the flag (or if one is already pending) it becomes time.
@@ -492,6 +514,59 @@ void Sim::updateBlueFlags(const std::vector<int>& order) {
     }
 }
 
+Compound Sim::chooseCompound(int i) const {
+    const Car& car = cars_[i];
+    const int remaining = config_.laps - car.lapsCompleted;
+    const CompoundSpecs& specs = track_.compounds();
+    Compound choice = Compound::Hard;
+    for (Compound c : {Compound::Soft, Compound::Medium}) {
+        if (specs[static_cast<int>(c)].cliffLap - kStintMarginMax >= remaining) {
+            choice = c;
+            break;
+        }
+    }
+    // B6.3.6: a second, different compound if only one was used so far.
+    if (car.compoundsUsed == (1u << static_cast<int>(choice))) {
+        choice = choice == Compound::Hard ? Compound::Medium : Compound::Hard;
+    }
+    return choice;
+}
+
+void Sim::fitTyres(int i, Compound compound) {
+    Car& car = cars_[i];
+    car.compound = compound;
+    car.tyreWear = 0.0;
+    car.compoundsUsed |= 1u << static_cast<int>(compound);
+}
+
+void Sim::planNextStop(int i) {
+    Car& car = cars_[i];
+    const int remaining = config_.laps - car.lapsCompleted;
+    const double margin = rng_.uniform(kStintMarginMin, kStintMarginMax);
+    const int stint = std::max(1, static_cast<int>(track_.compounds()[static_cast<int>(car.compound)].cliffLap - margin -
+                                                   car.tyreWear));
+    const bool ruleMet =
+        std::bitset<3>(car.compoundsUsed).count() >= static_cast<std::size_t>(config_.rules.minDryCompounds);
+    if (remaining <= stint) {
+        car.plannedStopLap = ruleMet ? std::numeric_limits<int>::max()
+                                     : car.lapsCompleted + std::max(1, remaining / 2); // only for B6.3.6
+    } else {
+        car.plannedStopLap = car.lapsCompleted + stint;
+    }
+}
+
+bool Sim::wantsTyreStop(int i) const {
+    const Car& car = cars_[i];
+    if (state_ == RaceState::RedFlag || chequered_ || car.finished || car.inPit ||
+        car.plannedStopLap == std::numeric_limits<int>::max()) {
+        return false;
+    }
+    const int inLap = car.lapsCompleted + 1; // the stop ends this lap
+    const bool neutralised = state_ == RaceState::SafetyCar || state_ == RaceState::VirtualSafetyCar;
+    return inLap >= car.plannedStopLap ||
+           (neutralised && car.plannedStopLap - inLap <= kNeutralisedStopWindow && config_.laps - inLap > 3);
+}
+
 void Sim::movePitCar(int i) {
     Car& car = cars_[i];
     const double lapLength = track_.length();
@@ -514,6 +589,22 @@ void Sim::movePitCar(int i) {
         car.stopDone = true;
         car.stopTimer = config_.rules.stopAndGoSeconds;
         car.speed = 0.0;
+    }
+    // Tyre stop: the box is at the line too; a 5 s / 10 s penalty is served before any work.
+    if (car.tyreStop && !car.stopDone && before > lapLength / 2.0 && after < lapLength / 2.0) {
+        car.stopDone = true;
+        double stationary = kStopTime + rng_.uniform(0.0, kStopTimeSpread);
+        if (rng_.uniform() < kSlowStopChance) {
+            stationary += rng_.uniform(kSlowStopMin, kSlowStopMax);
+        }
+        car.stopTimer = car.servablePenalty + stationary;
+        car.timePenalty -= car.servablePenalty;
+        car.servablePenalty = 0.0;
+        car.speed = 0.0;
+        fitTyres(i, chooseCompound(i));
+        ++car.stops;
+        car.tyreStop = false;
+        planNextStop(i);
     }
     if (before < kPitExitAfterLine && after >= kPitExitAfterLine) {
         car.inPit = false;
@@ -654,7 +745,7 @@ double Sim::performance(int i) const {
     const Entry& entry = entries_[i];
     const double fuel = kFuelStartFactor +
         (1.0 - kFuelStartFactor) * std::min(1.0, car.lapsCompleted / static_cast<double>(config_.laps));
-    const double tyres = 1.0 - kTyreLossPerLap * car.tyreWear;
+    const double tyres = tyreFactor(track_.compounds(), car.compound, car.tyreWear);
     return entry.teamPace * entry.skill * car.form * tyres * fuel;
 }
 
@@ -871,8 +962,14 @@ void Sim::step() {
     for (int i : order) {
         Car& car = cars_[i];
         const bool mustServe = car.pendingPenalty == Penalty::DriveThrough || car.pendingPenalty == Penalty::StopAndGo;
-        if (mustServe && state_ == RaceState::Green && track_.wrap(previous[i]) < pitLaneEntry &&
-            track_.wrap(car.distance) >= pitLaneEntry) {
+        const bool atEntry = track_.wrap(previous[i]) < pitLaneEntry && track_.wrap(car.distance) >= pitLaneEntry;
+        if (!atEntry || outOfRace(i) || car.spinTimer > 0.0) {
+            continue;
+        }
+        const bool serve = mustServe && state_ == RaceState::Green;
+        const bool tyres = !serve && wantsTyreStop(i);
+        if (serve || tyres) {
+            car.tyreStop = tyres;
             car.inPit = true;
             car.stopDone = false;
             car.overtakeTarget = -1;
@@ -1105,6 +1202,10 @@ void Sim::buildSnapshot() {
         cs.retired = car.retired;
         cs.blueFlag = car.blueLapper >= 0;
         cs.overtakeActive = car.overtakeActive;
+        cs.compound = car.compound;
+        cs.tyreAge = static_cast<int>(car.tyreWear);
+        cs.pitStops = car.stops;
+        cs.compoundsUsed = static_cast<int>(std::bitset<3>(car.compoundsUsed).count());
         cs.detectionGap = car.detectionGap;
         cs.gapToLeader = 0.0;
         cs.lapsDown = 0;

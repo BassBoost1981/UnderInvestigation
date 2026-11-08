@@ -1,5 +1,7 @@
 #pragma once
 
+#include "uisim/Tyres.h"
+
 #include <array>
 #include <string>
 #include <vector>
@@ -41,6 +43,8 @@ public:
     void setOvertakeLines(double detection, double activation) { detectionLine_ = detection; activationLine_ = activation; }
     double overtakeDetectionLine() const { return detectionLine_; }
     double overtakeActivationLine() const { return activationLine_; }
+    void setCompounds(const CompoundSpecs& specs) { compounds_ = specs; }
+    const CompoundSpecs& compounds() const { return compounds_; }
     int marshalSectorAt(double distance) const;
 
     const std::string& name() const { return name_; }
@@ -79,6 +83,7 @@ private:
     std::vector<TrackPose> centerline_;
     std::vector<double> sampleDistances_; // s of each centre-line sample
     double closureError_ = 0.0;
+    CompoundSpecs compounds_{{{1.0, 0.0006, 99, 0.0}, {1.0, 0.0006, 99, 0.0}, {1.0, 0.0006, 99, 0.0}}}; // M1 wear if no data
 };
 
 } // namespace uisim

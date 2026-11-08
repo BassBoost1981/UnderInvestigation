@@ -95,6 +95,7 @@ TEST_CASE("Replay shows the cars at the incident location") {
         CHECK(a == doctest::Approx(incident.distance)); // recorded in the same tick
         // Together on the road (also when lapping: then a full lap apart in total distance).
         const double road = std::min(sim.track().wrap(a - b), sim.track().wrap(b - a));
-        CHECK(road < 20.0);
+        // Blue flags: logged after the lapped car held the faster one up for a while (within ~1 s).
+        CHECK(road < (incident.type == Incident::Type::IgnoringBlueFlags ? 100.0 : 20.0));
     }
 }

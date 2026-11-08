@@ -2,6 +2,12 @@
   "name": "Testring Nordhafen",
   "overtake_detection_m": 5100,
   "overtake_activation_m": 5450,
+  "tyres": {
+    "comment": "Sim values: speed factor on a new set, loss per lap of age, age from which the set drops off, extra loss per lap after that.",
+    "soft":   { "pace": 1.000, "wear_per_lap": 0.0010, "cliff_lap": 18, "cliff_loss_per_lap": 0.004 },
+    "medium": { "pace": 0.997, "wear_per_lap": 0.0006, "cliff_lap": 30, "cliff_loss_per_lap": 0.004 },
+    "hard":   { "pace": 0.994, "wear_per_lap": 0.0004, "cliff_lap": 42, "cliff_loss_per_lap": 0.004 }
+  },
   "comment": "Fictional M1 test track, 5.6 km. speed_kmh = apex speed in corners / top speed on straights. overtake = relative overtaking chance (0 = impossible). turn_deg = heading change over the segment, positive = left; must sum to 360. overtake_detection_m / overtake_activation_m = Overtake mode lines (B7.2), here in T10 and on the run to the line.",
   "segments": [
     { "name": "Start/finish straight", "length_m": 900,  "speed_kmh": 320, "overtake": 1.0, "sector": 1, "turn_deg":    0 },

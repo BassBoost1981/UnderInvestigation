@@ -113,12 +113,25 @@ TEST_CASE("VSC: no overtaking and road gaps hold") {
     CHECK(sim.snapshot().state == RaceState::VirtualSafetyCar);
     CHECK(sim.stats().overtakes == overtakesBefore);
 
-    const auto after = leadLapDistanceGaps(sim.snapshot());
-    double worst = 0.0;
+    // Teams use the VSC for cheap stops (M7.4): compare only cars that stayed out,
+    // with the gaps measured to the first of them.
+    std::map<int, double> distanceBefore;
     for (const auto& [entry, gap] : before) {
-        if (after.count(entry)) {
-            worst = std::max(worst, std::abs(after.at(entry) - gap));
+        distanceBefore[entry] = -gap;
+    }
+    std::map<int, double> distanceAfter;
+    for (const CarState& car : sim.snapshot().cars) {
+        if (car.pitStops == 0 && !car.inPitLane && distanceBefore.count(car.entryIndex)) {
+            distanceAfter[car.entryIndex] = car.distance;
         }
+    }
+    REQUIRE(distanceAfter.size() >= 2);
+    const int reference = distanceAfter.begin()->first;
+    double worst = 0.0;
+    for (const auto& [entry, distance] : distanceAfter) {
+        const double gapBefore = distanceBefore.at(entry) - distanceBefore.at(reference);
+        const double gapAfter = distance - distanceAfter.at(reference);
+        worst = std::max(worst, std::abs(gapAfter - gapBefore));
     }
     INFO("largest change of a road gap to the leader under VSC: ", worst, " m");
     CHECK(worst < 100.0); // < ~1 s at race pace; transitions into the VSC shift gaps a little

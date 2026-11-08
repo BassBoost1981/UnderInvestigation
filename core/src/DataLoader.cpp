@@ -48,6 +48,16 @@ Track loadTrack(const std::filesystem::path& path) {
         if (root.contains("overtake_detection_m") && root.contains("overtake_activation_m")) {
             track.setOvertakeLines(root.at("overtake_detection_m").get<double>(), root.at("overtake_activation_m").get<double>());
         }
+        if (root.contains("tyres")) {
+            CompoundSpecs specs;
+            const char* names[] = {"soft", "medium", "hard"};
+            for (int c = 0; c < 3; ++c) {
+                const json& t = root.at("tyres").at(names[c]);
+                specs[c] = {t.at("pace").get<double>(), t.at("wear_per_lap").get<double>(), t.at("cliff_lap").get<int>(),
+                            t.at("cliff_loss_per_lap").get<double>()};
+            }
+            track.setCompounds(specs);
+        }
         return track;
     } catch (const json::exception& e) {
         throw std::runtime_error("Bad track data in " + displayName(path) + ": " + e.what());

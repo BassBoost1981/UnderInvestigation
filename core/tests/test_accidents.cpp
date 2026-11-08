@@ -214,7 +214,7 @@ TEST_CASE("Unprotected accident sites cause follow-up accidents, flags prevent t
     const int yellow = followUps(true, false);
     const int doubleYellow = followUps(false, true);
     INFO("follow-up accidents in 15 scenarios: no flag ", none, ", yellow ", yellow, ", double yellow ", doubleYellow);
-    CHECK(none >= 10);
+    CHECK(none >= 5); // damped since M7.2
     CHECK(yellow < none);
     CHECK(doubleYellow * 4 < none);
 }

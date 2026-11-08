@@ -1,5 +1,7 @@
 #pragma once
 
+#include "uisim/Tyres.h"
+
 #include <array>
 #include <vector>
 
@@ -53,6 +55,10 @@ struct CarState {
     bool retired = false; // out of the race (accident); classified after the finishers
     bool blueFlag = false; // being lapped: must let the faster car by
     bool overtakeActive = false; // Overtake mode (B7.2) usable this lap
+    Compound compound = Compound::Medium;
+    int tyreAge = 0; // laps on the current set
+    int pitStops = 0;
+    int compoundsUsed = 0; // number of different dry compounds so far
     double detectionGap = 0.0;   // seconds behind the car ahead at the last Detection Line crossing
     bool finished = false;
 };

@@ -180,7 +180,8 @@ private:
         int gridPosition = 0;
         int segment = 0;
         double form = 1.0;      // re-rolled every lap
-        double tyreWear = 0.0;  // laps on the current set (no pit stops in M1)
+        double tyreWear = 0.0;  // laps on the current set
+        Compound compound = Compound::Medium;
         double errorTimer = 0.0;
         int overtakeTarget = -1;
         double overtakeTimer = 0.0;
@@ -190,6 +191,12 @@ private:
         Penalty pendingPenalty = Penalty::None; // drive-through / stop-and-go to serve
         bool inPit = false;
         bool stopDone = false;
+        // Pit stops (M7.4)
+        bool tyreStop = false;      // in the pit lane for new tyres
+        int plannedStopLap = 0;     // stop at the end of this lap, INT_MAX = no further stop
+        int stops = 0;
+        unsigned compoundsUsed = 0; // bit per Compound (B6.3.6)
+        double servablePenalty = 0.0; // 5 s / 10 s still to serve at the next stop (B1.9.6 b)
         double stopTimer = 0.0;
         double spinTimer = 0.0; // > 0: spun, stationary
         bool retired = false;
@@ -241,6 +248,10 @@ private:
     bool recoveryAllowed(const HazardState& hazard) const;
     bool outOfRace(int car) const { return cars_[car].finished || cars_[car].retired; }
     void movePitCar(int car);
+    Compound chooseCompound(int car) const; // for the rest of the race, respecting B6.3.6
+    void fitTyres(int car, Compound compound);
+    void planNextStop(int car);
+    bool wantsTyreStop(int car) const;
     void convertUnservedPenalties();
     void recordReplayFrame();
     void radioReport(RadioMessage::Type type, int car, int accidentId, double distance, double delay, bool onTrack);
