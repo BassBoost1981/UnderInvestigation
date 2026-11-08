@@ -1,0 +1,12 @@
+# M8.7 check: the commands behind incident_review_clicks.txt, without clicks.
+300 incident 2
+300 review 2
+301 pause
+302 seek 1
+303 review_at -2.5
+304 review_camera
+305 accused other
+307 verdict 5s
+308 review_end
+309 timescale 500   # clicks need drawn frames in between: run with -UISimTimeScale=20 up to here
+99999 incident latest  # after the flag: keeps the game open until the rating is drawn

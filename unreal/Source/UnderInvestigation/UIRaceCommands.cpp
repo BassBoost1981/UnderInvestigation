@@ -7,9 +7,11 @@
 #include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
 #include "Framework/Application/SlateApplication.h"
+#include "HAL/PlatformTime.h"
 #include "Layout/WidgetPath.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "UnrealClient.h"
 #include "Widgets/SViewport.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogUISim, Log, All); // same category name as UIRaceDirector.cpp
@@ -59,6 +61,7 @@ bool AUIRaceDirector::CanExecute(const FUICommand& Command) const
 	case EUICommand::StopReview:
 	case EUICommand::ToggleReviewPause:
 	case EUICommand::SeekReview:
+	case EUICommand::SetReviewOffset:
 	case EUICommand::NextReviewCamera:
 		return bReviewing;
 	case EUICommand::SetAccused: return bReviewing && (Command.Index == 0 || Command.Index == 1);
@@ -95,6 +98,7 @@ FString AUIRaceDirector::CommandName(const FUICommand& Command) const
 	case EUICommand::StopReview: return TEXT("review_end");
 	case EUICommand::ToggleReviewPause: return TEXT("pause");
 	case EUICommand::SeekReview: return FString::Printf(TEXT("seek %g"), Command.Value);
+	case EUICommand::SetReviewOffset: return FString::Printf(TEXT("review_at %.1f"), Command.Value);
 	case EUICommand::NextReviewCamera: return TEXT("review_camera");
 	case EUICommand::SetAccused: return Command.Index == 0 ? TEXT("accused car") : TEXT("accused other");
 	case EUICommand::Verdict: return FString::Printf(TEXT("verdict %s"), PenaltyWords[static_cast<uint8>(Command.Penalty)]);
@@ -143,6 +147,9 @@ bool AUIRaceDirector::Execute(const FUICommand& Command)
 		ReviewTime = FMath::Clamp(ReviewTime + Command.Value, IncidentTime - ReviewWindow, IncidentTime + ReviewWindow);
 		break;
 	}
+	case EUICommand::SetReviewOffset:
+		ReviewTime = SimSession.Incidents()[ReviewIncidentIndex].Time + FMath::Clamp(Command.Value, -ReviewWindow, ReviewWindow);
+		break;
 	case EUICommand::NextReviewCamera: ReviewMainMode = (ReviewMainMode + 1) % 4; break;
 	case EUICommand::SetAccused: Accused = Command.Index; break;
 	case EUICommand::Verdict:
@@ -236,6 +243,7 @@ bool AUIRaceDirector::LoadScript(const FString& File)
 		else if (Name == TEXT("review_end")) { C.Type = EUICommand::StopReview; }
 		else if (Name == TEXT("pause")) { C.Type = EUICommand::ToggleReviewPause; }
 		else if (Name == TEXT("seek")) { C.Type = EUICommand::SeekReview; C.Value = FCString::Atod(*Arg); }
+		else if (Name == TEXT("review_at")) { C.Type = EUICommand::SetReviewOffset; C.Value = FCString::Atod(*Arg); }
 		else if (Name == TEXT("review_camera")) { C.Type = EUICommand::NextReviewCamera; }
 		else if (Name == TEXT("accused"))
 		{
@@ -256,6 +264,7 @@ bool AUIRaceDirector::LoadScript(const FString& File)
 				}
 			}
 		}
+		else if (Name == TEXT("screenshot")) { Line.bScreenshot = true; }
 		else if (Name == TEXT("click") && Words.Num() == 4)
 		{
 			Line.bClick = true;
@@ -280,18 +289,40 @@ bool AUIRaceDirector::LoadScript(const FString& File)
 void AUIRaceDirector::RunScript()
 {
 	const FUISimSnapshot& Snapshot = SimSession.Snapshot();
-	// The race clock stops at the flag, so lines after the finish run at the end.
-	while (ScriptNext < Script.Num() && (Snapshot.Time >= Script[ScriptNext].Time || Snapshot.bFinished))
+	if (Snapshot.bFinished && ScriptNext < Script.Num())
 	{
-		const FScriptLine& Line = Script[ScriptNext++];
-		if (Line.bClick)
+		// The race clock stops at the flag. Later lines run one per frame from half a second after
+		// the finish, so screens that appear at the end (rating) are laid out before they are clicked.
+		const double Now = FPlatformTime::Seconds();
+		FinishedAt = FinishedAt > 0.0 ? FinishedAt : Now;
+		if (Now - FinishedAt < 0.5)
 		{
-			SyntheticClick(Line.Click);
+			return;
 		}
-		else
-		{
-			Execute(Line.Command);
-		}
+		RunScriptLine(Script[ScriptNext++]);
+		return;
+	}
+	while (ScriptNext < Script.Num() && Snapshot.Time >= Script[ScriptNext].Time)
+	{
+		RunScriptLine(Script[ScriptNext++]);
+	}
+}
+
+void AUIRaceDirector::RunScriptLine(const FScriptLine& Line)
+{
+	if (Line.bScreenshot)
+	{
+		const FString File = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Screenshots/uisim_check.png"));
+		FScreenshotRequest::RequestScreenshot(File, true, false); // with UI
+		UE_LOG(LogUISim, Display, TEXT("Screenshot requested: %s"), *File);
+	}
+	else if (Line.bClick)
+	{
+		SyntheticClick(Line.Click);
+	}
+	else
+	{
+		Execute(Line.Command);
 	}
 }
 

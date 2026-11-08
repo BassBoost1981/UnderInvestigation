@@ -392,6 +392,11 @@ void AUIRaceDirector::Tick(float DeltaSeconds)
 	}
 	HandleInput();
 	RunScript(); // lines after the finish (the race clock has stopped)
+	if (TrackMap)
+	{
+		// The review panel needs the right side of the screen; the live map returns afterwards.
+		TrackMap->SetVisibility(bReviewing ? ESlateVisibility::Collapsed : ESlateVisibility::SelfHitTestInvisible);
+	}
 
 	if (ReviewAtSeconds > 0.0 && SimSession.Snapshot().Time >= ReviewAtSeconds)
 	{
@@ -508,10 +513,11 @@ void AUIRaceDirector::Tick(float DeltaSeconds)
 	{
 		bResultLogged = true;
 		LogResult();
-		if (bQuitWhenDone)
-		{
-			FPlatformMisc::RequestExit(false, TEXT("UISimQuitWhenDone"));
-		}
+	}
+	if (bResultLogged && bQuitWhenDone && ScriptNext >= Script.Num())
+	{
+		bQuitWhenDone = false;
+		FPlatformMisc::RequestExit(false, TEXT("UISimQuitWhenDone")); // after the last script line
 	}
 }
 

@@ -43,6 +43,7 @@ enum class EUICommand : uint8
 	StopReview,
 	ToggleReviewPause,
 	SeekReview,            // Value = seconds, relative to the replay time
+	SetReviewOffset,       // Value = seconds relative to the incident (-5..+5)
 	NextReviewCamera,
 	SetAccused,            // Index: 0 = car, 1 = other car
 	Verdict                // Penalty, against the accused car of the incident under review
@@ -93,6 +94,7 @@ public:
 
 	// Incident review (M4). Index into Session().Incidents(), -1 = none yet.
 	int32 SelectedIncident() const;
+	int32 ReviewedIncident() const { return ReviewIncidentIndex; } // valid while reviewing
 	bool IsReviewing() const { return bReviewing; }
 	bool IsReviewPaused() const { return bReviewPaused; }
 	double ReviewOffset() const; // replay time relative to the incident, seconds
@@ -215,10 +217,13 @@ private:
 		double Time = 0.0;
 		FUICommand Command;
 		bool bClick = false;
+		bool bScreenshot = false; // save Saved/Screenshots/uisim_check.png
 		FVector2D Click = FVector2D::ZeroVector;
 	};
 	TArray<FScriptLine> Script; // -UISimScript, sorted by time
+	void RunScriptLine(const FScriptLine& Line);
 	int32 ScriptNext = 0;
+	double FinishedAt = 0.0; // real time of the finish, for script lines after the flag
 	TSharedPtr<FSlateVirtualUserHandle> ClickUser;
 
 	UPROPERTY()
