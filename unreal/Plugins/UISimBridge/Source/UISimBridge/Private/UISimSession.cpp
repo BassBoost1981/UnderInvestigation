@@ -320,6 +320,7 @@ void FUISimSession::CopySnapshot()
 		Out.bInPitLane = Car.inPitLane;
 		Out.bRetired = Car.retired;
 		Out.bDisqualified = Car.disqualified;
+		Out.bUnlapping = Car.unlapping;
 		Out.bBlueFlag = Car.blueFlag;
 		Out.bOvertakeActive = Car.overtakeActive;
 		Out.Compound = static_cast<int32>(Car.compound);

@@ -14,6 +14,7 @@ struct FUISimCar
 	bool bInPitLane = false;
 	bool bRetired = false;
 	bool bDisqualified = false;
+	bool bUnlapping = false; // lapped car passing the queue and the SC (B5.13.4 c)
 	bool bBlueFlag = false;
 	bool bOvertakeActive = false; // Overtake mode (B7.2) usable this lap
 	int32 Compound = 1;      // 0 soft, 1 medium, 2 hard

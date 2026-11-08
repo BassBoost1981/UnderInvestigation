@@ -11,6 +11,6 @@
 900 click 773 836    # ROT: asks first
 901 click 808 809    # JA, ROT
 1000 click 773 836   # NEUSTART (same button)
-1100 click 689 863   # KAM 3
-1110 click 872 863   # ZEIT -
-1111 click 1003 863  # ZEIT +
+1100 click 668 863   # KAM 3
+1110 click 877 863   # ZEIT -
+1111 click 1008 863  # ZEIT +

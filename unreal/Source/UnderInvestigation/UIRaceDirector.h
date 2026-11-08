@@ -70,7 +70,7 @@ struct FUICommand
 //               -UISimTestVerdicts (5 s for every attacker, automated checks only)
 //               -UISimCrashAt=<seconds> (scripted crash, automated checks only)
 //               -UISimScript=<file> (commands at race times, see UIRaceCommands.cpp; relative to the project)
-// Keys: 1-5 cameras, +/- time scale.
+// Keys: 1-6 cameras (6 = pit lane), +/- time scale.
 // Race control: V = VSC on/off, S = Safety Car out / in this lap, R = red flag / restart,
 //               L = lapped cars may overtake (SC), P = close / open the pit entry,
 //               Q/E = select marshal sector, Y = cycle its flag (green, yellow, double yellow).
@@ -138,6 +138,8 @@ private:
 	void RunScript();
 	void SyntheticClick(const FVector2D& ViewportPixel); // Slate event at a viewport pixel, real cursor untouched
 	FVector CarLocation(int32 EntryIndex) const;
+	FVector PitCameraLocation() const;
+	FVector PitLaneCentre() const;
 	UStaticMeshComponent* AddMesh(UStaticMesh* Mesh, const FLinearColor& Color);
 
 	FUISimSession SimSession;
@@ -192,7 +194,8 @@ private:
 	bool bReviewPaused = false;
 	int32 ReviewIncidentIndex = -1;
 	double ReviewTime = 0.0;          // race time shown in the replay
-	int32 ReviewMainMode = 0;         // 0 marshal post, 1 heli, 2 onboard car, 3 onboard other car
+	int32 ReviewMainMode = 0;         // 0 marshal post, 1 heli, 2 onboard car, 3 onboard other car, 4 pit lane
+	static constexpr int32 ReviewCameraModes = 5;
 	double ReviewAtSeconds = 0.0;     // > 0: scripted review of the latest incident at this race time
 	int32 Accused = 0;
 	bool bTestVerdicts = false;       // -UISimTestVerdicts: 5 s for the attacker on every incident (checks only)
@@ -217,7 +220,8 @@ private:
 		double Time = 0.0;
 		FUICommand Command;
 		bool bClick = false;
-		bool bScreenshot = false; // save Saved/Screenshots/uisim_check.png
+		bool bScreenshot = false; // save Saved/Screenshots/<ShotName>.png
+		FString ShotName;
 		FVector2D Click = FVector2D::ZeroVector;
 	};
 	TArray<FScriptLine> Script; // -UISimScript, sorted by time

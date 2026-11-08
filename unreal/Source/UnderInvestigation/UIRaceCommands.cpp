@@ -150,7 +150,7 @@ bool AUIRaceDirector::Execute(const FUICommand& Command)
 	case EUICommand::SetReviewOffset:
 		ReviewTime = SimSession.Incidents()[ReviewIncidentIndex].Time + FMath::Clamp(Command.Value, -ReviewWindow, ReviewWindow);
 		break;
-	case EUICommand::NextReviewCamera: ReviewMainMode = (ReviewMainMode + 1) % 4; break;
+	case EUICommand::NextReviewCamera: ReviewMainMode = (ReviewMainMode + 1) % ReviewCameraModes; break;
 	case EUICommand::SetAccused: Accused = Command.Index; break;
 	case EUICommand::Verdict:
 	{
@@ -264,7 +264,7 @@ bool AUIRaceDirector::LoadScript(const FString& File)
 				}
 			}
 		}
-		else if (Name == TEXT("screenshot")) { Line.bScreenshot = true; }
+		else if (Name == TEXT("screenshot")) { Line.bScreenshot = true; Line.ShotName = Arg.IsEmpty() ? FString(TEXT("uisim_check")) : Arg; }
 		else if (Name == TEXT("click") && Words.Num() == 4)
 		{
 			Line.bClick = true;
@@ -312,7 +312,7 @@ void AUIRaceDirector::RunScriptLine(const FScriptLine& Line)
 {
 	if (Line.bScreenshot)
 	{
-		const FString File = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Screenshots/uisim_check.png"));
+		const FString File = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Screenshots"), Line.ShotName + TEXT(".png"));
 		FScreenshotRequest::RequestScreenshot(File, true, false); // with UI
 		UE_LOG(LogUISim, Display, TEXT("Screenshot requested: %s"), *File);
 	}

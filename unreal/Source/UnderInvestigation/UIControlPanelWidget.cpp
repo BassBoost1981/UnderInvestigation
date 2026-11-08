@@ -24,7 +24,8 @@ namespace
 	constexpr double LappedLeft = 318.0, LappedWidth = 150.0;
 	constexpr double PitLeft = 474.0, PitWidth = 116.0;
 	constexpr double TimeWidth = 90.0;
-	constexpr double TimeMinusLeft = 5 * 66.0 + 6.0;
+	constexpr double CameraWidth = 50.0;
+	constexpr double TimeMinusLeft = 6 * (CameraWidth + 6.0) + 6.0;
 	constexpr double TimeLabelLeft = TimeMinusLeft + TimeWidth + 6.0;
 	constexpr double TimePlusLeft = TimeLabelLeft + 56.0 + 6.0;
 	constexpr double RowHeight = 26.0;
@@ -137,9 +138,9 @@ TArray<UUIControlPanelWidget::FButton> UUIControlPanelWidget::Buttons() const
 		MakeCommand(Snapshot.bPitEntryClosed ? EUICommand::OpenPitEntry : EUICommand::ClosePitEntry), Snapshot.bPitEntryClosed);
 
 	// Row 2: cameras and time scale.
-	for (int32 Index = 0; Index < 5; ++Index)
+	for (int32 Index = 0; Index < 6; ++Index)
 	{
-		Add(Cell(Index * (60.0 + Gap), 2, 60.0), FString::Printf(TEXT("KAM %d"), Index + 1), MakeCommand(EUICommand::SetCamera, Index),
+		Add(Cell(Index * (CameraWidth + Gap), 2, CameraWidth), FString::Printf(TEXT("KAM %d"), Index + 1), MakeCommand(EUICommand::SetCamera, Index),
 			Race->ActiveCameraIndex() == Index);
 	}
 	Add(Cell(TimeMinusLeft, 2, TimeWidth), TEXT("ZEIT - [-]"), MakeCommand(EUICommand::SetTimeScale, 0, AUIRaceDirector::StepTimeScale(Race->TimeScale(), -1)),

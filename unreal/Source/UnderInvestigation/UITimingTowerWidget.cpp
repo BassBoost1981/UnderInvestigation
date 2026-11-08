@@ -82,6 +82,14 @@ void UUITimingTowerWidget::NativeTick(const FGeometry& MyGeometry, float InDelta
 	{
 		State = TEXT("CHEQUERED FLAG");
 	}
+	if (Snapshot.bLappedCarsReleased && Snapshot.State == EUISimRaceState::SafetyCar)
+	{
+		State += TEXT("  UEBERRUNDETE VORBEI");
+	}
+	if (Snapshot.bPitEntryClosed)
+	{
+		State += TEXT("  BOXENGASSE ZU");
+	}
 	Header->SetText(FText::FromString(FString::Printf(TEXT("LAP %2d/%d  %s  %s"),
 		Snapshot.LeaderLap, Snapshot.TotalLaps, *AUIRaceDirector::FormatRaceTime(Snapshot.Time), *State)));
 
@@ -95,7 +103,11 @@ void UUITimingTowerWidget::NativeTick(const FGeometry& MyGeometry, float InDelta
 		}
 		const FUISimCar& Car = Snapshot.Cars[Index];
 		FString Gap;
-		if (Car.bRetired)
+		if (Car.bDisqualified)
+		{
+			Gap = TEXT("DSQ");
+		}
+		else if (Car.bRetired)
 		{
 			Gap = TEXT("OUT");
 		}
@@ -116,6 +128,10 @@ void UUITimingTowerWidget::NativeTick(const FGeometry& MyGeometry, float InDelta
 		if (Car.bInPitLane)
 		{
 			Penalty = TEXT("PIT");
+		}
+		else if (Car.bUnlapping)
+		{
+			Penalty = TEXT("UNLAP"); // lapped car passing the queue under the SC
 		}
 		else if (Car.bBlueFlag)
 		{
@@ -156,7 +172,7 @@ void UUITimingTowerWidget::NativeTick(const FGeometry& MyGeometry, float InDelta
 	Footer->SetText(FText::FromString(FString::Printf(
 		TEXT("Sektor %d/%d: %s [Q/E, Y]  Verstoesse: %d\n")
 		TEXT("V VSC  S Safety Car  R Rot/Restart  L Ueberrundete  P Boxengasse%s\n")
-		TEXT("Kamera: %s [1-5]  Zeit x%g [+/-]"),
+		TEXT("Kamera: %s [1-6]  Zeit x%g [+/-]"),
 		Sector + 1, Snapshot.SectorFlags.Num(), FlagName, Race->Session().FlagViolations(),
 		Snapshot.bPitEntryClosed ? TEXT(" (GESPERRT)") : TEXT(""),
 		*Race->ActiveCameraName(), Race->TimeScale())));

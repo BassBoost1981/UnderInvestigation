@@ -1,0 +1,4 @@
+# M8.8 check (testring, seed 1, 1600x900): closed pit entry in the tower and the incident list.
+1300 pit_close
+2500 screenshot pit_closed
+2600 pit_open      # well after the screenshot (one frame covers several seconds at x500)

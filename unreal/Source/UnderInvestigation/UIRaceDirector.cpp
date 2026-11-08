@@ -174,7 +174,7 @@ void AUIRaceDirector::BuildTrack()
 		const FTransform At = SimSession.TrackTransform(D + 10.0, -20.0);
 		UStaticMeshComponent* Lane = AddMesh(CubeMesh, FLinearColor(0.25f, 0.25f, 0.27f));
 		Lane->SetWorldTransform(FTransform(At.GetRotation(), At.GetLocation() + FVector(0, 0, RoadHeight),
-			FVector(0.2, 0.08, 0.01)));
+			FVector(20.0, 8.0, 0.02))); // engine cube is 1 m: 20 m piece, 8 m wide
 	}
 
 	// Ground under the whole circuit.
@@ -213,7 +213,7 @@ void AUIRaceDirector::SpawnCars()
 		BoxTeams.Add(Team);
 		const FTransform At = SimSession.TrackTransform(SimSession.BoxOffset(Entry), -28.0);
 		UStaticMeshComponent* Garage = AddMesh(CubeMesh, TeamColor(Teams.IndexOfByKey(Team), Teams.Num()));
-		Garage->SetWorldTransform(FTransform(At.GetRotation(), At.GetLocation() + FVector(0, 0, 200.0), FVector(0.1, 0.06, 0.04)));
+		Garage->SetWorldTransform(FTransform(At.GetRotation(), At.GetLocation() + FVector(0, 0, 200.0), FVector(10.0, 6.0, 4.0))); // 10 m x 6 m x 4 m
 	}
 	SafetyCarMesh = AddMesh(CubeMesh, FLinearColor(1.0f, 0.45f, 0.0f));
 	SafetyCarMesh->SetWorldScale3D(CarScale * FVector(1.1, 1.05, 1.3));
@@ -346,6 +346,20 @@ void AUIRaceDirector::SpawnCameras()
 	const FBox Bounds(SimSession.CenterlineWorld());
 	Spawn(TEXT("Uebersicht"), Bounds.GetCenter() + FVector(0, 0, Bounds.GetSize().GetMax() * 0.95), FRotator(-90.0, 0.0, 0.0));
 	Cameras.Last()->GetCameraComponent()->SetFieldOfView(60.0f);
+
+	// Pit lane (M8.8): fixed, on the far side of the straight, looking across the lane at the boxes.
+	Spawn(TEXT("Boxengasse"), PitCameraLocation(), (PitLaneCentre() - PitCameraLocation()).Rotation());
+	Cameras.Last()->GetCameraComponent()->SetFieldOfView(70.0f);
+}
+
+FVector AUIRaceDirector::PitCameraLocation() const
+{
+	return SimSession.TrackTransform(0.0, 70.0).GetLocation() + FVector(0, 0, 3000.0); // across the straight
+}
+
+FVector AUIRaceDirector::PitLaneCentre() const
+{
+	return SimSession.TrackTransform(0.0, -22.0).GetLocation(); // between the fast lane and the boxes
 }
 
 FVector AUIRaceDirector::CarLocation(int32 EntryIndex) const
@@ -617,7 +631,7 @@ void AUIRaceDirector::HandleInput()
 		Command.Value = Value;
 		Execute(Command);
 	};
-	const FKey CameraKeys[] = {EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::Five};
+	const FKey CameraKeys[] = {EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::Five, EKeys::Six};
 	for (int32 Index = 0; !bReviewing && Index < UE_ARRAY_COUNT(CameraKeys) && Index < Cameras.Num(); ++Index)
 	{
 		if (Player->WasInputKeyJustPressed(CameraKeys[Index]))
@@ -777,6 +791,10 @@ void AUIRaceDirector::StartReview(int32 IncidentIndex)
 	bReviewPaused = false;
 	ReviewIncidentIndex = IncidentIndex;
 	ReviewTime = SimSession.Incidents()[IncidentIndex].Time - ReviewWindow;
+	// Pit lane offences start on the pit lane camera, everything else at the marshal post.
+	const EUISimIncidentType Type = SimSession.Incidents()[IncidentIndex].Type;
+	ReviewMainMode = Type == EUISimIncidentType::PitLaneSpeeding || Type == EUISimIncidentType::UnsafeRelease ||
+		Type == EUISimIncidentType::PitEntryClosed ? 4 : 0;
 	PipCapture->bCaptureEveryFrame = true;
 	UE_LOG(LogUISim, Display, TEXT("Review of incident #%d"), SimSession.Incidents()[IncidentIndex].Id);
 }
@@ -825,7 +843,7 @@ void AUIRaceDirector::UpdateReview(float DeltaSeconds)
 	const FTransform Main = ReviewViewTransform(ReviewMainMode, Fov);
 	ReviewCamera->SetActorTransform(Main);
 	ReviewCamera->GetCameraComponent()->SetFieldOfView(Fov);
-	const FTransform Pip = ReviewViewTransform((ReviewMainMode + 1) % 4, Fov);
+	const FTransform Pip = ReviewViewTransform((ReviewMainMode + 1) % ReviewCameraModes, Fov);
 	PipCapture->SetWorldLocationAndRotation(Pip.GetLocation(), Pip.GetRotation());
 	PipCapture->FOVAngle = Fov;
 }
@@ -860,6 +878,13 @@ FTransform AUIRaceDirector::ReviewViewTransform(int32 Mode, double& OutFov) cons
 		OutFov = 45.0;
 		return FTransform((Middle - Heli).Rotation(), Heli);
 	}
+	case 4: // pit lane camera, zoomed on the incident
+	{
+		const FVector From = PitCameraLocation();
+		const double Range = FVector::Dist(From, Middle);
+		OutFov = FMath::Clamp(FMath::RadiansToDegrees(2.0 * FMath::Atan(2500.0 / FMath::Max(Range, 1.0))), 5.0, 70.0);
+		return FTransform((Middle - From).Rotation(), From);
+	}
 	default: // onboard behind one of the two cars
 	{
 		const int32 Entry = Mode == 2 ? Incident.Car : Incident.OtherCar;
@@ -879,12 +904,13 @@ FString AUIRaceDirector::ReviewCameraName(bool bPictureInPicture) const
 	{
 		return FString();
 	}
-	const int32 Mode = bPictureInPicture ? (ReviewMainMode + 1) % 4 : ReviewMainMode;
+	const int32 Mode = bPictureInPicture ? (ReviewMainMode + 1) % ReviewCameraModes : ReviewMainMode;
 	const FUISimIncident& Incident = SimSession.Incidents()[ReviewIncidentIndex];
 	switch (Mode)
 	{
 	case 0: return TEXT("Streckenposten");
 	case 1: return TEXT("Heli");
+	case 4: return TEXT("Boxengasse");
 	case 2: return FString::Printf(TEXT("Onboard %s"), *SimSession.Entries()[Incident.Car].Code);
 	default: return FString::Printf(TEXT("Onboard %s"), *SimSession.Entries()[Incident.OtherCar].Code);
 	}
