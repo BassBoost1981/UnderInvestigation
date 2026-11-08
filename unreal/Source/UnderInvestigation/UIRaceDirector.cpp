@@ -73,6 +73,11 @@ void AUIRaceDirector::BeginPlay()
 	bTestVerdicts = FParse::Param(CommandLine, TEXT("UISimTestVerdicts"));
 	FParse::Value(CommandLine, TEXT("UISimCrashAt="), CrashAtSeconds);
 	bCrashReact = FParse::Param(CommandLine, TEXT("UISimCrashReact"));
+	FString ScriptFile;
+	if (FParse::Value(CommandLine, TEXT("UISimScript="), ScriptFile))
+	{
+		LoadScript(ScriptFile);
+	}
 
 	const FString DataDir = FPaths::ConvertRelativePathToFull(FPaths::Combine(FPaths::ProjectDir(), TEXT("../data")));
 	FString TrackFile = TEXT("testring.json");
@@ -378,13 +383,7 @@ void AUIRaceDirector::Tick(float DeltaSeconds)
 		Player->SetShowMouseCursor(true);
 	}
 	HandleInput();
-	if (SafetyCarAtSeconds > 0.0 && SimSession.Snapshot().Time >= SafetyCarAtSeconds)
-	{
-		SafetyCarAtSeconds = 0.0;
-		SimSession.DeploySafetyCar();
-		UE_LOG(LogUISim, Display, TEXT("Race control at %s: Safety Car deployed (scripted)"),
-			*FormatRaceTime(SimSession.Snapshot().Time));
-	}
+	RunScript(); // lines after the finish (the race clock has stopped)
 
 	if (ReviewAtSeconds > 0.0 && SimSession.Snapshot().Time >= ReviewAtSeconds)
 	{
@@ -459,6 +458,15 @@ void AUIRaceDirector::Tick(float DeltaSeconds)
 		}
 		PreviousSafetyCarDistance = SimSession.Snapshot().SafetyCarDistance;
 		bSafetyCarWasOnTrack = SimSession.Snapshot().bSafetyCarOnTrack;
+		// Scripted commands at the exact race time, independent of the frame rate and time scale.
+		RunScript();
+		if (SafetyCarAtSeconds > 0.0 && SimSession.Snapshot().Time >= SafetyCarAtSeconds)
+		{
+			SafetyCarAtSeconds = 0.0;
+			FUICommand Command;
+			Command.Type = EUICommand::DeploySafetyCar;
+			Execute(Command);
+		}
 		SimSession.Step();
 		if (!bSafetyCarWasOnTrack)
 		{
@@ -580,12 +588,20 @@ void AUIRaceDirector::HandleInput()
 	{
 		return;
 	}
+	auto Run = [this](EUICommand Type, int32 Index = 0, double Value = 0.0)
+	{
+		FUICommand Command;
+		Command.Type = Type;
+		Command.Index = Index;
+		Command.Value = Value;
+		Execute(Command);
+	};
 	const FKey CameraKeys[] = {EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::Five};
 	for (int32 Index = 0; !bReviewing && Index < UE_ARRAY_COUNT(CameraKeys) && Index < Cameras.Num(); ++Index)
 	{
 		if (Player->WasInputKeyJustPressed(CameraKeys[Index]))
 		{
-			ActiveCamera = Index;
+			Run(EUICommand::SetCamera, Index);
 		}
 	}
 
@@ -596,11 +612,11 @@ void AUIRaceDirector::HandleInput()
 	}
 	if (Player->WasInputKeyJustPressed(EKeys::Add) || Player->WasInputKeyJustPressed(EKeys::Equals))
 	{
-		SimTimeScale = TimeScales[FMath::Min(Current + 1, static_cast<int32>(UE_ARRAY_COUNT(TimeScales)) - 1)];
+		Run(EUICommand::SetTimeScale, 0, TimeScales[FMath::Min(Current + 1, static_cast<int32>(UE_ARRAY_COUNT(TimeScales)) - 1)]);
 	}
 	if (Player->WasInputKeyJustPressed(EKeys::Subtract) || Player->WasInputKeyJustPressed(EKeys::Hyphen))
 	{
-		SimTimeScale = TimeScales[FMath::Max(Current - 1, 0)];
+		Run(EUICommand::SetTimeScale, 0, TimeScales[FMath::Max(Current - 1, 0)]);
 	}
 	HandleRaceControlInput(Player);
 	HandleReviewInput(Player);
@@ -645,18 +661,26 @@ void AUIRaceDirector::HandleReviewInput(APlayerController* Player)
 	{
 		return;
 	}
+	auto Run = [this](EUICommand Type, int32 Index = 0, double Value = 0.0)
+	{
+		FUICommand Command;
+		Command.Type = Type;
+		Command.Index = Index;
+		Command.Value = Value;
+		Execute(Command);
+	};
 	const int32 Selected = SelectedIncident();
 	if (Player->WasInputKeyJustPressed(EKeys::Up))
 	{
-		SelectedIncidentIndex = FMath::Max(Selected - 1, 0);
+		Run(EUICommand::SelectIncident, FMath::Max(Selected - 1, 0));
 	}
 	if (Player->WasInputKeyJustPressed(EKeys::Down))
 	{
-		SelectedIncidentIndex = Selected + 1 >= Count ? -1 : Selected + 1; // past the newest: follow the latest
+		Run(EUICommand::SelectIncident, Selected + 1 >= Count ? -1 : Selected + 1); // past the newest: follow the latest
 	}
 	if (Player->WasInputKeyJustPressed(EKeys::Enter))
 	{
-		StartReview(SelectedIncident());
+		Run(EUICommand::StartReview, -1);
 	}
 	if (!bReviewing)
 	{
@@ -664,43 +688,40 @@ void AUIRaceDirector::HandleReviewInput(APlayerController* Player)
 	}
 	if (Player->WasInputKeyJustPressed(EKeys::BackSpace))
 	{
-		StopReview();
+		Run(EUICommand::StopReview);
 		return;
 	}
 	if (Player->WasInputKeyJustPressed(EKeys::SpaceBar))
 	{
-		bReviewPaused = !bReviewPaused;
+		Run(EUICommand::ToggleReviewPause);
 	}
-	const double IncidentTime = SimSession.Incidents()[ReviewIncidentIndex].Time;
 	if (Player->WasInputKeyJustPressed(EKeys::Left))
 	{
-		ReviewTime = FMath::Max(ReviewTime - 1.0, IncidentTime - ReviewWindow);
+		Run(EUICommand::SeekReview, 0, -1.0);
 	}
 	if (Player->WasInputKeyJustPressed(EKeys::Right))
 	{
-		ReviewTime = FMath::Min(ReviewTime + 1.0, IncidentTime + ReviewWindow);
+		Run(EUICommand::SeekReview, 0, 1.0);
 	}
 	if (Player->WasInputKeyJustPressed(EKeys::C))
 	{
-		ReviewMainMode = (ReviewMainMode + 1) % 4;
+		Run(EUICommand::NextReviewCamera);
 	}
 
 	// Verdict on the incident under review (one per incident).
-	const FUISimIncident& Incident = SimSession.Incidents()[ReviewIncidentIndex];
 	if (Player->WasInputKeyJustPressed(EKeys::Tab))
 	{
-		Accused = 1 - Accused;
+		Run(EUICommand::SetAccused, 1 - Accused);
 	}
 	const FKey PenaltyKeys[] = {EKeys::Zero, EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::Five, EKeys::Six};
 	for (int32 Index = 0; Index < UE_ARRAY_COUNT(PenaltyKeys); ++Index)
 	{
-		if (Player->WasInputKeyJustPressed(PenaltyKeys[Index]) && !SimSession.VerdictFor(Incident.Id))
+		if (Player->WasInputKeyJustPressed(PenaltyKeys[Index]))
 		{
-			const EUISimPenalty Penalty = static_cast<EUISimPenalty>(Index);
-			const int32 Car = Penalty == EUISimPenalty::None ? -1 : (Accused == 0 ? Incident.Car : Incident.OtherCar);
-			SimSession.IssueVerdict(Incident.Id, Car, Penalty);
-			UE_LOG(LogUISim, Display, TEXT("Verdict #%d: %s %s"), Incident.Id, *PenaltyName(Penalty),
-				Car >= 0 ? *SimSession.Entries()[Car].Code : TEXT(""));
+			FUICommand Command;
+			Command.Type = EUICommand::Verdict;
+			Command.Penalty = static_cast<EUISimPenalty>(Index);
+			Execute(Command);
 		}
 	}
 }
@@ -847,49 +868,34 @@ void AUIRaceDirector::HandleRaceControlInput(APlayerController* Player)
 {
 	const FUISimSnapshot& Snapshot = SimSession.Snapshot();
 	const EUISimRaceState State = Snapshot.State;
-	auto Log = [&Snapshot](const TCHAR* Action)
+	auto Run = [this](EUICommand Type, int32 Index = 0)
 	{
-		UE_LOG(LogUISim, Display, TEXT("Race control at %s: %s"), *FormatRaceTime(Snapshot.Time), Action);
+		FUICommand Command;
+		Command.Type = Type;
+		Command.Index = Index;
+		Execute(Command);
 	};
 
+	// Toggle keys: the state decides which command a key stands for.
 	if (Player->WasInputKeyJustPressed(EKeys::V))
 	{
-		if (State == EUISimRaceState::Green)
-		{
-			SimSession.DeployVirtualSafetyCar();
-			Log(TEXT("VSC deployed"));
-		}
-		else if (State == EUISimRaceState::VirtualSafetyCar)
-		{
-			SimSession.EndVirtualSafetyCar();
-			Log(TEXT("VSC ending"));
-		}
+		Run(State == EUISimRaceState::VirtualSafetyCar ? EUICommand::EndVsc : EUICommand::DeployVsc);
 	}
 	if (Player->WasInputKeyJustPressed(EKeys::S))
 	{
-		if (State == EUISimRaceState::SafetyCar)
-		{
-			SimSession.RecallSafetyCar();
-			Log(TEXT("Safety Car in this lap"));
-		}
-		else if (State != EUISimRaceState::RedFlag)
-		{
-			SimSession.DeploySafetyCar();
-			Log(TEXT("Safety Car deployed"));
-		}
+		Run(State == EUISimRaceState::SafetyCar ? EUICommand::RecallSafetyCar : EUICommand::DeploySafetyCar);
 	}
 	if (Player->WasInputKeyJustPressed(EKeys::R))
 	{
-		if (State == EUISimRaceState::RedFlag)
-		{
-			SimSession.Restart();
-			Log(TEXT("Restart behind the Safety Car"));
-		}
-		else
-		{
-			SimSession.RedFlag();
-			Log(TEXT("Red flag"));
-		}
+		Run(State == EUISimRaceState::RedFlag ? EUICommand::Restart : EUICommand::RedFlag);
+	}
+	if (Player->WasInputKeyJustPressed(EKeys::L))
+	{
+		Run(EUICommand::LappedCarsMayOvertake);
+	}
+	if (Player->WasInputKeyJustPressed(EKeys::P))
+	{
+		Run(Snapshot.bPitEntryClosed ? EUICommand::OpenPitEntry : EUICommand::ClosePitEntry);
 	}
 
 	const int32 Sectors = SimSession.MarshalSectorCount();
@@ -897,18 +903,19 @@ void AUIRaceDirector::HandleRaceControlInput(APlayerController* Player)
 	{
 		if (Player->WasInputKeyJustPressed(EKeys::Q))
 		{
-			SelectedMarshalSector = (SelectedMarshalSector + Sectors - 1) % Sectors;
+			Run(EUICommand::SelectSector, (SelectedMarshalSector + Sectors - 1) % Sectors);
 		}
 		if (Player->WasInputKeyJustPressed(EKeys::E))
 		{
-			SelectedMarshalSector = (SelectedMarshalSector + 1) % Sectors;
+			Run(EUICommand::SelectSector, (SelectedMarshalSector + 1) % Sectors);
 		}
 		if (Player->WasInputKeyJustPressed(EKeys::Y) && Snapshot.SectorFlags.IsValidIndex(SelectedMarshalSector))
 		{
-			const uint8 Next = (static_cast<uint8>(Snapshot.SectorFlags[SelectedMarshalSector]) + 1) % 3;
-			SimSession.SetSectorFlag(SelectedMarshalSector, static_cast<EUISimFlag>(Next));
-			const TCHAR* Names[] = {TEXT("green"), TEXT("yellow"), TEXT("double yellow")};
-			Log(*FString::Printf(TEXT("sector %d %s"), SelectedMarshalSector + 1, Names[Next]));
+			FUICommand Command;
+			Command.Type = EUICommand::SetSectorFlag;
+			Command.Index = SelectedMarshalSector;
+			Command.Flag = static_cast<EUISimFlag>((static_cast<uint8>(Snapshot.SectorFlags[SelectedMarshalSector]) + 1) % 3);
+			Execute(Command);
 		}
 	}
 }
@@ -927,7 +934,11 @@ void AUIRaceDirector::LogResult() const
 	{
 		const FUISimEntry& Entry = SimSession.Entries()[Car.EntryIndex];
 		FString Result;
-		if (Car.Position == 1)
+		if (Car.bDisqualified)
+		{
+			Result = TEXT("DSQ");
+		}
+		else if (Car.Position == 1)
 		{
 			Result = FormatRaceTime(Car.LastLineTime);
 		}

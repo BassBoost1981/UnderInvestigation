@@ -222,6 +222,9 @@ void FUISimSession::DeploySafetyCar() { Send(static_cast<int32>(ECommand::Deploy
 void FUISimSession::RecallSafetyCar() { Send(static_cast<int32>(ECommand::RecallSafetyCar)); }
 void FUISimSession::RedFlag() { Send(static_cast<int32>(ECommand::RedFlag)); }
 void FUISimSession::Restart() { Send(static_cast<int32>(ECommand::Restart)); }
+void FUISimSession::LappedCarsMayOvertake() { Send(static_cast<int32>(ECommand::LappedCarsMayOvertake)); }
+void FUISimSession::ClosePitEntry() { Send(static_cast<int32>(ECommand::ClosePitEntry)); }
+void FUISimSession::OpenPitEntry() { Send(static_cast<int32>(ECommand::OpenPitEntry)); }
 
 TArray<FVector> FUISimSession::CenterlineWorld() const
 {
@@ -290,6 +293,8 @@ void FUISimSession::CopySnapshot()
 	}
 	CurrentSnapshot.bSafetyCarOnTrack = In.safetyCarOnTrack;
 	CurrentSnapshot.bSafetyCarInThisLap = In.safetyCarInThisLap;
+	CurrentSnapshot.bLappedCarsReleased = In.lappedCarsReleased;
+	CurrentSnapshot.bPitEntryClosed = In.pitEntryClosed;
 	CurrentSnapshot.SafetyCarDistance = In.safetyCarDistance;
 	CurrentSnapshot.Cars.SetNum(static_cast<int32>(In.cars.size()));
 	for (int32 Index = 0; Index < CurrentSnapshot.Cars.Num(); ++Index)
@@ -314,6 +319,7 @@ void FUISimSession::CopySnapshot()
 		Out.PendingPenalty = static_cast<EUISimPenalty>(Car.pendingPenalty);
 		Out.bInPitLane = Car.inPitLane;
 		Out.bRetired = Car.retired;
+		Out.bDisqualified = Car.disqualified;
 		Out.bBlueFlag = Car.blueFlag;
 		Out.bOvertakeActive = Car.overtakeActive;
 		Out.Compound = static_cast<int32>(Car.compound);

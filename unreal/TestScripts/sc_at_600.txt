@@ -1,0 +1,6 @@
+# M8.4 check: Safety Car at 600 s (same as -UISimSafetyCarAt=600), plus harmless clicks.
+# Format: <race time in seconds> <command> [arguments]; see Source/UnderInvestigation/UIRaceCommands.cpp
+600 sc
+610 click 100 60
+620 click 1500 850
+630 restart

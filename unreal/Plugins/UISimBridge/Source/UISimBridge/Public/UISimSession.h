@@ -13,6 +13,7 @@ struct FUISimCar
 	EUISimPenalty PendingPenalty = EUISimPenalty::None;
 	bool bInPitLane = false;
 	bool bRetired = false;
+	bool bDisqualified = false;
 	bool bBlueFlag = false;
 	bool bOvertakeActive = false; // Overtake mode (B7.2) usable this lap
 	int32 Compound = 1;      // 0 soft, 1 medium, 2 hard
@@ -61,6 +62,8 @@ struct FUISimSnapshot
 	TArray<FUISimHazard> Hazards;   // not yet recovered
 	bool bSafetyCarOnTrack = false;
 	bool bSafetyCarInThisLap = false;
+	bool bLappedCarsReleased = false; // "LAPPED CARS MAY NOW OVERTAKE" sent
+	bool bPitEntryClosed = false;
 	double SafetyCarDistance = 0.0;
 	TArray<FUISimCar> Cars; // sorted by position
 };
@@ -201,6 +204,9 @@ public:
 	void RecallSafetyCar();
 	void RedFlag();
 	void Restart();
+	void LappedCarsMayOvertake(); // under the SC (B5.13.4 c)
+	void ClosePitEntry();         // B1.6.4
+	void OpenPitEntry();
 
 	// Centre line in Unreal world space (cm), one point every ~5 m.
 	TArray<FVector> CenterlineWorld() const;

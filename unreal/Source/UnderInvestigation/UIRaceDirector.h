@@ -17,6 +17,42 @@ class UUIRatingWidget;
 class UUIRadioWidget;
 class USceneCaptureComponent2D;
 class UTextureRenderTarget2D;
+class FSlateVirtualUserHandle;
+
+// One player action (M8.4). Keys, buttons and test scripts all go through AUIRaceDirector::Execute().
+enum class EUICommand : uint8
+{
+	SetSectorFlag,         // Index = marshal sector, Flag
+	SelectSector,          // Index
+	DeployVsc,
+	EndVsc,
+	DeploySafetyCar,
+	RecallSafetyCar,       // "Safety Car in this lap"
+	RedFlag,
+	Restart,
+	LappedCarsMayOvertake, // under the SC (B5.13.4 c)
+	ClosePitEntry,         // B1.6.4
+	OpenPitEntry,
+	SetCamera,             // Index
+	SetTimeScale,          // Value
+	SelectIncident,        // Index into the incident list, -1 = follow the latest
+	StartReview,           // Index, -1 = the selected incident
+	StopReview,
+	ToggleReviewPause,
+	SeekReview,            // Value = seconds, relative to the replay time
+	NextReviewCamera,
+	SetAccused,            // Index: 0 = car, 1 = other car
+	Verdict                // Penalty, against the accused car of the incident under review
+};
+
+struct FUICommand
+{
+	EUICommand Type = EUICommand::SelectSector;
+	int32 Index = 0;
+	double Value = 0.0;
+	EUISimFlag Flag = EUISimFlag::Green;
+	EUISimPenalty Penalty = EUISimPenalty::None;
+};
 
 // Runs the UISim race at a fixed 20 Hz tick and shows it: blockout track and cars,
 // interpolated between sim snapshots, plus switchable cameras and the timing tower.
@@ -29,8 +65,10 @@ class UTextureRenderTarget2D;
 // Verdict while reviewing: Tab accused car, 0 none, 1 warning, 2 5 s, 3 10 s, 4 drive-through, 5 stop-and-go.
 //               -UISimTestVerdicts (5 s for every attacker, automated checks only)
 //               -UISimCrashAt=<seconds> (scripted crash, automated checks only)
+//               -UISimScript=<file> (commands at race times, see UIRaceCommands.cpp; relative to the project)
 // Keys: 1-5 cameras, +/- time scale.
 // Race control: V = VSC on/off, S = Safety Car out / in this lap, R = red flag / restart,
+//               L = lapped cars may overtake (SC), P = close / open the pit entry,
 //               Q/E = select marshal sector, Y = cycle its flag (green, yellow, double yellow).
 UCLASS()
 class AUIRaceDirector : public AActor
@@ -62,6 +100,12 @@ public:
 	// "1:23.456" or "1:02:03.456".
 	static FString FormatRaceTime(double Seconds);
 
+	// Command layer (M8.4, UIRaceCommands.cpp). Execute() logs every command and refuses
+	// (returns false) what is not allowed in the current state.
+	bool CanExecute(const FUICommand& Command) const;
+	bool Execute(const FUICommand& Command);
+	static FString CommandName(const FUICommand& Command); // script syntax, e.g. "flag 3 yellow"
+
 private:
 	void BuildTrack();
 	void SpawnCars();
@@ -81,6 +125,9 @@ private:
 	void UpdateReview(float DeltaSeconds);
 	FTransform ReviewViewTransform(int32 Mode, double& OutFov) const;
 	void LogResult() const;
+	bool LoadScript(const FString& File);
+	void RunScript();
+	void SyntheticClick(const FVector2D& ViewportPixel); // Slate event at a viewport pixel, real cursor untouched
 	FVector CarLocation(int32 EntryIndex) const;
 	UStaticMeshComponent* AddMesh(UStaticMesh* Mesh, const FLinearColor& Color);
 
@@ -150,6 +197,17 @@ private:
 	double CrashReactAt = 0.0;
 	bool bCrashCameraPending = false;
 	TArray<FUISimReplayCar> ReplayCars;
+
+	struct FScriptLine
+	{
+		double Time = 0.0;
+		FUICommand Command;
+		bool bClick = false;
+		FVector2D Click = FVector2D::ZeroVector;
+	};
+	TArray<FScriptLine> Script; // -UISimScript, sorted by time
+	int32 ScriptNext = 0;
+	TSharedPtr<FSlateVirtualUserHandle> ClickUser;
 
 	UPROPERTY()
 	TObjectPtr<ACameraActor> ReviewCamera;

@@ -155,8 +155,9 @@ void UUITimingTowerWidget::NativeTick(const FGeometry& MyGeometry, float InDelta
 		? FlagNames[static_cast<uint8>(Snapshot.SectorFlags[Sector])] : TEXT("-");
 	Footer->SetText(FText::FromString(FString::Printf(
 		TEXT("Sektor %d/%d: %s [Q/E, Y]  Verstoesse: %d\n")
-		TEXT("V VSC  S Safety Car  R Rot/Restart\n")
+		TEXT("V VSC  S Safety Car  R Rot/Restart  L Ueberrundete  P Boxengasse%s\n")
 		TEXT("Kamera: %s [1-5]  Zeit x%g [+/-]"),
 		Sector + 1, Snapshot.SectorFlags.Num(), FlagName, Race->Session().FlagViolations(),
+		Snapshot.bPitEntryClosed ? TEXT(" (GESPERRT)") : TEXT(""),
 		*Race->ActiveCameraName(), Race->TimeScale())));
 }
