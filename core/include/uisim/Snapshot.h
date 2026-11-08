@@ -10,6 +10,22 @@ enum class RaceState { Green, VirtualSafetyCar, SafetyCar, RedFlag };
 // Steward penalties, ordered by severity.
 enum class Penalty { None, Warning, FiveSeconds, TenSeconds, DriveThrough, StopAndGo };
 
+// Spin: stops briefly and rejoins. OffTrack: stranded beside the track, retired.
+// Crash: stopped on the track with debris, retired.
+enum class AccidentType { Spin, OffTrack, Crash };
+
+// A stranded car (and its debris) that the marshals have to recover.
+struct HazardState {
+    int id = 0;               // = accident id
+    AccidentType type = AccidentType::OffTrack;
+    int car = 0;              // entry index
+    double trackPosition = 0.0;
+    int marshalSector = 0;
+    bool onTrack = false;     // on the racing line: recovery needs double yellow, VSC, SC or red
+    double recoveryLeft = 0.0; // seconds of marshal work still needed
+    double waitingTime = 0.0;  // seconds the marshals had to wait for a sufficient flag
+};
+
 // Read-only state of one car after a sim step. Flat and copyable so the UE
 // layer can keep two snapshots and interpolate between them.
 struct CarState {
@@ -31,6 +47,8 @@ struct CarState {
     double timePenalty = 0.0; // seconds added to the race time (5 s / 10 s verdicts)
     Penalty pendingPenalty = Penalty::None; // drive-through / stop-and-go not served yet
     bool inPitLane = false;
+    bool spinning = false;
+    bool retired = false; // out of the race (accident); classified after the finishers
     bool finished = false;
 };
 
@@ -39,12 +57,13 @@ struct SimSnapshot {
     int leaderLap = 0; // lap the leader is on (1-based), capped at totalLaps
     int totalLaps = 0;
     bool chequered = false; // leader has finished
-    bool finished = false;  // every car has taken the flag
+    bool finished = false;  // every car has taken the flag or retired
     RaceState state = RaceState::Green;
     std::vector<Flag> sectorFlags; // one per marshal sector
     bool safetyCarOnTrack = false;
     bool safetyCarInThisLap = false;
     double safetyCarDistance = 0.0; // metres, same scale as CarState::distance
+    std::vector<HazardState> hazards; // not yet recovered
     std::vector<CarState> cars; // sorted by position
 };
 

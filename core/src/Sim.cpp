@@ -57,6 +57,21 @@ constexpr double kRedFlagStopOffset = 2.0;    // red flag: cars stop this far be
 constexpr double kPitLateral = -5.0;          // snapshot lateral units: 20 m right of the racing line
 constexpr double kPitExitAfterLine = 300.0;
 
+// Accidents (M6.3). Chances per driver error / per collision (for the car that was hit).
+constexpr double kErrorCrashChance = 0.02;
+constexpr double kErrorOffTrackChance = 0.04;
+constexpr double kErrorSpinChance = 0.15;
+constexpr double kCollisionCrashChance = 0.08;
+constexpr double kCollisionSpinChance = 0.20;
+constexpr double kSpinMin = 3.0, kSpinMax = 6.0;                    // seconds stationary
+constexpr double kOffTrackRecoveryMin = 60.0, kOffTrackRecoveryMax = 120.0;
+constexpr double kCrashRecoveryMin = 120.0, kCrashRecoveryMax = 180.0;
+constexpr double kOffTrackLateral = 2.5;  // snapshot units: 10 m beside the racing line
+constexpr double kCrashLateral = 0.3;
+constexpr double kSpinLateral = 0.5;
+constexpr double kHazardSightDistance = 40.0; // drivers lift when they see a car on the track
+constexpr double kHazardCautionFactor = 0.6;
+
 // Long-run effects (no pit stops in M1).
 constexpr double kTyreLossPerLap = 0.0006;
 constexpr double kFuelStartFactor = 0.985;
@@ -155,6 +170,11 @@ void Sim::applyCommands() {
         case Type::IssueVerdict:
             applyVerdict(c);
             break;
+        case Type::InjectAccident:
+            if (c.car >= 0 && c.car < static_cast<int>(cars_.size()) && !outOfRace(c.car) && cars_[c.car].spinTimer <= 0.0) {
+                startAccident(c.car, c.accident, false);
+            }
+            break;
         }
     }
     pending_.clear();
@@ -194,6 +214,85 @@ void Sim::applyVerdict(const Command& c) {
     case Penalty::Warning:
         break;
     }
+}
+
+void Sim::maybeAccident(int i, double crashChance, double offTrackChance, double spinChance, bool fromCollision) {
+    if (outOfRace(i) || cars_[i].spinTimer > 0.0 || cars_[i].inPit) {
+        return;
+    }
+    const double roll = rng_.uniform() / std::max(config_.accidentChanceScale, 1e-12);
+    if (roll < crashChance) {
+        startAccident(i, AccidentType::Crash, fromCollision);
+    } else if (roll < crashChance + offTrackChance) {
+        startAccident(i, AccidentType::OffTrack, fromCollision);
+    } else if (roll < crashChance + offTrackChance + spinChance) {
+        startAccident(i, AccidentType::Spin, fromCollision);
+    }
+}
+
+void Sim::startAccident(int i, AccidentType type, bool fromCollision) {
+    Car& car = cars_[i];
+    Accident accident;
+    accident.id = static_cast<int>(accidents_.size()) + 1;
+    accident.type = type;
+    accident.time = time_;
+    accident.car = i;
+    accident.distance = car.distance;
+    accident.fromCollision = fromCollision;
+    accidents_.push_back(accident);
+
+    car.speed = 0.0;
+    car.overtakeTarget = -1;
+    for (Car& other : cars_) {
+        if (other.overtakeTarget == i) {
+            other.overtakeTarget = -1; // nothing left to attack
+        }
+    }
+    if (type == AccidentType::Spin) {
+        car.spinTimer = rng_.uniform(kSpinMin, kSpinMax);
+        car.lateral = kSpinLateral;
+        ++stats_.spins;
+        return;
+    }
+
+    car.retired = true;
+    ++stats_.accidents;
+    HazardState hazard;
+    hazard.id = accident.id;
+    hazard.type = type;
+    hazard.car = i;
+    hazard.trackPosition = track_.wrap(car.distance);
+    hazard.marshalSector = track_.marshalSectorAt(car.distance);
+    hazard.onTrack = type == AccidentType::Crash;
+    if (hazard.onTrack) {
+        hazard.recoveryLeft = rng_.uniform(kCrashRecoveryMin, kCrashRecoveryMax);
+        car.lateral = kCrashLateral;
+    } else {
+        hazard.recoveryLeft = rng_.uniform(kOffTrackRecoveryMin, kOffTrackRecoveryMax);
+        car.lateral = rng_.uniform() < 0.5 ? kOffTrackLateral : -kOffTrackLateral;
+    }
+    hazards_.push_back(hazard);
+}
+
+bool Sim::recoveryAllowed(const HazardState& hazard) const {
+    if (state_ != RaceState::Green) {
+        return true; // VSC, Safety Car or red flag
+    }
+    const Flag flag = sectorFlags_[hazard.marshalSector];
+    return hazard.onTrack ? flag == Flag::DoubleYellow : flag != Flag::Green;
+}
+
+void Sim::updateHazards() {
+    for (HazardState& hazard : hazards_) {
+        if (recoveryAllowed(hazard)) {
+            hazard.recoveryLeft -= kDt;
+        } else {
+            hazard.waitingTime += kDt; // marshals cannot go out yet
+        }
+    }
+    hazards_.erase(std::remove_if(hazards_.begin(), hazards_.end(),
+                                  [](const HazardState& h) { return h.recoveryLeft <= 0.0; }),
+                   hazards_.end());
 }
 
 void Sim::movePitCar(int i) {
@@ -240,7 +339,7 @@ void Sim::convertUnservedPenalties() {
 void Sim::deploySafetyCar(bool inThisLap) {
     int front = -1; // race leader on the road: most distance covered
     for (int i = 0; i < static_cast<int>(cars_.size()); ++i) {
-        if (!cars_[i].finished && (front < 0 || cars_[i].distance > cars_[front].distance)) {
+        if (!outOfRace(i) && (front < 0 || cars_[i].distance > cars_[front].distance)) {
             front = i;
         }
     }
@@ -377,6 +476,12 @@ double Sim::speedCap(int i, double gapAhead) const {
     if (car.errorTimer > 0.0) {
         cap *= kErrorSpeedFactor;
     }
+    for (const HazardState& hazard : hazards_) {
+        if (hazard.onTrack && track_.wrap(hazard.trackPosition - car.distance) < kHazardSightDistance) {
+            cap *= kHazardCautionFactor; // a car on the racing line ahead: lift and go around
+            break;
+        }
+    }
     if (car.yieldTimer > 0.0) {
         cap *= kYieldFactor;
     }
@@ -433,16 +538,31 @@ void Sim::step() {
     if (state_ != RaceState::Green) {
         neutralisedTime_ += kDt;
     }
+    updateHazards();
     const double lapLength = track_.length();
     const int n = static_cast<int>(cars_.size());
 
     // Cars racing on the track, sorted by track position (not race order).
-    // Cars in the pit lane move on their own and do not interact.
+    // Cars in the pit lane move on their own and do not interact; spun cars stand still.
     std::vector<int> order;
     std::vector<int> inPitLane;
+    std::vector<int> spun;
     for (int i = 0; i < n; ++i) {
-        if (!cars_[i].finished) {
+        if (outOfRace(i)) {
+            continue;
+        }
+        if (cars_[i].spinTimer > 0.0) {
+            spun.push_back(i);
+        } else {
             (cars_[i].inPit ? inPitLane : order).push_back(i);
+        }
+    }
+    for (int i : spun) {
+        Car& car = cars_[i];
+        car.speed = 0.0;
+        car.spinTimer = std::max(0.0, car.spinTimer - kDt);
+        if (car.spinTimer <= 0.0) {
+            car.lateral = 0.0; // rejoins from standstill
         }
     }
     std::sort(order.begin(), order.end(), [&](int a, int b) {
@@ -631,6 +751,7 @@ void Sim::onSegmentEntered(int i) {
             car.overtakeTarget = -1;
             ++stats_.collisions;
             addIncident(Incident::Type::Collision, i, target, blame);
+            maybeAccident(target, kCollisionCrashChance, 0.0, kCollisionSpinChance, true);
         } else if (gap < kAlongsideGap && rng_.uniform() < attack / (attack + defend)) {
             defender.yieldTimer = kYieldTime;
         } else {
@@ -645,6 +766,7 @@ void Sim::onSegmentEntered(int i) {
     if (rng_.uniform() < chance) {
         car.errorTimer = kErrorDuration;
         ++stats_.driverErrors;
+        maybeAccident(i, kErrorCrashChance, kErrorOffTrackChance, kErrorSpinChance, false);
     }
 }
 
@@ -688,13 +810,23 @@ void Sim::buildSnapshot() {
 
     // Timing-screen order: more timing lines crossed first, then earlier crossing.
     // Final classification (everyone finished): laps, then race time plus time penalties.
-    const bool allFinished = std::all_of(cars_.begin(), cars_.end(), [](const Car& c) { return c.finished; });
+    // Retired cars come last, ordered by laps completed (more laps = better).
+    const bool allFinished = std::all_of(cars_.begin(), cars_.end(), [](const Car& c) { return c.finished || c.retired; });
     auto classifiedTime = [&](const Car& c) { return c.lastBoundaryTime + c.timePenalty; };
     std::vector<int> rank(n);
     std::iota(rank.begin(), rank.end(), 0);
     std::sort(rank.begin(), rank.end(), [&](int a, int b) {
         const Car& ca = cars_[a];
         const Car& cb = cars_[b];
+        if (ca.retired != cb.retired) {
+            return cb.retired;
+        }
+        if (ca.retired) {
+            if (ca.boundaryTimes.size() != cb.boundaryTimes.size()) {
+                return ca.boundaryTimes.size() > cb.boundaryTimes.size();
+            }
+            return a < b;
+        }
         if (allFinished) {
             if (ca.lapsCompleted != cb.lapsCompleted) {
                 return ca.lapsCompleted > cb.lapsCompleted;
@@ -721,7 +853,8 @@ void Sim::buildSnapshot() {
     snapshot_.totalLaps = config_.laps;
     snapshot_.leaderLap = std::min(config_.laps, leader.lapsCompleted + 1);
     snapshot_.chequered = chequered_;
-    snapshot_.finished = std::all_of(cars_.begin(), cars_.end(), [](const Car& c) { return c.finished; });
+    snapshot_.finished = allFinished;
+    snapshot_.hazards = hazards_;
     snapshot_.state = state_;
     snapshot_.sectorFlags = sectorFlags_;
     snapshot_.safetyCarOnTrack = safetyCar_.onTrack;
@@ -749,12 +882,16 @@ void Sim::buildSnapshot() {
         cs.timePenalty = car.timePenalty;
         cs.pendingPenalty = car.pendingPenalty;
         cs.inPitLane = car.inPit;
+        cs.spinning = car.spinTimer > 0.0;
+        cs.retired = car.retired;
         cs.gapToLeader = 0.0;
         cs.lapsDown = 0;
         cs.interval = 0.0;
 
         const std::size_t crossed = car.boundaryTimes.size();
-        if (r > 0 && allFinished) {
+        if (car.retired) {
+            cs.lapsDown = leader.lapsCompleted - car.lapsCompleted; // gaps are meaningless for a retired car
+        } else if (r > 0 && allFinished) {
             const Car& ahead = cars_[rank[r - 1]];
             cs.lapsDown = leader.lapsCompleted - car.lapsCompleted;
             cs.gapToLeader = classifiedTime(car) - classifiedTime(leader);

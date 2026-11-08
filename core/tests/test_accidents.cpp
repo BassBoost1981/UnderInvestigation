@@ -1,0 +1,203 @@
+// M6.3 acceptance: accidents, stranded cars, recovery and retirements (docs/DESIGN.md 8.1).
+
+#include "uisim/DataDir.h"
+#include "uisim/DataLoader.h"
+#include "uisim/Sim.h"
+
+#include <doctest/doctest.h>
+
+using namespace uisim;
+
+namespace {
+
+// Scenario races place their accidents themselves (accidentChanceScale 0); the rate test uses 1.
+Sim makeRace(std::uint64_t seed, int laps = 20, double accidentChanceScale = 0.0) {
+    const std::filesystem::path data(UISIM_DATA_DIR);
+    RaceConfig config;
+    config.laps = laps;
+    config.seed = seed;
+    config.accidentChanceScale = accidentChanceScale;
+    config.rules = loadRules(data / "rules" / "fia-f1-2026.json");
+    return Sim(loadTrack(data / "tracks" / "testring.json"), loadEntries(data / "entries" / "fictional-grid.json"), config);
+}
+
+void runSeconds(Sim& sim, double seconds) {
+    for (long s = 0; s < static_cast<long>(seconds / Sim::kDt) && !sim.finished(); ++s) {
+        sim.step();
+    }
+}
+
+void runToEnd(Sim& sim) {
+    for (long steps = 0; !sim.finished() && steps < 2'000'000; ++steps) {
+        sim.step();
+    }
+    REQUIRE(sim.finished());
+}
+
+void inject(Sim& sim, int car, AccidentType type) {
+    Command c;
+    c.type = Command::Type::InjectAccident;
+    c.car = car;
+    c.accident = type;
+    sim.command(c);
+    sim.step();
+}
+
+void setFlag(Sim& sim, int sector, Flag flag) {
+    Command c;
+    c.type = Command::Type::SetSectorFlag;
+    c.sector = sector;
+    c.flag = flag;
+    sim.command(c);
+}
+
+const CarState& stateOf(const Sim& sim, int entry) {
+    for (const CarState& car : sim.snapshot().cars) {
+        if (car.entryIndex == entry) {
+            return car;
+        }
+    }
+    FAIL("entry not found");
+    return sim.snapshot().cars.front();
+}
+
+// A car in mid-field after a few laps, away from the start/finish straight.
+int victim(const Sim& sim) { return sim.snapshot().cars[8].entryIndex; }
+
+} // namespace
+
+TEST_CASE("A crash leaves a stopped car on the track that the field drives around") {
+    Sim sim = makeRace(3);
+    runSeconds(sim, 400.0);
+    const int car = victim(sim);
+    inject(sim, car, AccidentType::Crash);
+
+    REQUIRE(sim.snapshot().hazards.size() == 1);
+    const HazardState hazard = sim.snapshot().hazards.front();
+    CHECK(hazard.car == car);
+    CHECK(hazard.onTrack);
+    CHECK(stateOf(sim, car).retired);
+    const double where = stateOf(sim, car).distance;
+
+    // The car stays exactly where it stopped, the race goes on around it.
+    runSeconds(sim, 120.0);
+    CHECK(stateOf(sim, car).distance == where);
+    CHECK(stateOf(sim, car).speed == 0.0);
+    CHECK(sim.snapshot().cars.back().entryIndex == car); // classified last
+    REQUIRE(sim.snapshot().hazards.size() == 1);
+    CHECK(sim.snapshot().hazards.front().trackPosition == hazard.trackPosition);
+}
+
+TEST_CASE("Recovery on the track waits for double yellow, VSC or Safety Car") {
+    Sim sim = makeRace(3);
+    runSeconds(sim, 400.0);
+    inject(sim, victim(sim), AccidentType::Crash);
+    const int sector = sim.snapshot().hazards.front().marshalSector;
+
+    SUBCASE("green: the marshals have to wait") {
+        runSeconds(sim, 300.0);
+        REQUIRE(sim.snapshot().hazards.size() == 1);
+        CHECK(sim.snapshot().hazards.front().waitingTime == doctest::Approx(300.0).epsilon(0.01));
+    }
+    SUBCASE("single yellow is not enough for a car on the track") {
+        setFlag(sim, sector, Flag::Yellow);
+        runSeconds(sim, 300.0);
+        CHECK(sim.snapshot().hazards.size() == 1);
+    }
+    SUBCASE("double yellow: recovered within the recovery time") {
+        setFlag(sim, sector, Flag::DoubleYellow);
+        runSeconds(sim, 185.0);
+        CHECK(sim.snapshot().hazards.empty());
+    }
+    SUBCASE("VSC: recovered as well") {
+        Command vsc;
+        vsc.type = Command::Type::DeployVirtualSafetyCar;
+        sim.command(vsc);
+        runSeconds(sim, 185.0);
+        CHECK(sim.snapshot().hazards.empty());
+    }
+}
+
+TEST_CASE("A car stranded beside the track needs at least a single yellow") {
+    Sim sim = makeRace(3);
+    runSeconds(sim, 400.0);
+    inject(sim, victim(sim), AccidentType::OffTrack);
+    REQUIRE(sim.snapshot().hazards.size() == 1);
+    CHECK_FALSE(sim.snapshot().hazards.front().onTrack);
+    const int sector = sim.snapshot().hazards.front().marshalSector;
+
+    runSeconds(sim, 150.0);
+    CHECK(sim.snapshot().hazards.size() == 1); // green: waiting
+    setFlag(sim, sector, Flag::Yellow);
+    runSeconds(sim, 125.0);
+    CHECK(sim.snapshot().hazards.empty());
+}
+
+TEST_CASE("A spun car stops, rejoins and finishes") {
+    Sim sim = makeRace(3);
+    runSeconds(sim, 400.0);
+    const int car = victim(sim);
+    inject(sim, car, AccidentType::Spin);
+    CHECK(stateOf(sim, car).spinning);
+    CHECK(stateOf(sim, car).speed == 0.0);
+    CHECK(sim.snapshot().hazards.empty());
+    runSeconds(sim, 7.0);
+    CHECK_FALSE(stateOf(sim, car).spinning);
+    runToEnd(sim);
+    CHECK(stateOf(sim, car).finished);
+    CHECK_FALSE(stateOf(sim, car).retired);
+}
+
+TEST_CASE("Retired cars are classified after the finishers and the race still ends") {
+    Sim sim = makeRace(3);
+    runSeconds(sim, 400.0);
+    const int car = victim(sim);
+    inject(sim, car, AccidentType::OffTrack);
+    runToEnd(sim);
+    const auto& cars = sim.snapshot().cars;
+    CHECK(cars.back().entryIndex == car);
+    CHECK(cars.back().retired);
+    CHECK(cars.back().lapsDown > 0);
+    for (std::size_t r = 0; r + 1 < cars.size(); ++r) {
+        CHECK(cars[r].finished);
+    }
+}
+
+TEST_CASE("Accident rate per race is in the target range") {
+    // Target (2026-11-08): 0.5-3 retirements (off-track or crash) and 1-6 spins per 50-lap race on average.
+    constexpr int kRaces = 10;
+    int accidents = 0;
+    int spins = 0;
+    for (int seed = 1; seed <= kRaces; ++seed) {
+        Sim sim = makeRace(static_cast<std::uint64_t>(seed), 50, 1.0);
+        runToEnd(sim);
+        accidents += sim.stats().accidents;
+        spins += sim.stats().spins;
+    }
+    INFO("accidents per race ", accidents / double(kRaces), ", spins per race ", spins / double(kRaces));
+    CHECK(accidents >= 5);
+    CHECK(accidents <= 30);
+    CHECK(spins >= 10);
+    CHECK(spins <= 60);
+}
+
+TEST_CASE("Accidents keep the sim deterministic") {
+    auto race = [] {
+        Sim sim = makeRace(4);
+        runSeconds(sim, 300.0);
+        inject(sim, victim(sim), AccidentType::Crash);
+        runSeconds(sim, 60.0);
+        Command sc;
+        sc.type = Command::Type::DeploySafetyCar;
+        sim.command(sc);
+        runToEnd(sim);
+        return sim;
+    };
+    const Sim a = race();
+    const Sim b = race();
+    CHECK(a.snapshot().time == b.snapshot().time);
+    CHECK(a.accidents().size() == b.accidents().size());
+    for (std::size_t r = 0; r < a.snapshot().cars.size(); ++r) {
+        CHECK(a.snapshot().cars[r].entryIndex == b.snapshot().cars[r].entryIndex);
+    }
+}

@@ -104,7 +104,10 @@ TEST_CASE("50-lap race result is plausible") {
     for (std::size_t r = 0; r < snap.cars.size(); ++r) {
         const CarState& car = snap.cars[r];
         CHECK(car.position == static_cast<int>(r) + 1);
-        CHECK(car.finished);
+        CHECK((car.finished || car.retired));
+        if (car.retired) {
+            continue; // accidents (M6): retired cars have no meaningful lap times or gaps
+        }
         CHECK(car.lapsCompleted >= 48);
         fastest = std::min(fastest, car.bestLapTime);
         slowest = std::max(slowest, car.bestLapTime);

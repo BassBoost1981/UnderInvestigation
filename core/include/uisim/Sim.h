@@ -20,6 +20,9 @@ struct RaceConfig {
     // Chance that a driver attacks anyway when overtaking is not allowed
     // (yellow, VSC, SC, before the restart line). Creates violations to judge.
     double ruleBreakChance = 0.02;
+    // Scales the chance that errors and collisions escalate into accidents (0 = none;
+    // for tests and scenarios that place accidents themselves).
+    double accidentChanceScale = 1.0;
 };
 
 struct RaceStats {
@@ -28,6 +31,8 @@ struct RaceStats {
     int driverErrors = 0; // corner mistakes (time loss, no crash in M1)
     int flagViolations = 0;
     int collisions = 0;
+    int spins = 0;
+    int accidents = 0; // off-track and crashes (retirements)
 };
 
 // Race-control action, applied at the start of the next step.
@@ -40,14 +45,25 @@ struct Command {
         RecallSafetyCar, // "Safety Car in this lap"
         RedFlag,
         Restart,         // after a red flag: restart behind the Safety Car
-        IssueVerdict     // steward decision on an incident (one per incident)
+        IssueVerdict,    // steward decision on an incident (one per incident)
+        InjectAccident   // scenario/test tool: `car` has an accident of type `accident`
     };
     Type type = Type::SetSectorFlag;
     int sector = 0;          // SetSectorFlag only
     Flag flag = Flag::Green; // SetSectorFlag only
     int incidentId = 0;      // IssueVerdict only
-    int car = -1;            // IssueVerdict only: entry index penalised, -1 = no one
+    int car = -1;            // IssueVerdict: entry index penalised, -1 = no one; InjectAccident: car
     Penalty penalty = Penalty::None; // IssueVerdict only
+    AccidentType accident = AccidentType::Spin; // InjectAccident only
+};
+
+struct Accident {
+    int id = 0; // 1-based
+    AccidentType type = AccidentType::Spin;
+    double time = 0.0;
+    int car = 0;            // entry index
+    double distance = 0.0;  // total distance of the car
+    bool fromCollision = false;
 };
 
 // A steward decision as issued.
@@ -107,6 +123,7 @@ public:
     void command(const Command& command);
     const std::vector<Incident>& incidents() const { return incidents_; }
     const std::vector<Verdict>& verdicts() const { return verdicts_; }
+    const std::vector<Accident>& accidents() const { return accidents_; }
     double neutralisedTime() const { return neutralisedTime_; } // seconds under VSC, SC or red flag
     double finishTime() const { return finishTime_; }           // race time when the last car finished
 
@@ -143,6 +160,8 @@ private:
         bool inPit = false;
         bool stopDone = false;
         double stopTimer = 0.0;
+        double spinTimer = 0.0; // > 0: spun, stationary
+        bool retired = false;
         // Timing: sector boundaries are crossed in order s1, s2, line.
         int boundaryIndex = 0;
         int lapsCompleted = 0;
@@ -170,6 +189,11 @@ private:
     void recordViolation(int car, int passedCar);
     void addIncident(Incident::Type type, int car, int otherCar, double blame);
     void applyVerdict(const Command& command);
+    void startAccident(int car, AccidentType type, bool fromCollision);
+    void maybeAccident(int car, double crashChance, double offTrackChance, double spinChance, bool fromCollision);
+    void updateHazards();
+    bool recoveryAllowed(const HazardState& hazard) const;
+    bool outOfRace(int car) const { return cars_[car].finished || cars_[car].retired; }
     void movePitCar(int car);
     void convertUnservedPenalties();
     void recordReplayFrame();
@@ -197,6 +221,8 @@ private:
     std::vector<Command> pending_;
     std::vector<Incident> incidents_;
     std::vector<Verdict> verdicts_;
+    std::vector<Accident> accidents_;
+    std::vector<HazardState> hazards_;
     double neutralisedTime_ = 0.0;
     double finishTime_ = 0.0;
     std::vector<ReplayFrame> replayFrames_;

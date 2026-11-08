@@ -12,6 +12,7 @@ struct FUISimCar
 	double TimePenalty = 0.0;
 	EUISimPenalty PendingPenalty = EUISimPenalty::None;
 	bool bInPitLane = false;
+	bool bRetired = false;
 	int32 EntryIndex = 0;
 	int32 Position = 0;
 	int32 GridPosition = 0;

@@ -811,6 +811,10 @@ void AUIRaceDirector::LogResult() const
 		{
 			Result = FormatRaceTime(Car.LastLineTime);
 		}
+		else if (Car.bRetired)
+		{
+			Result = TEXT("DNF");
+		}
 		else if (Car.LapsDown > 0)
 		{
 			Result = FString::Printf(TEXT("+%d %s"), Car.LapsDown, Car.LapsDown == 1 ? TEXT("lap") : TEXT("laps"));

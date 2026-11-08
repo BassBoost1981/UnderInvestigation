@@ -94,6 +94,8 @@ int main(int argc, char** argv) {
             std::string result;
             if (car.position == 1) {
                 result = formatTime(car.lastLineTime);
+            } else if (car.retired) {
+                result = "DNF";
             } else if (car.lapsDown > 0) {
                 result = "+" + std::to_string(car.lapsDown) + (car.lapsDown == 1 ? " lap" : " laps");
             } else {
@@ -117,6 +119,7 @@ int main(int argc, char** argv) {
                     sim.stats().overtakeAttempts, sim.stats().driverErrors);
         std::printf("Incidents: %zu (collisions %d, flag violations %d)\n", sim.incidents().size(),
                     sim.stats().collisions, sim.stats().flagViolations);
+        std::printf("Accidents: %d (spins %d)\n", sim.stats().accidents, sim.stats().spins);
         std::printf("Simulated %s of race time in %.3f s (%ld ticks at %.0f Hz)\n",
                     formatTime(snap.time).c_str(), wall, steps, 1.0 / Sim::kDt);
 

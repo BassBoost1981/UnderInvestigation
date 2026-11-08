@@ -288,5 +288,6 @@ void FUISimSession::CopySnapshot()
 		Out.TimePenalty = Car.timePenalty;
 		Out.PendingPenalty = static_cast<EUISimPenalty>(Car.pendingPenalty);
 		Out.bInPitLane = Car.inPitLane;
+		Out.bRetired = Car.retired;
 	}
 }
