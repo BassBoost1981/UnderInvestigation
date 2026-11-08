@@ -23,6 +23,8 @@ struct RaceConfig {
     // Scales the chance that errors and collisions escalate into accidents (0 = none;
     // for tests and scenarios that place accidents themselves).
     double accidentChanceScale = 1.0;
+    // Scales follow-up accidents and punctures at accident sites (M6.4); 0 isolates scenarios.
+    double followUpChanceScale = 1.0;
 };
 
 struct RaceStats {
@@ -33,6 +35,8 @@ struct RaceStats {
     int collisions = 0;
     int spins = 0;
     int accidents = 0; // off-track and crashes (retirements)
+    int followUpAccidents = 0; // spins/crashes at an insufficiently flagged accident site
+    int punctures = 0;         // from debris
 };
 
 // Race-control action, applied at the start of the next step.
@@ -64,6 +68,7 @@ struct Accident {
     int car = 0;            // entry index
     double distance = 0.0;  // total distance of the car
     bool fromCollision = false;
+    int causedBy = 0; // follow-up: id of the unprotected accident the car ran into, 0 = none
 };
 
 // A steward decision as issued.
@@ -189,7 +194,8 @@ private:
     void recordViolation(int car, int passedCar);
     void addIncident(Incident::Type type, int car, int otherCar, double blame);
     void applyVerdict(const Command& command);
-    void startAccident(int car, AccidentType type, bool fromCollision);
+    void startAccident(int car, AccidentType type, bool fromCollision, int causedBy = 0);
+    void checkHazardPasses(const std::vector<int>& cars, const std::vector<double>& previousDistance);
     void maybeAccident(int car, double crashChance, double offTrackChance, double spinChance, bool fromCollision);
     void updateHazards();
     bool recoveryAllowed(const HazardState& hazard) const;

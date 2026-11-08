@@ -72,6 +72,16 @@ constexpr double kSpinLateral = 0.5;
 constexpr double kHazardSightDistance = 40.0; // drivers lift when they see a car on the track
 constexpr double kHazardCautionFactor = 0.6;
 
+// Follow-up accidents (M6.4): chance per car passing an accident site, before flag and speed factors.
+constexpr double kPassRiskCrashSite = 0.04;    // stopped car on the racing line
+constexpr double kPassRiskOffTrackSite = 0.01; // stranded beside the track
+constexpr double kPassRiskYellow = 0.3;        // single yellow: drivers are warned
+constexpr double kPassRiskDoubleYellow = 0.05; // double yellow: ready to stop
+constexpr double kFollowUpCrashShare = 0.35;   // rest are spins
+constexpr double kPassRiskReferenceSpeed = 70.0; // m/s; faster passes are riskier
+constexpr double kPunctureChance = 0.02;       // per pass over crash debris at racing speed
+constexpr double kPunctureDuration = 20.0;     // limping, seconds
+
 // Long-run effects (no pit stops in M1).
 constexpr double kTyreLossPerLap = 0.0006;
 constexpr double kFuelStartFactor = 0.985;
@@ -230,7 +240,43 @@ void Sim::maybeAccident(int i, double crashChance, double offTrackChance, double
     }
 }
 
-void Sim::startAccident(int i, AccidentType type, bool fromCollision) {
+void Sim::checkHazardPasses(const std::vector<int>& racing, const std::vector<double>& previousDistance) {
+    const std::size_t sites = hazards_.size(); // follow-ups added below are not passed this tick
+    for (int i : racing) {
+        Car& car = cars_[i];
+        if (outOfRace(i) || car.inPit || car.spinTimer > 0.0) {
+            continue;
+        }
+        const double from = track_.wrap(previousDistance[i]);
+        const double to = track_.wrap(car.distance);
+        for (std::size_t h = 0; h < sites && !outOfRace(i) && car.spinTimer <= 0.0; ++h) {
+            const HazardState hazard = hazards_[h];
+            const double at = hazard.trackPosition;
+            const bool passed = from <= to ? (from <= at && at < to) : (at >= from || at < to);
+            if (!passed || hazard.car == i || state_ != RaceState::Green) {
+                continue; // VSC, Safety Car and red flag protect every site
+            }
+            const Flag flag = sectorFlags_[hazard.marshalSector];
+            const double flagFactor = flag == Flag::DoubleYellow ? kPassRiskDoubleYellow
+                                    : flag == Flag::Yellow       ? kPassRiskYellow
+                                                                 : 1.0;
+            const double speedFactor = std::clamp(car.speed / kPassRiskReferenceSpeed, 0.3, 1.3);
+            const double risk = (hazard.onTrack ? kPassRiskCrashSite : kPassRiskOffTrackSite) * flagFactor *
+                                speedFactor * config_.followUpChanceScale;
+            if (rng_.uniform() < risk) {
+                ++stats_.followUpAccidents;
+                const AccidentType type = rng_.uniform() < kFollowUpCrashShare ? AccidentType::Crash : AccidentType::Spin;
+                startAccident(i, type, false, hazard.id);
+            } else if (hazard.onTrack &&
+                       rng_.uniform() < kPunctureChance * flagFactor * speedFactor * config_.followUpChanceScale) {
+                ++stats_.punctures; // debris
+                car.errorTimer = std::max(car.errorTimer, kPunctureDuration);
+            }
+        }
+    }
+}
+
+void Sim::startAccident(int i, AccidentType type, bool fromCollision, int causedBy) {
     Car& car = cars_[i];
     Accident accident;
     accident.id = static_cast<int>(accidents_.size()) + 1;
@@ -239,6 +285,7 @@ void Sim::startAccident(int i, AccidentType type, bool fromCollision) {
     accident.car = i;
     accident.distance = car.distance;
     accident.fromCollision = fromCollision;
+    accident.causedBy = causedBy;
     accidents_.push_back(accident);
 
     car.speed = 0.0;
@@ -711,6 +758,7 @@ void Sim::step() {
         }
     }
 
+    checkHazardPasses(order, previous);
     order.insert(order.end(), inPitLane.begin(), inPitLane.end());
     for (int i : order) {
         processTimingLines(i, previous[i]);

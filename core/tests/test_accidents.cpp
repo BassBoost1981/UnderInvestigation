@@ -10,13 +10,15 @@ using namespace uisim;
 
 namespace {
 
-// Scenario races place their accidents themselves (accidentChanceScale 0); the rate test uses 1.
-Sim makeRace(std::uint64_t seed, int laps = 20, double accidentChanceScale = 0.0) {
+// Scenario races place their accidents themselves (accidentChanceScale 0) and, unless a test
+// is about them, have no follow-up accidents either; the rate test uses the real values.
+Sim makeRace(std::uint64_t seed, int laps = 20, double accidentChanceScale = 0.0, double followUpChanceScale = 0.0) {
     const std::filesystem::path data(UISIM_DATA_DIR);
     RaceConfig config;
     config.laps = laps;
     config.seed = seed;
     config.accidentChanceScale = accidentChanceScale;
+    config.followUpChanceScale = followUpChanceScale;
     config.rules = loadRules(data / "rules" / "fia-f1-2026.json");
     return Sim(loadTrack(data / "tracks" / "testring.json"), loadEntries(data / "entries" / "fictional-grid.json"), config);
 }
@@ -169,16 +171,51 @@ TEST_CASE("Accident rate per race is in the target range") {
     int accidents = 0;
     int spins = 0;
     for (int seed = 1; seed <= kRaces; ++seed) {
-        Sim sim = makeRace(static_cast<std::uint64_t>(seed), 50, 1.0);
+        Sim sim = makeRace(static_cast<std::uint64_t>(seed), 50, 1.0, 1.0);
         runToEnd(sim);
-        accidents += sim.stats().accidents;
-        spins += sim.stats().spins;
+        // Primary accidents only: without a race director nobody flags, so follow-ups pile up.
+        for (const Accident& a : sim.accidents()) {
+            if (a.causedBy == 0) {
+                (a.type == AccidentType::Spin ? spins : accidents) += 1;
+            }
+        }
     }
     INFO("accidents per race ", accidents / double(kRaces), ", spins per race ", spins / double(kRaces));
     CHECK(accidents >= 5);
     CHECK(accidents <= 30);
     CHECK(spins >= 10);
     CHECK(spins <= 60);
+}
+
+TEST_CASE("Unprotected accident sites cause follow-up accidents, flags prevent them") {
+    // Same scenario over many seeds: a crash on the racing line, then 5 minutes of racing.
+    auto followUps = [](bool yellow, bool doubleYellow) {
+        int total = 0;
+        for (std::uint64_t seed = 1; seed <= 15; ++seed) {
+            Sim sim = makeRace(seed, 20, 0.0, 1.0); // no random accidents; follow-ups active
+            runSeconds(sim, 400.0);
+            inject(sim, victim(sim), AccidentType::Crash);
+            const int sector = sim.snapshot().hazards.front().marshalSector;
+            if (yellow || doubleYellow) {
+                setFlag(sim, sector, doubleYellow ? Flag::DoubleYellow : Flag::Yellow);
+            }
+            runSeconds(sim, 300.0);
+            total += sim.stats().followUpAccidents;
+            for (const Accident& a : sim.accidents()) {
+                if (a.causedBy != 0) {
+                    CHECK(a.causedBy < a.id); // linked to an earlier site (follow-ups can chain)
+                }
+            }
+        }
+        return total;
+    };
+    const int none = followUps(false, false);
+    const int yellow = followUps(true, false);
+    const int doubleYellow = followUps(false, true);
+    INFO("follow-up accidents in 15 scenarios: no flag ", none, ", yellow ", yellow, ", double yellow ", doubleYellow);
+    CHECK(none >= 10);
+    CHECK(yellow < none);
+    CHECK(doubleYellow * 4 < none);
 }
 
 TEST_CASE("Accidents keep the sim deterministic") {

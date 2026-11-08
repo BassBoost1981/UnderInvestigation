@@ -18,6 +18,9 @@ Sim makeRace(std::uint64_t seed, int laps = 20) {
     RaceConfig config;
     config.laps = laps;
     config.seed = seed;
+    // Penalty tests compare two races; random accidents would make one of them diverge.
+    config.accidentChanceScale = 0.0;
+    config.followUpChanceScale = 0.0;
     return Sim(loadTrack(data / "tracks" / "testring.json"), loadEntries(data / "entries" / "fictional-grid.json"), config);
 }
 
