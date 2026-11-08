@@ -275,7 +275,7 @@ Jeder Meilenstein hat ein überprüfbares Abnahmekriterium.
 | **M7** | **Boxenstopps & Strategie** (Plan in 8.2) | Siehe Abnahmekriterien der Arbeitspakete in 8.2. |
 | M8+ | Ausbau | Bedienung per Maus (Streckenkarte, Strafen-Dialog), Funk mit Persönlichkeiten, Wetter, Steward-Anhörungen, Karriere |
 
-**Stand 2026-11-08:** M7.1 erledigt (Reglement geprüft). M1–M6 erledigt (46 Kern-Tests, Unreal-Ergebnis identisch zum Konsolen-Runner). Unfälle ohne Kontakt sind eigene Vorfälle im Review (zählen in der Bewertung nur, wenn entschieden); der Zeitenturm zeigt den Overtake-Modus (OVT).
+**Stand 2026-11-08:** M7.1 erledigt (Reglement geprüft). M7.2 erledigt: Jede Unfallstelle merkt sich die Vorbeifahrten (Risiko ×0,97 pro Auto) und löst höchstens 2 Folgeunfälle aus. Ohne Eingriffe fallen im Mittel ~1,9 statt 10,5 Autos aus (20 Seeds). M1–M6 erledigt (47 Kern-Tests, Unreal-Ergebnis identisch zum Konsolen-Runner). Unfälle ohne Kontakt sind eigene Vorfälle im Review (zählen in der Bewertung nur, wenn entschieden); der Zeitenturm zeigt den Overtake-Modus (OVT).
 
 ### 8.1 Plan M6: Unfälle & Sicherheit
 

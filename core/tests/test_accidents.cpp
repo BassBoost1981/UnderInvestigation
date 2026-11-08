@@ -339,3 +339,18 @@ TEST_CASE("An accident without contact is a review entry that only counts when d
     // Left alone the spin does not dilute fairness; a wrong penalty lowers it.
     CHECK(rateRace(penalised).fairness < rateRace(sim).fairness);
 }
+
+TEST_CASE("Without any reaction follow-up accidents do not wreck the race") {
+    // Real accident and follow-up rates, nobody sets a flag: on average at most 4 retirements.
+    int retired = 0;
+    constexpr int kRaces = 10;
+    for (std::uint64_t seed = 1; seed <= kRaces; ++seed) {
+        Sim sim = makeRace(seed, 50, 1.0, 1.0);
+        runToEnd(sim);
+        for (const CarState& car : sim.snapshot().cars) {
+            retired += car.retired ? 1 : 0;
+        }
+    }
+    INFO("retirements in ", kRaces, " races: ", retired);
+    CHECK(retired <= 4 * kRaces);
+}

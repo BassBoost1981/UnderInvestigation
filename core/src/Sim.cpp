@@ -86,6 +86,8 @@ constexpr double kPassRiskYellow = 0.3;        // single yellow: drivers are war
 constexpr double kPassRiskDoubleYellow = 0.05; // double yellow: ready to stop
 constexpr double kFollowUpCrashShare = 0.35;   // rest are spins
 constexpr double kPassRiskReferenceSpeed = 70.0; // m/s; faster passes are riskier
+constexpr double kPassRiskLearning = 0.97;    // each car that passed makes the next one more careful
+constexpr int kMaxFollowUpsPerSite = 2;        // drivers slow down on their own after that
 constexpr double kPunctureChance = 0.02;       // per pass over crash debris at racing speed
 constexpr double kPunctureDuration = 20.0;     // limping, seconds
 
@@ -272,9 +274,16 @@ void Sim::checkHazardPasses(const std::vector<int>& racing, const std::vector<do
                                     : flag == Flag::Yellow       ? kPassRiskYellow
                                                                  : 1.0;
             const double speedFactor = std::clamp(car.speed / kPassRiskReferenceSpeed, 0.3, 1.3);
-            const double risk = (hazard.onTrack ? kPassRiskCrashSite : kPassRiskOffTrackSite) * flagFactor *
-                                speedFactor * config_.followUpChanceScale;
+            if (siteMemory_.size() <= static_cast<std::size_t>(hazard.id)) {
+                siteMemory_.resize(static_cast<std::size_t>(hazard.id) + 1);
+            }
+            SiteMemory& site = siteMemory_[static_cast<std::size_t>(hazard.id)];
+            const double learning = std::pow(kPassRiskLearning, site.passes++);
+            const double risk = site.followUps >= kMaxFollowUpsPerSite ? 0.0
+                : (hazard.onTrack ? kPassRiskCrashSite : kPassRiskOffTrackSite) * flagFactor * speedFactor *
+                  learning * config_.followUpChanceScale;
             if (rng_.uniform() < risk) {
+                ++site.followUps;
                 ++stats_.followUpAccidents;
                 const AccidentType type = rng_.uniform() < kFollowUpCrashShare ? AccidentType::Crash : AccidentType::Spin;
                 startAccident(i, type, false, hazard.id);

@@ -270,6 +270,11 @@ private:
     std::vector<Incident> incidents_;
     std::vector<Verdict> verdicts_;
     std::vector<Accident> accidents_;
+    struct SiteMemory {
+        int passes = 0;    // cars that passed the site under green: drivers know about it
+        int followUps = 0; // follow-up accidents it caused
+    };
+    std::vector<SiteMemory> siteMemory_; // indexed by hazard id
     std::vector<HazardState> hazards_;
     bool overtakeEnabled_ = false;
     bool overtakeAfterSafetyCar_ = false; // re-enable once everyone crossed the line after the SC
