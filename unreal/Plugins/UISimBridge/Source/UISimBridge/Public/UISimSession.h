@@ -14,6 +14,7 @@ struct FUISimCar
 	bool bInPitLane = false;
 	bool bRetired = false;
 	bool bBlueFlag = false;
+	bool bOvertakeActive = false; // Overtake mode (B7.2) usable this lap
 	int32 EntryIndex = 0;
 	int32 Position = 0;
 	int32 GridPosition = 0;
@@ -61,7 +62,8 @@ struct FUISimSnapshot
 
 enum class EUISimIncidentType : uint8
 {
-	Collision, OvertakeUnderYellow, OvertakeUnderVsc, OvertakeUnderSafetyCar, OvertakeUnderRedFlag, OvertakeBeforeRestartLine, IgnoringBlueFlags
+	Collision, OvertakeUnderYellow, OvertakeUnderVsc, OvertakeUnderSafetyCar, OvertakeUnderRedFlag, OvertakeBeforeRestartLine, IgnoringBlueFlags,
+	Accident // spin/off-track/crash without contact: Car == OtherCar, review only
 };
 
 struct FUISimIncident

@@ -405,6 +405,10 @@ void AUIRaceDirector::Tick(float DeltaSeconds)
 	while (bTestVerdicts && IncidentsHandledByTest < SimSession.Incidents().Num())
 	{
 		const FUISimIncident& Incident = SimSession.Incidents()[IncidentsHandledByTest++];
+		if (Incident.Type == EUISimIncidentType::Accident)
+		{
+			continue; // no one to penalise
+		}
 		SimSession.IssueVerdict(Incident.Id, Incident.Car, EUISimPenalty::FiveSeconds);
 	}
 

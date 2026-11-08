@@ -298,6 +298,9 @@ void Sim::startAccident(int i, AccidentType type, bool fromCollision, int caused
     accident.fromCollision = fromCollision;
     accident.causedBy = causedBy;
     accidents_.push_back(accident);
+    if (!fromCollision) {
+        addIncident(Incident::Type::Accident, i, i, 0.0); // contact is already a Collision incident
+    }
 
     car.speed = 0.0;
     car.overtakeTarget = -1;

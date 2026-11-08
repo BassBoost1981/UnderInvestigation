@@ -313,3 +313,29 @@ TEST_CASE("Accidents keep the sim deterministic") {
         CHECK(a.snapshot().cars[r].entryIndex == b.snapshot().cars[r].entryIndex);
     }
 }
+
+TEST_CASE("An accident without contact is a review entry that only counts when decided") {
+    Sim sim = makeRace(3, 5);
+    runSeconds(sim, 400.0);
+    const int car = victim(sim);
+    const std::size_t before = sim.incidents().size();
+    inject(sim, car, AccidentType::Spin);
+    REQUIRE(sim.incidents().size() == before + 1);
+    const Incident accident = sim.incidents().back();
+    CHECK(accident.type == Incident::Type::Accident);
+    CHECK(accident.car == car);
+    CHECK(accident.otherCar == car);
+    CHECK(expectedVerdict(accident).car == -1);
+
+    Sim penalised = sim; // same race, the stewards wrongly penalise the spinner
+    Command c;
+    c.type = Command::Type::IssueVerdict;
+    c.incidentId = accident.id;
+    c.car = car;
+    c.penalty = Penalty::TenSeconds;
+    penalised.command(c);
+    runToEnd(sim);
+    runToEnd(penalised);
+    // Left alone the spin does not dilute fairness; a wrong penalty lowers it.
+    CHECK(rateRace(penalised).fairness < rateRace(sim).fairness);
+}

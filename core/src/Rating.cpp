@@ -66,6 +66,8 @@ ExpectedVerdict expectedVerdict(const Incident& incident) {
         return {incident.car, Penalty::FiveSeconds};
     case Type::OvertakeBeforeRestartLine:
         return {incident.car, Penalty::FiveSeconds};
+    case Type::Accident:
+        return {-1, Penalty::None};
     }
     return {};
 }
@@ -74,6 +76,7 @@ RaceRating rateRace(const Sim& sim) {
     RaceRating rating;
     const auto& incidents = sim.incidents();
     double total = 0.0;
+    int rated = 0;
     for (const Incident& incident : incidents) {
         IncidentRating r;
         r.incidentId = incident.id;
@@ -87,11 +90,15 @@ RaceRating rateRace(const Sim& sim) {
             ++rating.decided;
         }
         r.score = score(r.expected, r.givenCar, r.givenPenalty);
-        total += r.score;
+        // An accident without contact only counts when the stewards decided on it.
+        if (incident.type != Incident::Type::Accident || r.decided) {
+            total += r.score;
+            ++rated;
+        }
         rating.incidents.push_back(r);
     }
-    if (!incidents.empty()) {
-        rating.fairness = total / static_cast<double>(incidents.size());
+    if (rated > 0) {
+        rating.fairness = total / static_cast<double>(rated);
     }
 
     // Consistency over decided pairs of the same kind with similar blame.

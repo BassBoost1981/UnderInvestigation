@@ -69,17 +69,28 @@ void UUIRatingWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 	Text += TEXT("Vorfall  Dein Urteil              Richtig waere            Punkte\n");
 
 	const TArray<FUISimIncident>& Incidents = Race->Session().Incidents();
-	for (int32 Index = 0; Index < Rating.Incidents.Num() && Index < MaxIncidentLines; ++Index)
+	int32 Lines = 0;
+	int32 Hidden = 0;
+	for (int32 Index = 0; Index < Rating.Incidents.Num(); ++Index)
 	{
 		const FUISimIncidentRating& R = Rating.Incidents[Index];
+		if (Incidents[Index].Type == EUISimIncidentType::Accident && !R.bDecided)
+		{
+			continue; // not rated (core Rating.cpp)
+		}
+		if (Lines++ >= MaxIncidentLines)
+		{
+			++Hidden;
+			continue;
+		}
 		const FString Given = R.bDecided ? Decision(Entries, R.GivenCar, R.GivenPenalty) : FString(TEXT("(nicht entschieden)"));
 		const FString Truth = Decision(Entries, R.ExpectedCar, R.ExpectedPenalty);
 		const int32 Blame = FMath::RoundToInt(Incidents[Index].GroundTruthBlame * 100.0);
 		Text += FString::Printf(TEXT("#%-6d %-24s %-18s %3d%%  %3.0f %%\n"), R.IncidentId, *Given, *Truth, Blame, R.Score * 100.0);
 	}
-	if (Rating.Incidents.Num() > MaxIncidentLines)
+	if (Hidden > 0)
 	{
-		Text += FString::Printf(TEXT("... und %d weitere\n"), Rating.Incidents.Num() - MaxIncidentLines);
+		Text += FString::Printf(TEXT("... und %d weitere\n"), Hidden);
 	}
 	Text += TEXT("\n(Prozentwert hinter dem richtigen Urteil: Schuldanteil des Angreifers)");
 	Body->SetText(FText::FromString(Text));

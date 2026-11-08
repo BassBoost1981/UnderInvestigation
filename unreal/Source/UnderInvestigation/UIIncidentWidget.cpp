@@ -35,6 +35,7 @@ namespace
 		case EUISimIncidentType::OvertakeUnderRedFlag: return TEXT("Ueberholt unter Rot");
 		case EUISimIncidentType::OvertakeBeforeRestartLine: return TEXT("Ueberholt vor Linie");
 		case EUISimIncidentType::IgnoringBlueFlags: return TEXT("Blau ignoriert");
+		case EUISimIncidentType::Accident: return TEXT("Unfall");
 		}
 		return FString();
 	}
@@ -144,9 +145,11 @@ void UUIIncidentWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTim
 				Decision += TEXT(" ") + Entries[Verdict->Car].Code;
 			}
 		}
-		Rows[Row]->SetText(FText::FromString(FString::Printf(TEXT("%s#%-2d %9s %-20s %s/%s  %s"),
+		const FString Cars = Incident.Car == Incident.OtherCar ? Entries[Incident.Car].Code
+			: Entries[Incident.Car].Code + TEXT("/") + Entries[Incident.OtherCar].Code;
+		Rows[Row]->SetText(FText::FromString(FString::Printf(TEXT("%s#%-2d %9s %-20s %-7s  %s"),
 			Index == Selected ? TEXT(">") : TEXT(" "), Incident.Id, *AUIRaceDirector::FormatRaceTime(Incident.Time),
-			*IncidentTypeName(Incident.Type), *Entries[Incident.Car].Code, *Entries[Incident.OtherCar].Code, *Decision)));
+			*IncidentTypeName(Incident.Type), *Cars, *Decision)));
 		Rows[Row]->SetColorAndOpacity(FSlateColor(Index == Selected ? FLinearColor(1.0f, 0.85f, 0.2f) : FLinearColor::White));
 		Rows[Row]->SetVisibility(ESlateVisibility::HitTestInvisible);
 	}
@@ -165,9 +168,10 @@ void UUIIncidentWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTim
 	ReviewInfo->SetText(FText::FromString(FString::Printf(TEXT("REPLAY #%d  t %+.1f s %s\nKamera: %s   Bild-im-Bild: %s"),
 		Incident.Id, Race->ReviewOffset(), Race->IsReviewPaused() ? TEXT("[PAUSE]") : TEXT(""),
 		*Race->ReviewCameraName(false), *Race->ReviewCameraName(true))));
-	PlotLegend->SetText(FText::FromString(FString::Printf(TEXT("Tempo km/h, -%.0f..+%.0f s:  %s rot  %s blau"),
-		AUIRaceDirector::ReviewWindow, AUIRaceDirector::ReviewWindow,
-		*Entries[Incident.Car].Code, *Entries[Incident.OtherCar].Code)));
+	const FString Legend = Incident.Car == Incident.OtherCar ? Entries[Incident.Car].Code
+		: FString::Printf(TEXT("%s rot  %s blau"), *Entries[Incident.Car].Code, *Entries[Incident.OtherCar].Code);
+	PlotLegend->SetText(FText::FromString(FString::Printf(TEXT("Tempo km/h, -%.0f..+%.0f s:  %s"),
+		AUIRaceDirector::ReviewWindow, AUIRaceDirector::ReviewWindow, *Legend)));
 
 	FString VerdictLine;
 	if (const FUISimVerdict* Verdict = Race->Session().VerdictFor(Incident.Id))

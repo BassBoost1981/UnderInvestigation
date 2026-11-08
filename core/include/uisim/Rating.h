@@ -25,7 +25,7 @@ struct IncidentRating {
 
 // Race director rating (DESIGN.md 7).
 struct RaceRating {
-    double fairness = 1.0;    // verdicts vs ground truth, undecided incidents count as "no action"
+    double fairness = 1.0;    // verdicts vs ground truth, undecided incidents count as "no action" (undecided accidents without contact not at all)
     double consistency = 1.0; // similar incidents got similar verdicts
     double raceQuality = 1.0; // little neutralisation, no decisions after the flag
     double safety = 1.0;      // accident sites protected quickly, no follow-up accidents

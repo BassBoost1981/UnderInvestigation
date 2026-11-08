@@ -315,5 +315,6 @@ void FUISimSession::CopySnapshot()
 		Out.bInPitLane = Car.inPitLane;
 		Out.bRetired = Car.retired;
 		Out.bBlueFlag = Car.blueFlag;
+		Out.bOvertakeActive = Car.overtakeActive;
 	}
 }

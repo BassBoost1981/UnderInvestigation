@@ -40,7 +40,7 @@ TEST_CASE("Collisions are recorded with a ground truth") {
             const Incident& incident = sim.incidents()[k];
             CHECK(incident.id == static_cast<int>(k) + 1);
             CHECK(incident.time >= previousTime);
-            CHECK(incident.car != incident.otherCar);
+            CHECK((incident.type == Incident::Type::Accident) == (incident.car == incident.otherCar));
             CHECK(incident.blame >= 0.0);
             CHECK(incident.blame <= 1.0);
             previousTime = incident.time;
@@ -48,8 +48,10 @@ TEST_CASE("Collisions are recorded with a ground truth") {
                 ++collisions;
             }
         }
-        CHECK(sim.stats().collisions + sim.stats().flagViolations + sim.stats().blueFlagsIgnored ==
-              static_cast<int>(sim.incidents().size()));
+        const auto soloAccidents = std::count_if(sim.accidents().begin(), sim.accidents().end(),
+            [](const Accident& a) { return !a.fromCollision; });
+        CHECK(sim.stats().collisions + sim.stats().flagViolations + sim.stats().blueFlagsIgnored + soloAccidents ==
+              static_cast<long long>(sim.incidents().size()));
     }
     INFO("collisions in 5 races: ", collisions);
     CHECK(collisions >= 5);  // something to investigate in a typical race

@@ -96,7 +96,8 @@ struct Incident {
         OvertakeUnderSafetyCar,
         OvertakeUnderRedFlag,
         OvertakeBeforeRestartLine,
-        IgnoringBlueFlags         // lapped car did not let the faster car by in time
+        IgnoringBlueFlags,        // lapped car did not let the faster car by in time
+        Accident                  // spin/off-track/crash without contact (otherCar == car); review only, no one at fault
     };
     int id = 0;          // 1-based, in order of occurrence
     Type type = Type::Collision;
