@@ -88,6 +88,10 @@ RaceRules loadRules(const std::filesystem::path& path) {
         rules.safetyCarCatchUpFraction = number("safety_car_catch_up_fraction");
         rules.redFlagSpeedFraction = number("red_flag_speed_fraction");
         rules.redFlagFreeTyreChange = r.at("red_flag_free_tyre_change").at("value").get<bool>();
+        rules.pitLaneSpeedKmh = number("pit_lane_speed_kmh");
+        rules.stopAndGoSeconds = number("stop_and_go_seconds");
+        rules.unservedDriveThroughSeconds = number("unserved_drive_through_seconds");
+        rules.unservedStopAndGoSeconds = number("unserved_stop_and_go_seconds");
         return rules;
     } catch (const json::exception& e) {
         throw std::runtime_error("Bad rules data in " + displayName(path) + ": " + e.what());

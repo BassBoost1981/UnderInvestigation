@@ -54,12 +54,8 @@ constexpr double kRedFlagStopOffset = 2.0;    // red flag: cars stop this far be
 
 // Penalties (M5). Pit lane runs alongside the main straight, from the pit entry
 // (kPitEntryBeforeLine before the line) to the exit after the line.
-constexpr double kPitSpeed = 80.0 / 3.6;
 constexpr double kPitLateral = -5.0;          // snapshot lateral units: 20 m right of the racing line
 constexpr double kPitExitAfterLine = 300.0;
-constexpr double kStopAndGoTime = 10.0;
-constexpr double kUnservedDriveThrough = 20.0; // time added if not served before the end
-constexpr double kUnservedStopAndGo = 30.0;
 
 // Long-run effects (no pit stops in M1).
 constexpr double kTyreLossPerLap = 0.0006;
@@ -188,7 +184,8 @@ void Sim::applyVerdict(const Command& c) {
     case Penalty::StopAndGo:
         // Served at the next pit entry; after the flag (or if one is already pending) it becomes time.
         if (car.finished || car.pendingPenalty != Penalty::None) {
-            car.timePenalty += c.penalty == Penalty::DriveThrough ? kUnservedDriveThrough : kUnservedStopAndGo;
+            car.timePenalty += c.penalty == Penalty::DriveThrough ? config_.rules.unservedDriveThroughSeconds
+                                                               : config_.rules.unservedStopAndGoSeconds;
         } else {
             car.pendingPenalty = c.penalty;
         }
@@ -202,14 +199,15 @@ void Sim::applyVerdict(const Command& c) {
 void Sim::movePitCar(int i) {
     Car& car = cars_[i];
     const double lapLength = track_.length();
+    const double pitSpeed = config_.rules.pitLaneSpeedKmh / 3.6;
     const double before = track_.wrap(car.distance);
     if (car.stopTimer > 0.0) {
         car.stopTimer = std::max(0.0, car.stopTimer - kDt);
         car.speed = 0.0;
-    } else if (car.speed > kPitSpeed) {
-        car.speed = std::max(kPitSpeed, car.speed - kBrake * kDt);
+    } else if (car.speed > pitSpeed) {
+        car.speed = std::max(pitSpeed, car.speed - kBrake * kDt);
     } else {
-        car.speed = std::min(kPitSpeed, car.speed + 4.0 * kDt);
+        car.speed = std::min(pitSpeed, car.speed + 4.0 * kDt);
     }
     car.distance += car.speed * kDt;
     car.lateral = kPitLateral;
@@ -218,7 +216,7 @@ void Sim::movePitCar(int i) {
     // Stop-and-go: the box is at the line.
     if (car.pendingPenalty == Penalty::StopAndGo && !car.stopDone && before > lapLength / 2.0 && after < lapLength / 2.0) {
         car.stopDone = true;
-        car.stopTimer = kStopAndGoTime;
+        car.stopTimer = config_.rules.stopAndGoSeconds;
         car.speed = 0.0;
     }
     if (before < kPitExitAfterLine && after >= kPitExitAfterLine) {
@@ -231,9 +229,9 @@ void Sim::movePitCar(int i) {
 void Sim::convertUnservedPenalties() {
     for (Car& car : cars_) {
         if (car.pendingPenalty == Penalty::DriveThrough) {
-            car.timePenalty += kUnservedDriveThrough;
+            car.timePenalty += config_.rules.unservedDriveThroughSeconds;
         } else if (car.pendingPenalty == Penalty::StopAndGo) {
-            car.timePenalty += kUnservedStopAndGo;
+            car.timePenalty += config_.rules.unservedStopAndGoSeconds;
         }
         car.pendingPenalty = Penalty::None;
     }

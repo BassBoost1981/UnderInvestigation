@@ -12,6 +12,10 @@ struct RaceRules {
     double safetyCarCatchUpFraction = 0.85; // field closing up to the Safety Car queue
     double redFlagSpeedFraction = 0.40;    // slow return to the pit lane / line
     bool redFlagFreeTyreChange = true;     // tyres may be changed during a suspension
+    double pitLaneSpeedKmh = 80.0;
+    double stopAndGoSeconds = 10.0;
+    double unservedDriveThroughSeconds = 20.0; // added if not served before the end / imposed afterwards
+    double unservedStopAndGoSeconds = 30.0;
 };
 
 } // namespace uisim

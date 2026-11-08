@@ -77,6 +77,10 @@ TEST_CASE("Rules file loads with the documented defaults") {
     CHECK(rules.safetyCarSpeedFraction == defaults.safetyCarSpeedFraction);
     CHECK(rules.doubleYellowSpeedFactor == defaults.doubleYellowSpeedFactor);
     CHECK(rules.redFlagFreeTyreChange == defaults.redFlagFreeTyreChange);
+    CHECK(rules.pitLaneSpeedKmh == 80.0);                 // B1.6.3 a
+    CHECK(rules.stopAndGoSeconds == defaults.stopAndGoSeconds);
+    CHECK(rules.unservedDriveThroughSeconds == 20.0);     // B1.9.6 c iii, d
+    CHECK(rules.unservedStopAndGoSeconds == 30.0);
 }
 
 TEST_CASE("Invalid marshal sector is rejected") {
