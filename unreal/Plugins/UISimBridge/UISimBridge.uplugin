@@ -1,0 +1,17 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "UISim Bridge",
+	"Description": "Connects the engine-independent UISim core (repository folder core/) to Unreal. The only module that knows both core and Unreal types.",
+	"Category": "Simulation",
+	"EnabledByDefault": true,
+	"CanContainContent": false,
+	"Modules": [
+		{
+			"Name": "UISimBridge",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}

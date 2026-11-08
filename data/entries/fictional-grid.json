@@ -1,0 +1,35 @@
+{
+  "comment": "Fictional teams and drivers. Any resemblance to real persons is unintended. pace/skill = performance multipliers (1.0 = best), aggression 0..1 = willingness to attempt overtakes.",
+  "teams": [
+    { "name": "Aurora Racing", "pace": 1.000, "drivers": [
+      { "number": 7,  "name": "Elias Varga",       "code": "VRG", "skill": 0.998, "aggression": 0.7 },
+      { "number": 12, "name": "Tomas Reyna",       "code": "REY", "skill": 0.993, "aggression": 0.6 } ] },
+    { "name": "Halcyon GP", "pace": 0.998, "drivers": [
+      { "number": 3,  "name": "Noah Lindqvist",    "code": "LIN", "skill": 1.000, "aggression": 0.8 },
+      { "number": 22, "name": "Kenji Morita",      "code": "MOR", "skill": 0.990, "aggression": 0.5 } ] },
+    { "name": "Vortex Motorsport", "pace": 0.996, "drivers": [
+      { "number": 5,  "name": "Luca Bellandi",     "code": "BEL", "skill": 0.996, "aggression": 0.9 },
+      { "number": 19, "name": "Felix Achterberg",  "code": "ACH", "skill": 0.991, "aggression": 0.6 } ] },
+    { "name": "Meridian F", "pace": 0.993, "drivers": [
+      { "number": 9,  "name": "Samir Haddad",      "code": "HAD", "skill": 0.995, "aggression": 0.7 },
+      { "number": 27, "name": "Oskar Wendt",       "code": "WEN", "skill": 0.988, "aggression": 0.4 } ] },
+    { "name": "Stratos Racing Team", "pace": 0.991, "drivers": [
+      { "number": 8,  "name": "Rafael Quintero",   "code": "QUI", "skill": 0.994, "aggression": 0.8 },
+      { "number": 30, "name": "Jonas Keller",      "code": "KEL", "skill": 0.987, "aggression": 0.5 } ] },
+    { "name": "Kestrel Engineering", "pace": 0.989, "drivers": [
+      { "number": 11, "name": "Adrien Marchetti",  "code": "MAR", "skill": 0.992, "aggression": 0.6 },
+      { "number": 14, "name": "Ivo Dragan",        "code": "DRA", "skill": 0.989, "aggression": 0.9 } ] },
+    { "name": "Polaris Works", "pace": 0.987, "drivers": [
+      { "number": 2,  "name": "Callum Ashby",      "code": "ASH", "skill": 0.990, "aggression": 0.5 },
+      { "number": 17, "name": "Mateo Ferrante",    "code": "FER", "skill": 0.986, "aggression": 0.7 } ] },
+    { "name": "Ironbridge Racing", "pace": 0.985, "drivers": [
+      { "number": 21, "name": "Niklas Ohlsson",    "code": "OHL", "skill": 0.988, "aggression": 0.6 },
+      { "number": 26, "name": "Daniel Okafor",     "code": "OKA", "skill": 0.985, "aggression": 0.8 } ] },
+    { "name": "Corsa Nova", "pace": 0.983, "drivers": [
+      { "number": 33, "name": "Pietro Galli",      "code": "GAL", "skill": 0.987, "aggression": 0.7 },
+      { "number": 41, "name": "Hugo Laurent",      "code": "LAU", "skill": 0.983, "aggression": 0.5 } ] },
+    { "name": "Talon Motorsport", "pace": 0.981, "drivers": [
+      { "number": 6,  "name": "Emil Sandvik",      "code": "SAN", "skill": 0.985, "aggression": 0.6 },
+      { "number": 25, "name": "Aaron Whitfield",   "code": "WHI", "skill": 0.981, "aggression": 0.4 } ] }
+  ]
+}

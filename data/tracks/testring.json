@@ -1,0 +1,22 @@
+{
+  "name": "Testring Nordhafen",
+  "comment": "Fictional M1 test track, 5.6 km. speed_kmh = apex speed in corners / top speed on straights. overtake = relative overtaking chance (0 = impossible). turn_deg = heading change over the segment, positive = left; must sum to 360.",
+  "segments": [
+    { "name": "Start/finish straight", "length_m": 900,  "speed_kmh": 320, "overtake": 1.0, "sector": 1, "turn_deg":    0 },
+    { "name": "T1 hairpin",            "length_m": 100,  "speed_kmh": 85,  "overtake": 0.3, "sector": 1, "turn_deg":  143 },
+    { "name": "Harbour straight",      "length_m": 350,  "speed_kmh": 270, "overtake": 0.4, "sector": 1, "turn_deg":    0 },
+    { "name": "T2-3 chicane",          "length_m": 150,  "speed_kmh": 130, "overtake": 0.1, "sector": 1, "turn_deg":  -17 },
+    { "name": "Crane straight",        "length_m": 400,  "speed_kmh": 290, "overtake": 0.5, "sector": 1, "turn_deg":    0 },
+    { "name": "T4",                    "length_m": 250,  "speed_kmh": 230, "overtake": 0.0, "sector": 1, "turn_deg":   30 },
+    { "name": "Back straight",         "length_m": 1000, "speed_kmh": 325, "overtake": 1.0, "sector": 2, "turn_deg":    0 },
+    { "name": "T5",                    "length_m": 180,  "speed_kmh": 150, "overtake": 0.2, "sector": 2, "turn_deg":  108 },
+    { "name": "Dune esses",            "length_m": 400,  "speed_kmh": 210, "overtake": 0.0, "sector": 2, "turn_deg":   16 },
+    { "name": "T8",                    "length_m": 300,  "speed_kmh": 250, "overtake": 0.0, "sector": 2, "turn_deg":   68 },
+    { "name": "Lighthouse run",        "length_m": 300,  "speed_kmh": 280, "overtake": 0.2, "sector": 2, "turn_deg":    0 },
+    { "name": "T9",                    "length_m": 120,  "speed_kmh": 100, "overtake": 0.3, "sector": 3, "turn_deg":  -94 },
+    { "name": "Dock straight",         "length_m": 500,  "speed_kmh": 300, "overtake": 0.6, "sector": 3, "turn_deg":    0 },
+    { "name": "T10",                   "length_m": 200,  "speed_kmh": 160, "overtake": 0.1, "sector": 3, "turn_deg":  124 },
+    { "name": "Final corner",          "length_m": 250,  "speed_kmh": 190, "overtake": 0.0, "sector": 3, "turn_deg":  -18 },
+    { "name": "Run to the line",       "length_m": 200,  "speed_kmh": 280, "overtake": 0.2, "sector": 3, "turn_deg":    0 }
+  ]
+}

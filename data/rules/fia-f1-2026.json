@@ -1,0 +1,13 @@
+{
+  "name": "FIA F1 Sporting Regulations 2026 (simplified for the sim)",
+  "comment": "Parameters of the rule mechanics, not regulation text. Article numbers from the table of contents of Section B, Issue 1 (2024-10-17); later issues (latest seen: Issue 07, 2026-06-25) are NOT checked - verify before relying on them. Values are simplifications chosen for the sim.",
+  "rules": {
+    "yellow_speed_factor":          { "value": 0.95, "source": "ISC Appendix H - yellow flag (single waved)",      "verified": false },
+    "double_yellow_speed_factor":   { "value": 0.80, "source": "ISC Appendix H - yellow flag (double waved)",      "verified": false },
+    "vsc_speed_fraction":           { "value": 0.60, "source": "F1 SR 2026 Section B, B5.12 Virtual Safety Car",   "verified": false },
+    "safety_car_speed_fraction":    { "value": 0.55, "source": "F1 SR 2026 Section B, B5.13 Safety Car",           "verified": false },
+    "safety_car_catch_up_fraction": { "value": 0.85, "source": "F1 SR 2026 Section B, B5.13 Safety Car",           "verified": false },
+    "red_flag_speed_fraction":      { "value": 0.40, "source": "F1 SR 2026 Section B, B5.14 Suspension & Resumption", "verified": false },
+    "red_flag_free_tyre_change":    { "value": true, "source": "F1 SR 2026 Section B, B5.14 Suspension & Resumption", "verified": false }
+  }
+}

@@ -1,0 +1,12 @@
+/core/build/
+
+# Recognisable real-name grids: private use only, never in the public repository (docs/DESIGN.md chapter 10)
+/data/entries/*-parody.json
+
+# Unreal build output
+/unreal/Binaries/
+/unreal/Intermediate/
+/unreal/Saved/
+/unreal/DerivedDataCache/
+/unreal/Plugins/*/Binaries/
+/unreal/Plugins/*/Intermediate/

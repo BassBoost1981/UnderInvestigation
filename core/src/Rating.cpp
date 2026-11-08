@@ -1,0 +1,135 @@
+#include "uisim/Rating.h"
+
+#include <algorithm>
+#include <cmath>
+
+namespace uisim {
+namespace {
+
+constexpr double kScorePerSeverityStep = 0.34; // one step off (e.g. 5 s instead of 10 s) costs a third
+constexpr double kSimilarBlame = 0.15;          // incidents this close in blame should be judged alike
+constexpr double kAcceptedNeutralisation = 0.05; // share of the race under VSC/SC/red that costs nothing
+constexpr double kAfterRaceDecisionCost = 0.1;
+
+int severity(Penalty penalty) { return static_cast<int>(penalty); }
+
+double score(const ExpectedVerdict& expected, int givenCar, Penalty given) {
+    const int party = severity(given) > 0 ? givenCar : -1; // "no action" has no party
+    const int level = party < 0 ? 0 : severity(given);
+    const int expectedLevel = severity(expected.penalty);
+    if (expected.car < 0) {
+        return std::max(0.0, 1.0 - kScorePerSeverityStep * level);
+    }
+    if (party == expected.car) {
+        return std::max(0.0, 1.0 - kScorePerSeverityStep * std::abs(level - expectedLevel));
+    }
+    if (party < 0) {
+        return std::max(0.0, 1.0 - kScorePerSeverityStep * expectedLevel); // let off too lightly
+    }
+    return 0.0; // the wrong driver was penalised
+}
+
+// Which side a verdict penalised: 1 = incident.car, 2 = incident.otherCar, 0 = no one.
+int role(const Incident& incident, int car, Penalty penalty) {
+    if (severity(penalty) == 0 || car < 0) {
+        return 0;
+    }
+    return car == incident.car ? 1 : car == incident.otherCar ? 2 : 3;
+}
+
+} // namespace
+
+ExpectedVerdict expectedVerdict(const Incident& incident) {
+    using Type = Incident::Type;
+    switch (incident.type) {
+    case Type::Collision:
+        if (incident.blame >= 0.8) {
+            return {incident.car, Penalty::TenSeconds};
+        }
+        if (incident.blame >= 0.6) {
+            return {incident.car, Penalty::FiveSeconds};
+        }
+        if (incident.blame <= 0.2) {
+            return {incident.otherCar, Penalty::FiveSeconds};
+        }
+        return {-1, Penalty::None}; // racing incident
+    case Type::OvertakeUnderYellow:
+    case Type::OvertakeUnderVsc:
+    case Type::OvertakeUnderSafetyCar:
+        return {incident.car, Penalty::TenSeconds};
+    case Type::OvertakeUnderRedFlag:
+        return {incident.car, Penalty::DriveThrough};
+    case Type::OvertakeBeforeRestartLine:
+        return {incident.car, Penalty::FiveSeconds};
+    }
+    return {};
+}
+
+RaceRating rateRace(const Sim& sim) {
+    RaceRating rating;
+    const auto& incidents = sim.incidents();
+    double total = 0.0;
+    for (const Incident& incident : incidents) {
+        IncidentRating r;
+        r.incidentId = incident.id;
+        r.expected = expectedVerdict(incident);
+        const auto verdict = std::find_if(sim.verdicts().begin(), sim.verdicts().end(),
+            [&](const Verdict& v) { return v.incidentId == incident.id; });
+        if (verdict != sim.verdicts().end()) {
+            r.decided = true;
+            r.givenCar = verdict->car;
+            r.givenPenalty = verdict->penalty;
+            ++rating.decided;
+        }
+        r.score = score(r.expected, r.givenCar, r.givenPenalty);
+        total += r.score;
+        rating.incidents.push_back(r);
+    }
+    if (!incidents.empty()) {
+        rating.fairness = total / static_cast<double>(incidents.size());
+    }
+
+    // Consistency over decided pairs of the same kind with similar blame.
+    int pairs = 0;
+    int consistent = 0;
+    for (std::size_t a = 0; a < incidents.size(); ++a) {
+        for (std::size_t b = a + 1; b < incidents.size(); ++b) {
+            const IncidentRating& ra = rating.incidents[a];
+            const IncidentRating& rb = rating.incidents[b];
+            if (!ra.decided || !rb.decided || incidents[a].type != incidents[b].type ||
+                std::abs(incidents[a].blame - incidents[b].blame) > kSimilarBlame) {
+                continue;
+            }
+            ++pairs;
+            // Verdicts may differ only as much as the truth justifies (a threshold can lie between them).
+            auto difference = [&](int carA, Penalty penA, int carB, Penalty penB) {
+                const int sides = role(incidents[a], carA, penA) == role(incidents[b], carB, penB) ? 0 : 2;
+                return sides + std::abs(severity(penA) - severity(penB));
+            };
+            const int given = difference(ra.givenCar, ra.givenPenalty, rb.givenCar, rb.givenPenalty);
+            const int deserved = difference(ra.expected.car, ra.expected.penalty, rb.expected.car, rb.expected.penalty);
+            if (given <= deserved + 1) {
+                ++consistent;
+            }
+        }
+    }
+    if (pairs > 0) {
+        rating.consistency = static_cast<double>(consistent) / pairs;
+    }
+
+    // Race quality: too much neutralisation is boring, decisions after the flag annoy everyone.
+    const double raceTime = sim.finishTime() > 0.0 ? sim.finishTime() : sim.snapshot().time;
+    const double share = raceTime > 0.0 ? sim.neutralisedTime() / raceTime : 0.0;
+    double quality = 1.0 - std::max(0.0, share - kAcceptedNeutralisation) * 3.0;
+    for (const Verdict& verdict : sim.verdicts()) {
+        if (verdict.afterRace) {
+            quality -= kAfterRaceDecisionCost;
+        }
+    }
+    rating.raceQuality = std::clamp(quality, 0.0, 1.0);
+
+    rating.overall = 100.0 * (0.5 * rating.fairness + 0.2 * rating.consistency + 0.3 * rating.raceQuality);
+    return rating;
+}
+
+} // namespace uisim

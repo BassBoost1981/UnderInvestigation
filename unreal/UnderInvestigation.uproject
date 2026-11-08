@@ -1,0 +1,19 @@
+{
+	"FileVersion": 3,
+	"EngineAssociation": "5.8",
+	"Category": "",
+	"Description": "Under Investigation - A Race Director Simulator (presentation layer, see docs/DESIGN.md)",
+	"Modules": [
+		{
+			"Name": "UnderInvestigation",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "UISimBridge",
+			"Enabled": true
+		}
+	]
+}
