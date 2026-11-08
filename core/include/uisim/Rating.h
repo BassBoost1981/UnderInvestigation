@@ -23,12 +23,15 @@ struct IncidentRating {
     double score = 0.0; // 0..1
 };
 
-// Race director rating (DESIGN.md 7). Safety follows once crashes block the track.
+// Race director rating (DESIGN.md 7).
 struct RaceRating {
     double fairness = 1.0;    // verdicts vs ground truth, undecided incidents count as "no action"
     double consistency = 1.0; // similar incidents got similar verdicts
     double raceQuality = 1.0; // little neutralisation, no decisions after the flag
-    double overall = 100.0;   // 0..100: 50 % fairness, 20 % consistency, 30 % race quality
+    double safety = 1.0;      // accident sites protected quickly, no follow-up accidents
+    double overall = 100.0;   // 0..100: 35 % fairness, 15 % consistency, 30 % safety, 20 % race quality
+    int accidentSites = 0;
+    int followUpAccidents = 0;
     int decided = 0;
     std::vector<IncidentRating> incidents;
 };

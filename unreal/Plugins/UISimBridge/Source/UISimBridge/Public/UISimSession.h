@@ -87,6 +87,8 @@ struct FUISimRating
 	double Fairness = 1.0;
 	double Consistency = 1.0;
 	double RaceQuality = 1.0;
+	double Safety = 1.0;
+	int32 FollowUpAccidents = 0;
 	double Overall = 100.0;
 	TArray<FUISimIncidentRating> Incidents;
 };

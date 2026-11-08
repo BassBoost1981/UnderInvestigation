@@ -842,7 +842,8 @@ void AUIRaceDirector::LogResult() const
 	UE_LOG(LogUISim, Display, TEXT("RESULT Overtakes: %d"), SimSession.Overtakes());
 	UE_LOG(LogUISim, Display, TEXT("Flag violations: %d"), SimSession.FlagViolations());
 	const FUISimRating Rating = SimSession.Rating();
-	UE_LOG(LogUISim, Display, TEXT("Rating: %.0f/100 (fairness %.0f%%, consistency %.0f%%, race quality %.0f%%), %d incidents"),
-		Rating.Overall, Rating.Fairness * 100.0, Rating.Consistency * 100.0, Rating.RaceQuality * 100.0,
-		Rating.Incidents.Num());
+	UE_LOG(LogUISim, Display,
+		TEXT("Rating: %.0f/100 (fairness %.0f%%, consistency %.0f%%, safety %.0f%%, race quality %.0f%%), %d incidents"),
+		Rating.Overall, Rating.Fairness * 100.0, Rating.Consistency * 100.0, Rating.Safety * 100.0,
+		Rating.RaceQuality * 100.0, Rating.Incidents.Num());
 }

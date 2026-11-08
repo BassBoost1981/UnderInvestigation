@@ -105,9 +105,18 @@ TEST_CASE("Time penalty changes the final classification") {
 }
 
 TEST_CASE("Time penalties do not change how the race is driven") {
-    Sim clean = makeRace(1, 50);
+    // With accidents and follow-ups active: a time penalty must not change a single tick.
+    const std::filesystem::path data(UISIM_DATA_DIR);
+    auto withAccidents = [&] {
+        RaceConfig config;
+        config.laps = 50;
+        config.seed = 1;
+        return Sim(loadTrack(data / "tracks" / "testring.json"),
+                   loadEntries(data / "entries" / "fictional-grid.json"), config);
+    };
+    Sim clean = withAccidents();
     runToEnd(clean);
-    Sim penalised = makeRace(1, 50);
+    Sim penalised = withAccidents();
     runToEnd(penalised, [](Sim& s, const Incident& incident) {
         s.command(verdict(incident.id, incident.car, Penalty::FiveSeconds));
     });

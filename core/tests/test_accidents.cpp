@@ -2,6 +2,7 @@
 
 #include "uisim/DataDir.h"
 #include "uisim/DataLoader.h"
+#include "uisim/Rating.h"
 #include "uisim/Sim.h"
 
 #include <doctest/doctest.h>
@@ -255,6 +256,41 @@ TEST_CASE("Spins and off-track excursions are reported too") {
     REQUIRE(sim.radio().size() == 2);
     CHECK(sim.radio()[0].type == RadioMessage::Type::Spin);
     CHECK(sim.radio()[1].type == RadioMessage::Type::CarOffTrack);
+}
+
+TEST_CASE("Safety rating rewards a quick, sufficient flag") {
+    // Crash on the racing line, double yellow after `reactAfter` seconds, then race to the end.
+    auto safetyAfter = [](double reactAfter) {
+        Sim sim = makeRace(3);
+        runSeconds(sim, 400.0);
+        inject(sim, victim(sim), AccidentType::Crash);
+        runSeconds(sim, reactAfter);
+        setFlag(sim, sim.snapshot().hazards.front().marshalSector, Flag::DoubleYellow);
+        runToEnd(sim);
+        const RaceRating rating = rateRace(sim);
+        CHECK(rating.accidentSites == 1);
+        CHECK(rating.overall == doctest::Approx(100.0 * (0.35 * rating.fairness + 0.15 * rating.consistency +
+                                                        0.3 * rating.safety + 0.2 * rating.raceQuality)));
+        return rating.safety;
+    };
+    CHECK(safetyAfter(10.0) == doctest::Approx(1.0));
+    CHECK(safetyAfter(70.0) == doctest::Approx(0.5).epsilon(0.02));
+    CHECK(safetyAfter(300.0) == doctest::Approx(0.0));
+}
+
+TEST_CASE("Safety rating counts follow-up accidents") {
+    int followUps = 0;
+    for (std::uint64_t seed = 1; seed <= 10; ++seed) {
+        Sim sim = makeRace(seed, 20, 0.0, 1.0); // follow-ups active
+        runSeconds(sim, 400.0);
+        inject(sim, victim(sim), AccidentType::Crash);
+        runSeconds(sim, 600.0); // nobody reacts
+        const RaceRating rating = rateRace(sim);
+        CHECK(rating.followUpAccidents == sim.stats().followUpAccidents);
+        CHECK(rating.safety == doctest::Approx(0.0)); // never protected
+        followUps += rating.followUpAccidents;
+    }
+    CHECK(followUps > 0);
 }
 
 TEST_CASE("Accidents keep the sim deterministic") {

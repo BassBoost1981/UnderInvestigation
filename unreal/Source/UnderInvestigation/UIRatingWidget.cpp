@@ -64,7 +64,8 @@ void UUIRatingWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 	Text += FString::Printf(TEXT("Fairness      %3.0f %%   (Urteile gegen die Wahrheit)\n"), Rating.Fairness * 100.0);
 	Text += FString::Printf(TEXT("Konsistenz    %3.0f %%   (aehnliche Faelle, aehnliche Urteile)\n"), Rating.Consistency * 100.0);
 	Text += FString::Printf(TEXT("Rennqualitaet %3.0f %%   (wenig Neutralisation, keine Urteile nach dem Rennen)\n"), Rating.RaceQuality * 100.0);
-	Text += TEXT("Sicherheit      -     (ab M6: Unfaelle mit stehenden Autos)\n\n");
+	Text += FString::Printf(TEXT("Sicherheit    %3.0f %%   (Unfallstellen schnell gesichert, %d Folgeunfaelle)\n\n"),
+		Rating.Safety * 100.0, Rating.FollowUpAccidents);
 	Text += TEXT("Vorfall  Dein Urteil              Richtig waere            Punkte\n");
 
 	const TArray<FUISimIncident>& Incidents = Race->Session().Incidents();

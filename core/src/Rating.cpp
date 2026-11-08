@@ -10,6 +10,9 @@ constexpr double kScorePerSeverityStep = 0.34; // one step off (e.g. 5 s instead
 constexpr double kSimilarBlame = 0.15;          // incidents this close in blame should be judged alike
 constexpr double kAcceptedNeutralisation = 0.05; // share of the race under VSC/SC/red that costs nothing
 constexpr double kAfterRaceDecisionCost = 0.1;
+constexpr double kFullReactionTime = 20.0; // seconds after the accident: radio delay plus a quick reaction
+constexpr double kZeroReactionTime = 120.0;
+constexpr double kFollowUpCost = 0.15;
 
 int severity(Penalty penalty) { return static_cast<int>(penalty); }
 
@@ -128,7 +131,26 @@ RaceRating rateRace(const Sim& sim) {
     }
     rating.raceQuality = std::clamp(quality, 0.0, 1.0);
 
-    rating.overall = 100.0 * (0.5 * rating.fairness + 0.2 * rating.consistency + 0.3 * rating.raceQuality);
+    // Safety: how fast each accident site got a sufficient flag, minus follow-up accidents.
+    double reaction = 0.0;
+    for (const Accident& accident : sim.accidents()) {
+        if (accident.causedBy != 0) {
+            ++rating.followUpAccidents;
+        }
+        if (accident.type == AccidentType::Spin) {
+            continue; // a spun car drives on: nothing to protect
+        }
+        ++rating.accidentSites;
+        if (accident.protectedAfter >= 0.0) {
+            reaction += std::clamp((kZeroReactionTime - accident.protectedAfter) / (kZeroReactionTime - kFullReactionTime),
+                                   0.0, 1.0);
+        }
+    }
+    const double reactionScore = rating.accidentSites > 0 ? reaction / rating.accidentSites : 1.0;
+    rating.safety = std::clamp(reactionScore - kFollowUpCost * rating.followUpAccidents, 0.0, 1.0);
+
+    rating.overall = 100.0 * (0.35 * rating.fairness + 0.15 * rating.consistency + 0.3 * rating.safety +
+                              0.2 * rating.raceQuality);
     return rating;
 }
 

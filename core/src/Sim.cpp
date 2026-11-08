@@ -358,6 +358,11 @@ bool Sim::recoveryAllowed(const HazardState& hazard) const {
 
 void Sim::updateHazards() {
     for (HazardState& hazard : hazards_) {
+        Accident& accident = accidents_[static_cast<std::size_t>(hazard.id - 1)];
+        accident.waitingTime = hazard.waitingTime;
+        if (recoveryAllowed(hazard) && accident.protectedAfter < 0.0) {
+            accident.protectedAfter = time_ - accident.time; // first moment the site is protected
+        }
         if (recoveryAllowed(hazard)) {
             hazard.recoveryLeft -= kDt;
         } else {

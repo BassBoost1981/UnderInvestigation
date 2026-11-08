@@ -183,6 +183,8 @@ FUISimRating FUISimSession::Rating() const
 	Out.Fairness = In.fairness;
 	Out.Consistency = In.consistency;
 	Out.RaceQuality = In.raceQuality;
+	Out.Safety = In.safety;
+	Out.FollowUpAccidents = In.followUpAccidents;
 	Out.Overall = In.overall;
 	for (const uisim::IncidentRating& R : In.incidents)
 	{

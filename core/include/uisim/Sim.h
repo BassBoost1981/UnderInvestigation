@@ -69,6 +69,9 @@ struct Accident {
     double distance = 0.0;  // total distance of the car
     bool fromCollision = false;
     int causedBy = 0; // follow-up: id of the unprotected accident the car ran into, 0 = none
+    // Accident sites only (off-track, crash), for the safety rating:
+    double protectedAfter = -1.0; // seconds until the site first had a sufficient flag, -1 = never
+    double waitingTime = 0.0;     // seconds the recovery had to wait for that flag
 };
 
 // A steward decision as issued.
