@@ -25,6 +25,7 @@ struct HazardState {
     double recoveryLeft = 0.0; // seconds of marshal work still needed
     double waitingTime = 0.0;  // seconds the marshals had to wait for a sufficient flag
     bool recoveryRequested = false; // marshals have radioed for the flag they need
+    bool recovering = false;        // marshals at work right now
 };
 
 // Read-only state of one car after a sim step. Flat and copyable so the UE

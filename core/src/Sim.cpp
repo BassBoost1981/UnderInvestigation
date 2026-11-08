@@ -372,7 +372,8 @@ void Sim::updateHazards() {
         if (recoveryAllowed(hazard) && accident.protectedAfter < 0.0) {
             accident.protectedAfter = time_ - accident.time; // first moment the site is protected
         }
-        if (recoveryAllowed(hazard)) {
+        hazard.recovering = recoveryAllowed(hazard);
+        if (hazard.recovering) {
             hazard.recoveryLeft -= kDt;
         } else {
             hazard.waitingTime += kDt; // marshals cannot go out yet

@@ -283,6 +283,11 @@ void FUISimSession::CopySnapshot()
 		const uisim::RadioMessage& M = Sim->radio()[Index];
 		RadioList.Add({M.time, static_cast<EUISimRadio>(M.type), M.marshalPost, M.car, M.accidentId, M.onTrack});
 	}
+	CurrentSnapshot.Hazards.Reset();
+	for (const uisim::HazardState& H : In.hazards)
+	{
+		CurrentSnapshot.Hazards.Add({H.id, H.car, H.trackPosition, H.onTrack, H.recovering});
+	}
 	CurrentSnapshot.bSafetyCarOnTrack = In.safetyCarOnTrack;
 	CurrentSnapshot.bSafetyCarInThisLap = In.safetyCarInThisLap;
 	CurrentSnapshot.SafetyCarDistance = In.safetyCarDistance;

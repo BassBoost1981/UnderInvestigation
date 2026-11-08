@@ -274,7 +274,7 @@ Jeder Meilenstein hat ein überprüfbares Abnahmekriterium.
 | **M6** | **Unfälle & Sicherheit** (Plan in 8.1) | Siehe Abnahmekriterien der Arbeitspakete in 8.1. |
 | M7+ | Ausbau | Boxenstopps/Strategie, Bedienung per Maus (Streckenkarte, Strafen-Dialog), Funk mit Persönlichkeiten, Wetter, Steward-Anhörungen, mehrere Strecken, Karriere |
 
-**Stand 2026-11-08:** M1–M5 erledigt (31 Kern-Tests, Unreal-Ergebnis identisch zum Konsolen-Runner).
+**Stand 2026-11-08:** M1–M6 erledigt (45 Kern-Tests, Unreal-Ergebnis identisch zum Konsolen-Runner). Offen aus M6: Unfälle erscheinen noch nicht als eigene Einträge im Review, Overtake-Modus noch ohne Anzeige in Unreal.
 
 ### 8.1 Plan M6: Unfälle & Sicherheit
 

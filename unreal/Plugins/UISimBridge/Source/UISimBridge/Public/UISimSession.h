@@ -31,6 +31,16 @@ struct FUISimCar
 };
 
 enum class EUISimFlag : uint8 { Green, Yellow, DoubleYellow };
+
+// Stranded car / accident site (core HazardState).
+struct FUISimHazard
+{
+	int32 Id = 0;
+	int32 Car = 0;
+	double TrackPosition = 0.0;
+	bool bOnTrack = false;
+	bool bRecovering = false;
+};
 enum class EUISimRaceState : uint8 { Green, VirtualSafetyCar, SafetyCar, RedFlag };
 
 struct FUISimSnapshot
@@ -42,6 +52,7 @@ struct FUISimSnapshot
 	bool bFinished = false;
 	EUISimRaceState State = EUISimRaceState::Green;
 	TArray<EUISimFlag> SectorFlags; // one per marshal sector
+	TArray<FUISimHazard> Hazards;   // not yet recovered
 	bool bSafetyCarOnTrack = false;
 	bool bSafetyCarInThisLap = false;
 	double SafetyCarDistance = 0.0;

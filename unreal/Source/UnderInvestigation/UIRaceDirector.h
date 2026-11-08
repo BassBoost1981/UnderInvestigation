@@ -73,6 +73,7 @@ private:
 	void SpawnFlagPosts();
 	void UpdateFlagPosts();
 	void UpdateSafetyCar(double Alpha);
+	void UpdateAccidentSites();
 	void SpawnReviewView();
 	void HandleReviewInput(APlayerController* Player);
 	void StartReview(int32 IncidentIndex);
@@ -106,6 +107,10 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UStaticMeshComponent> SafetyCarMesh;
+	UPROPERTY()
+	TArray<TObjectPtr<UStaticMeshComponent>> DebrisMeshes;   // pooled, 3 per site on the track
+	UPROPERTY()
+	TArray<TObjectPtr<UStaticMeshComponent>> RecoveryMeshes; // pooled, one per site being recovered
 	double PreviousSafetyCarDistance = 0.0;
 	bool bSafetyCarWasOnTrack = false;
 
@@ -141,6 +146,9 @@ private:
 	UPROPERTY()
 	TObjectPtr<UUIRadioWidget> RadioPanel;
 	double CrashAtSeconds = 0.0; // -UISimCrashAt: scripted crash of the car in P9 (checks only)
+	bool bCrashReact = false;     // -UISimCrashReact: double yellow 10 s after the scripted crash
+	double CrashReactAt = 0.0;
+	bool bCrashCameraPending = false;
 	TArray<FUISimReplayCar> ReplayCars;
 
 	UPROPERTY()

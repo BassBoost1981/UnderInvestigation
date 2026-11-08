@@ -72,6 +72,7 @@ void AUIRaceDirector::BeginPlay()
 	FParse::Value(CommandLine, TEXT("UISimReviewAt="), ReviewAtSeconds);                 // scripted incident review
 	bTestVerdicts = FParse::Param(CommandLine, TEXT("UISimTestVerdicts"));
 	FParse::Value(CommandLine, TEXT("UISimCrashAt="), CrashAtSeconds);
+	bCrashReact = FParse::Param(CommandLine, TEXT("UISimCrashReact"));
 
 	const FString DataDir = FPaths::ConvertRelativePathToFull(FPaths::Combine(FPaths::ProjectDir(), TEXT("../data")));
 	const FString TrackPath = FPaths::Combine(DataDir, TEXT("tracks/testring.json"));
@@ -223,6 +224,54 @@ void AUIRaceDirector::UpdateFlagPosts()
 	}
 }
 
+void AUIRaceDirector::UpdateAccidentSites()
+{
+	const TArray<FUISimHazard>& Sites = SimSession.Snapshot().Hazards;
+	int32 Debris = 0;
+	int32 Recovery = 0;
+	// Debris pieces scattered around a crash site on the track (fixed pattern: along, sideways, in metres).
+	const FVector2D Pattern[] = {{-6.0, 2.5}, {4.0, -2.0}, {9.0, 1.0}};
+	for (const FUISimHazard& Site : Sites)
+	{
+		if (Site.bOnTrack)
+		{
+			for (const FVector2D& Offset : Pattern)
+			{
+				if (!DebrisMeshes.IsValidIndex(Debris))
+				{
+					UStaticMeshComponent* Piece = AddMesh(CubeMesh, FLinearColor(0.02f, 0.02f, 0.02f));
+					Piece->SetWorldScale3D(FVector(0.6, 0.4, 0.15));
+					DebrisMeshes.Add(Piece);
+				}
+				const FTransform At = SimSession.TrackTransform(Site.TrackPosition + Offset.X, Offset.Y);
+				DebrisMeshes[Debris]->SetWorldLocationAndRotation(At.GetLocation() + FVector(0, 0, RoadHeight + 8.0),
+					At.GetRotation() * FQuat(FVector::UpVector, Offset.X));
+				DebrisMeshes[Debris++]->SetVisibility(true);
+			}
+		}
+		if (Site.bRecovering)
+		{
+			if (!RecoveryMeshes.IsValidIndex(Recovery))
+			{
+				UStaticMeshComponent* Truck = AddMesh(CubeMesh, FLinearColor(1.0f, 0.75f, 0.0f));
+				Truck->SetWorldScale3D(FVector(7.0, 2.5, 3.0)); // recovery truck with crane (blockout)
+				RecoveryMeshes.Add(Truck);
+			}
+			const FTransform At = SimSession.TrackTransform(Site.TrackPosition, -(RoadWidthMetres / 2.0 + 6.0));
+			RecoveryMeshes[Recovery]->SetWorldLocationAndRotation(At.GetLocation() + FVector(0, 0, 150.0), At.GetRotation());
+			RecoveryMeshes[Recovery++]->SetVisibility(true);
+		}
+	}
+	for (int32 Index = Debris; Index < DebrisMeshes.Num(); ++Index)
+	{
+		DebrisMeshes[Index]->SetVisibility(false);
+	}
+	for (int32 Index = Recovery; Index < RecoveryMeshes.Num(); ++Index)
+	{
+		RecoveryMeshes[Index]->SetVisibility(false);
+	}
+}
+
 void AUIRaceDirector::UpdateSafetyCar(double Alpha)
 {
 	const FUISimSnapshot& Snapshot = SimSession.Snapshot();
@@ -330,6 +379,27 @@ void AUIRaceDirector::Tick(float DeltaSeconds)
 		CrashAtSeconds = 0.0;
 		SimSession.InjectCrash(SimSession.Snapshot().Cars[8].EntryIndex);
 		UE_LOG(LogUISim, Display, TEXT("Scripted crash at %s"), *FormatRaceTime(SimSession.Snapshot().Time));
+		bCrashCameraPending = true;
+		CrashReactAt = bCrashReact ? SimSession.Snapshot().Time + 10.0 : 0.0;
+	}
+	if (bCrashCameraPending && SimSession.Snapshot().Hazards.Num() > 0)
+	{
+		// Put the first trackside camera at the marshal post nearest to the scripted crash.
+		bCrashCameraPending = false;
+		const FUISimHazard& Site = SimSession.Snapshot().Hazards.Last();
+		const double SectorLength = SimSession.TrackLength() / SimSession.MarshalSectorCount();
+		const double Post = FMath::RoundToDouble(Site.TrackPosition / SectorLength) * SectorLength;
+		Cameras[1]->SetActorLocation(SimSession.TrackTransform(Post, -(RoadWidthMetres / 2.0 + 3.0)).GetLocation() + FVector(0, 0, 600.0));
+		ActiveCamera = 1;
+	}
+	if (CrashReactAt > 0.0 && SimSession.Snapshot().Time >= CrashReactAt && SimSession.Snapshot().Hazards.Num() > 0)
+	{
+		CrashReactAt = 0.0;
+		const double SectorLength = SimSession.TrackLength() / SimSession.MarshalSectorCount();
+		const int32 Sector = FMath::Clamp(static_cast<int32>(SimSession.Snapshot().Hazards.Last().TrackPosition / SectorLength), 0,
+			SimSession.MarshalSectorCount() - 1);
+		SimSession.SetSectorFlag(Sector, EUISimFlag::DoubleYellow);
+		UE_LOG(LogUISim, Display, TEXT("Scripted reaction: double yellow in sector %d"), Sector + 1);
 	}
 
 	while (bTestVerdicts && IncidentsHandledByTest < SimSession.Incidents().Num())
@@ -375,6 +445,7 @@ void AUIRaceDirector::Tick(float DeltaSeconds)
 	const double Alpha = FMath::Clamp(Accumulator / Dt, 0.0, 1.0);
 	UpdateCars(Alpha);
 	UpdateSafetyCar(Alpha);
+	UpdateAccidentSites();
 	UpdateFlagPosts();
 	UpdateCameras();
 	if (bReviewing)
@@ -404,13 +475,20 @@ void AUIRaceDirector::UpdateCars(double Alpha)
 	for (const FUISimCar& Car : SimSession.Snapshot().Cars)
 	{
 		UStaticMeshComponent* Mesh = CarMeshes[Car.EntryIndex];
-		// Finished cars leave the track (parc fermé) instead of piling up at the line.
-		Mesh->SetVisibility(!Car.bFinished);
+		// Finished cars leave the track (parc fermé); retired cars stay at their accident site
+		// until the marshals have recovered them.
+		const FUISimHazard* Site = SimSession.Snapshot().Hazards.FindByPredicate(
+			[&Car](const FUISimHazard& H) { return H.Car == Car.EntryIndex; });
+		Mesh->SetVisibility(!Car.bFinished && (!Car.bRetired || Site != nullptr));
 		const double Distance = FMath::Lerp(PreviousDistance[Car.EntryIndex], Car.Distance, Alpha);
 		const double Lateral = FMath::Lerp(PreviousLateral[Car.EntryIndex], Car.Lateral, Alpha);
 		const FTransform Transform = SimSession.CarTransform(Distance, Lateral);
-		Mesh->SetWorldLocationAndRotation(Transform.GetLocation() + FVector(0, 0, RoadHeight + CarScale.Z * 50.0),
-			Transform.GetRotation());
+		FQuat Rotation = Transform.GetRotation();
+		if (Site)
+		{
+			Rotation = Rotation * FQuat(FVector::UpVector, FMath::DegreesToRadians(Site->bOnTrack ? 70.0 : 30.0));
+		}
+		Mesh->SetWorldLocationAndRotation(Transform.GetLocation() + FVector(0, 0, RoadHeight + CarScale.Z * 50.0), Rotation);
 	}
 }
 
