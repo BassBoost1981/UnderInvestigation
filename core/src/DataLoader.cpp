@@ -118,6 +118,17 @@ RaceRules loadRules(const std::filesystem::path& path) {
         rules.trackLimitsBlackWhiteAt = static_cast<int>(number("track_limits_black_white_at"));
         rules.trackLimitsPenaltyFrom = static_cast<int>(number("track_limits_penalty_from"));
         rules.trackLimitsPenaltySeconds = number("track_limits_penalty_seconds");
+        rules.lappedCarsMayOvertake = r.at("lapped_cars_may_overtake").at("value").get<bool>();
+        rules.safetyCarInLapsAfterLappedCars = static_cast<int>(number("safety_car_in_laps_after_lapped_cars"));
+        const std::string closedPenalty = r.at("pit_entry_closed_penalty").at("value").get<std::string>();
+        if (closedPenalty == "drive_through") {
+            rules.pitEntryClosedPenalty = Penalty::DriveThrough;
+        } else if (closedPenalty == "stop_and_go") {
+            rules.pitEntryClosedPenalty = Penalty::StopAndGo;
+        } else {
+            throw std::runtime_error("Bad rules data in " + displayName(path) + ": unknown pit_entry_closed_penalty '" +
+                                     closedPenalty + "'");
+        }
         return rules;
     } catch (const json::exception& e) {
         throw std::runtime_error("Bad rules data in " + displayName(path) + ": " + e.what());

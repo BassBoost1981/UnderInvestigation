@@ -130,6 +130,24 @@
       "value": 5,
       "source": "2026 F1 Penalty Guidelines v01",
       "verified": false
+    },
+    "lapped_cars_may_overtake": {
+      "value": true,
+      "source": "F1 SR 2026 Section B, B5.13.4 c",
+      "verified": true,
+      "note": "The Race Director may let the lapped cars pass the cars on the lead lap and the Safety Car; they then rejoin the back of the queue without overtaking. The rule fixes which cars count (lapped when crossing the Control Line at the end of the lap in which they crossed the first Safety Car line for the second time after deployment); the sim takes the cars lapped when the message is sent. Closing the pit exit meanwhile is not modelled."
+    },
+    "safety_car_in_laps_after_lapped_cars": {
+      "value": 1,
+      "source": "F1 SR 2026 Section B, B5.13.5 b",
+      "verified": true,
+      "note": "After the message the Safety Car returns at the end of the following lap, unless the Race Director keeps it out. The rule does not wait until every lapped car has rejoined the queue."
+    },
+    "pit_entry_closed_penalty": {
+      "value": "stop_and_go",
+      "source": "F1 SR 2026 Section B, B1.6.4 b",
+      "verified": true,
+      "note": "The Race Director may close the pit entry for safety reasons; only cars needing essential and evident repairs may enter. In the race any other entry is a stop-and-go. The sim has no repairs, so every entry while closed is an offence."
     }
   }
 }

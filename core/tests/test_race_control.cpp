@@ -92,6 +92,9 @@ TEST_CASE("Rules file loads with the documented defaults") {
     CHECK(rules.trackLimitsBlackWhiteAt == 3);
     CHECK(rules.trackLimitsPenaltyFrom == 4);
     CHECK(rules.trackLimitsPenaltySeconds == 5.0);
+    CHECK(rules.lappedCarsMayOvertake);                   // B5.13.4 c
+    CHECK(rules.safetyCarInLapsAfterLappedCars == 1);     // B5.13.5 b
+    CHECK(rules.pitEntryClosedPenalty == Penalty::StopAndGo); // B1.6.4 b
 }
 
 TEST_CASE("Invalid marshal sector is rejected") {
