@@ -1,55 +1,135 @@
 {
   "name": "FIA F1 Sporting Regulations 2026 (simplified for the sim)",
-  "comment": "Parameters of the rule mechanics, not regulation text. Checked 2026-11-08 against '2026 F1 Regulations - Section B [Sporting] - Iss 09' (2026-10-01), the newest issue listed by the FIA on that date. verified = the cited article exists in that issue and describes this mechanic; 'note' says where the value is a sim simplification or comes from outside Section B.",
+  "comment": "Parameters of the rule mechanics, not regulation text. Checked against '2026 F1 Regulations - Section B [Sporting] - Iss 09' (2026-10-01), ISC Appendix H 2026 (published 2026-06-23), the 2026 F1 Penalty Guidelines v01 (FIA: no regulatory value) and the Race Director's Competition Notes Sao Paulo GP 2026 V2; Section B and Appendix H were the newest 2026 issues listed by the FIA on 2026-11-08. verified = the cited article exists in that issue and describes this mechanic; values from the Penalty Guidelines are marked verified false because they are guidance, not regulation; 'note' says where a value is a sim simplification.",
   "rules": {
     "yellow_speed_factor": {
-      "value": 0.95, "source": "ISC Appendix H - yellow flag (single waved)", "verified": false,
-      "note": "Flags are defined in the International Sporting Code, Appendix H, not in Section B; Appendix H was not part of this check. The factor is a sim assumption (the rule only requires reducing speed and no overtaking)."
+      "value": 0.95,
+      "source": "ISC Appendix H 2026, Art. 2.5.5 b (single waved yellow); Section B B1.8.4",
+      "verified": true,
+      "note": "Mechanic verified: reduce speed, no overtaking, be prepared to change direction. The rule gives no number; 0.95 is a sim factor."
     },
     "double_yellow_speed_factor": {
-      "value": 0.80, "source": "ISC Appendix H - yellow flag (double waved)", "verified": false,
-      "note": "As above; 'significantly reduce speed, be prepared to stop' expressed as a sim factor."
+      "value": 0.8,
+      "source": "ISC Appendix H 2026, Art. 2.5.5 b (double waved yellow); Section B B1.8.4",
+      "verified": true,
+      "note": "Mechanic verified: significantly reduce speed, no overtaking, be prepared to stop. The rule gives no number; 0.80 is a sim factor."
     },
     "vsc_speed_fraction": {
-      "value": 0.60, "source": "F1 SR 2026 Section B, B5.12 Virtual Safety Car (B5.12.2 b)", "verified": true,
+      "value": 0.6,
+      "source": "F1 SR 2026 Section B, B5.12 Virtual Safety Car (B5.12.2 b)",
+      "verified": true,
       "note": "The rule sets a minimum time per marshalling sector via the FIA ECU; the sim simplifies this to one share of the reference speed."
     },
     "safety_car_speed_fraction": {
-      "value": 0.55, "source": "F1 SR 2026 Section B, B5.13 Safety Car", "verified": true,
+      "value": 0.55,
+      "source": "F1 SR 2026 Section B, B5.13 Safety Car",
+      "verified": true,
       "note": "Safety Car pace is a sim value; the rule defines the procedure, not a speed."
     },
     "safety_car_catch_up_fraction": {
-      "value": 0.85, "source": "F1 SR 2026 Section B, B5.13.2 b", "verified": true,
+      "value": 0.85,
+      "source": "F1 SR 2026 Section B, B5.13.2 b",
+      "verified": true,
       "note": "Rule: queue up behind the Safety Car and stay above the minimum time per marshalling sector; the catch-up pace is a sim value. Not modelled yet: lapped cars overtaking on the Safety Car's green light."
     },
     "red_flag_speed_fraction": {
-      "value": 0.40, "source": "F1 SR 2026 Section B, B5.14 Suspension Procedure(s)", "verified": true,
+      "value": 0.4,
+      "source": "F1 SR 2026 Section B, B5.14 Suspension Procedure(s)",
+      "verified": true,
       "note": "Rule: proceed slowly into the Pit Lane, overtaking forbidden. The sim stops the cars before the Control Line instead of in the Pit Lane."
     },
     "red_flag_free_tyre_change": {
-      "value": true, "source": "F1 SR 2026 Section B, B5.1.5 with B5.14", "verified": true
+      "value": true,
+      "source": "F1 SR 2026 Section B, B5.14.4 a vii (work allowed during a suspension); B5.1.5 (tyre blankets)",
+      "verified": true,
+      "note": "Whether a tyre fitted under the red flag counts towards B6.3.6 is not stated; the sim counts it (every specification used in the race counts)."
     },
     "pit_lane_speed_kmh": {
-      "value": 80, "source": "F1 SR 2026 Section B, B1.6.3 a", "verified": true
+      "value": 80,
+      "source": "F1 SR 2026 Section B, B1.6.3 a",
+      "verified": true
     },
     "unserved_drive_through_seconds": {
-      "value": 20, "source": "F1 SR 2026 Section B, B1.9.6 c iii and d", "verified": true,
+      "value": 20,
+      "source": "F1 SR 2026 Section B, B1.9.6 c iii and d",
+      "verified": true,
       "note": "Also applies when imposed after the end of the race."
     },
     "unserved_stop_and_go_seconds": {
-      "value": 30, "source": "F1 SR 2026 Section B, B1.9.6 c iii and d", "verified": true
+      "value": 30,
+      "source": "F1 SR 2026 Section B, B1.9.6 c iii and d",
+      "verified": true
     },
     "stop_and_go_seconds": {
-      "value": 10, "source": "F1 SR 2026 Section B, B1.9.6 c i (period of the time penalty)", "verified": true,
+      "value": 10,
+      "source": "F1 SR 2026 Section B, B1.9.6 c i (period of the time penalty)",
+      "verified": true,
       "note": "The period is set by the stewards' decision; 10 s is the usual value and the one used in the sim."
     },
     "overtake_detection_gap_seconds": {
-      "value": 1.0, "source": "F1 SR 2026 Section B, B7.2.1 b vii and B7.2.3 c", "verified": false,
+      "value": 1.0,
+      "source": "F1 SR 2026 Section B, B7.2.1 b vii and B7.2.3 c",
+      "verified": false,
       "note": "The mechanic is verified (enabled after the leader first crosses the Detection Line and after a Safety Car period; activated at the Activation Line if less than the Detection Gap behind at the Detection Line). The gap value is announced by the FIA per event and is not in the regulations; 1.0 s is a sim assumption. Used from package 6.8."
     },
     "blue_flag_marshal_sectors": {
-      "value": 3, "source": "ISC Appendix H (blue flag) and Race Director's event notes", "verified": false,
-      "note": "Not in Section B. The number of marshalling sectors a lapped car may take to let the leader by comes from the Race Director's event notes, which were not checked. Used from package 6.7."
+      "value": 3,
+      "source": "ISC Appendix H 2026, Art. 2.5.5 e; Race Director's Competition Notes Sao Paulo GP 2026 V2, section 2",
+      "verified": false,
+      "note": "The rules say 'at the earliest/first available opportunity' and give no number of sectors; blue lights come on at 1.2 s gap (team pre-warning at 3.0 s). Three marshal sectors is the sim's stand-in for 'first opportunity'."
+    },
+    "min_dry_compounds": {
+      "value": 2,
+      "source": "F1 SR 2026 Section B, B6.3.6 (with B6.1.2 b ii)",
+      "verified": true,
+      "note": "At least two dry specifications in the race, one of them a mandatory race specification; void if intermediate or wet tyres were used. The sim has no mandatory specification: any two of soft, medium, hard."
+    },
+    "two_compound_not_restarted_seconds": {
+      "value": 30,
+      "source": "F1 SR 2026 Section B, B6.3.6",
+      "verified": true,
+      "note": "Breaking B6.3.6 means disqualification; only if the race is suspended and cannot be restarted are 30 s added instead."
+    },
+    "time_penalty_served_at_next_stop": {
+      "value": true,
+      "source": "F1 SR 2026 Section B, B1.9.6 b i-iii",
+      "verified": true,
+      "note": "5 s/10 s are served at the next pit stop before any work (entries behind the SC or for a red flag do not count); otherwise added to the race time."
+    },
+    "pit_speeding_drive_through_from_kmh": {
+      "value": 6,
+      "source": "2026 F1 Penalty Guidelines v01 (B1.6.3 a iii)",
+      "verified": false,
+      "note": "Guideline tariff in the race: under 6 km/h over the limit 5 s, 6-15 km/h drive-through, more than 15 km/h stop-and-go. The regulation itself only lists the possible penalties."
+    },
+    "pit_speeding_stop_and_go_above_kmh": {
+      "value": 15,
+      "source": "2026 F1 Penalty Guidelines v01 (B1.6.3 a iii)",
+      "verified": false,
+      "note": "See pit_speeding_drive_through_from_kmh."
+    },
+    "unsafe_release_penalty_seconds": {
+      "value": 5,
+      "source": "F1 SR 2026 Section B, B1.6.2 a; 2026 F1 Penalty Guidelines v01",
+      "verified": false,
+      "note": "B1.6.2 a forbids an unsafe release but sets no penalty; the guidelines allow 5 s, 10 s or drive-through. The sim expects 5 s, 10 s if it causes contact. Releasing an unsafe car (B1.6.2 b, stop-and-go) is not modelled."
+    },
+    "track_limits_black_white_at": {
+      "value": 3,
+      "source": "2026 F1 Penalty Guidelines v01 (B1.8.6, ISC App. L Ch. IV 2 c); App. H 2.5.4.1 f",
+      "verified": false,
+      "note": "Leaving the track is defined in B1.8.6 (verified). The strike count is guidance only: every offence deletes the lap, the 3rd brings the black-and-white flag."
+    },
+    "track_limits_penalty_from": {
+      "value": 4,
+      "source": "2026 F1 Penalty Guidelines v01",
+      "verified": false,
+      "note": "4th and each further offence: 5 s (track_limits_penalty_seconds)."
+    },
+    "track_limits_penalty_seconds": {
+      "value": 5,
+      "source": "2026 F1 Penalty Guidelines v01",
+      "verified": false
     }
   }
 }

@@ -83,6 +83,15 @@ TEST_CASE("Rules file loads with the documented defaults") {
     CHECK(rules.unservedStopAndGoSeconds == 30.0);
     CHECK(rules.blueFlagMarshalSectors == 3);
     CHECK(rules.overtakeDetectionGapSeconds == 1.0);
+    CHECK(rules.minDryCompounds == 2);                    // B6.3.6
+    CHECK(rules.twoCompoundNotRestartedSeconds == 30.0);
+    CHECK(rules.timePenaltyServedAtNextStop);             // B1.9.6 b
+    CHECK(rules.pitSpeedingDriveThroughFromKmh == defaults.pitSpeedingDriveThroughFromKmh);
+    CHECK(rules.pitSpeedingStopAndGoAboveKmh == defaults.pitSpeedingStopAndGoAboveKmh);
+    CHECK(rules.unsafeReleasePenaltySeconds == defaults.unsafeReleasePenaltySeconds);
+    CHECK(rules.trackLimitsBlackWhiteAt == 3);
+    CHECK(rules.trackLimitsPenaltyFrom == 4);
+    CHECK(rules.trackLimitsPenaltySeconds == 5.0);
 }
 
 TEST_CASE("Invalid marshal sector is rejected") {

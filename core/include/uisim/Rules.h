@@ -18,6 +18,16 @@ struct RaceRules {
     double unservedStopAndGoSeconds = 30.0;
     double overtakeDetectionGapSeconds = 1.0; // B7.2: set per event by the FIA (sim assumption)
     int blueFlagMarshalSectors = 3; // a lapped car must let the faster car by within this many sectors
+    // M7 (from package 7.1; used by the tyre, pit stop and track limits packages)
+    int minDryCompounds = 2;                    // B6.3.6, otherwise disqualification
+    double twoCompoundNotRestartedSeconds = 30.0; // B6.3.6: instead of disqualification if the race is not restarted
+    bool timePenaltyServedAtNextStop = true;    // B1.9.6 b
+    double pitSpeedingDriveThroughFromKmh = 6.0; // Penalty Guidelines: below 5 s, from here drive-through
+    double pitSpeedingStopAndGoAboveKmh = 15.0;  // Penalty Guidelines: above this stop-and-go
+    double unsafeReleasePenaltySeconds = 5.0;    // Penalty Guidelines (B1.6.2 a)
+    int trackLimitsBlackWhiteAt = 3;   // Penalty Guidelines: offence that brings the black-and-white flag
+    int trackLimitsPenaltyFrom = 4;    // first offence that is penalised
+    double trackLimitsPenaltySeconds = 5.0;
 };
 
 } // namespace uisim

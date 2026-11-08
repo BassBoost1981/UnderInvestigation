@@ -98,6 +98,15 @@ RaceRules loadRules(const std::filesystem::path& path) {
         rules.unservedStopAndGoSeconds = number("unserved_stop_and_go_seconds");
         rules.blueFlagMarshalSectors = static_cast<int>(number("blue_flag_marshal_sectors"));
         rules.overtakeDetectionGapSeconds = number("overtake_detection_gap_seconds");
+        rules.minDryCompounds = static_cast<int>(number("min_dry_compounds"));
+        rules.twoCompoundNotRestartedSeconds = number("two_compound_not_restarted_seconds");
+        rules.timePenaltyServedAtNextStop = r.at("time_penalty_served_at_next_stop").at("value").get<bool>();
+        rules.pitSpeedingDriveThroughFromKmh = number("pit_speeding_drive_through_from_kmh");
+        rules.pitSpeedingStopAndGoAboveKmh = number("pit_speeding_stop_and_go_above_kmh");
+        rules.unsafeReleasePenaltySeconds = number("unsafe_release_penalty_seconds");
+        rules.trackLimitsBlackWhiteAt = static_cast<int>(number("track_limits_black_white_at"));
+        rules.trackLimitsPenaltyFrom = static_cast<int>(number("track_limits_penalty_from"));
+        rules.trackLimitsPenaltySeconds = number("track_limits_penalty_seconds");
         return rules;
     } catch (const json::exception& e) {
         throw std::runtime_error("Bad rules data in " + displayName(path) + ": " + e.what());
