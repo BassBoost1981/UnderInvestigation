@@ -15,6 +15,7 @@ class UUITimingTowerWidget;
 class UUIIncidentWidget;
 class UUIRatingWidget;
 class UUIRadioWidget;
+class UUITrackMapWidget;
 class USceneCaptureComponent2D;
 class UTextureRenderTarget2D;
 class FSlateVirtualUserHandle;
@@ -34,6 +35,7 @@ enum class EUICommand : uint8
 	ClosePitEntry,         // B1.6.4
 	OpenPitEntry,
 	SetCamera,             // Index
+	FollowCar,             // Index = entry index for the TV camera, -1 = the leader
 	SetTimeScale,          // Value
 	SelectIncident,        // Index into the incident list, -1 = follow the latest
 	StartReview,           // Index, -1 = the selected incident
@@ -104,7 +106,8 @@ public:
 	// (returns false) what is not allowed in the current state.
 	bool CanExecute(const FUICommand& Command) const;
 	bool Execute(const FUICommand& Command);
-	static FString CommandName(const FUICommand& Command); // script syntax, e.g. "flag 3 yellow"
+	FString CommandName(const FUICommand& Command) const; // script syntax, e.g. "flag 3 yellow"
+	int32 FollowedCar() const { return FollowedEntry; } // entry index, -1 = the leader
 
 private:
 	void BuildTrack();
@@ -192,6 +195,9 @@ private:
 	TObjectPtr<UUIRatingWidget> RatingPanel;
 	UPROPERTY()
 	TObjectPtr<UUIRadioWidget> RadioPanel;
+	UPROPERTY()
+	TObjectPtr<UUITrackMapWidget> TrackMap;
+	int32 FollowedEntry = -1; // TV camera target, -1 = the leader
 	double CrashAtSeconds = 0.0; // -UISimCrashAt: scripted crash of the car in P9 (checks only)
 	bool bCrashReact = false;     // -UISimCrashReact: double yellow 10 s after the scripted crash
 	double CrashReactAt = 0.0;

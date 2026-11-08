@@ -18,6 +18,7 @@
 #include "UIIncidentWidget.h"
 #include "UIRatingWidget.h"
 #include "UIRadioWidget.h"
+#include "UITrackMapWidget.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "Engine/TextureRenderTarget2D.h"
 
@@ -374,6 +375,9 @@ void AUIRaceDirector::Tick(float DeltaSeconds)
 		RadioPanel = CreateWidget<UUIRadioWidget>(Player, UUIRadioWidget::StaticClass());
 		RadioPanel->SetRaceDirector(this);
 		RadioPanel->AddToViewport();
+		TrackMap = CreateWidget<UUITrackMapWidget>(Player, UUITrackMapWidget::StaticClass());
+		TrackMap->SetRaceDirector(this);
+		TrackMap->AddToViewport();
 
 		// Free mouse: visible cursor, never locked to the window.
 		FInputModeGameAndUI InputMode;
@@ -531,14 +535,21 @@ void AUIRaceDirector::UpdateCars(double Alpha)
 
 void AUIRaceDirector::UpdateCameras()
 {
-	// Leader still on track (finished cars are hidden).
+	// TV camera target: the followed car while it is on track, otherwise the leader (finished cars are hidden).
 	const FUISimCar* Leader = nullptr;
 	for (const FUISimCar& Car : SimSession.Snapshot().Cars)
 	{
-		if (!Car.bFinished)
+		if (!Car.bFinished && Car.EntryIndex == FollowedEntry && !Car.bRetired)
 		{
 			Leader = &Car;
 			break;
+		}
+	}
+	for (int32 Index = 0; !Leader && Index < SimSession.Snapshot().Cars.Num(); ++Index)
+	{
+		if (!SimSession.Snapshot().Cars[Index].bFinished)
+		{
+			Leader = &SimSession.Snapshot().Cars[Index];
 		}
 	}
 	if (!Leader)
@@ -922,6 +933,10 @@ void AUIRaceDirector::HandleRaceControlInput(APlayerController* Player)
 
 FString AUIRaceDirector::ActiveCameraName() const
 {
+	if (ActiveCamera == 0 && SimSession.Entries().IsValidIndex(FollowedEntry))
+	{
+		return TEXT("TV ") + SimSession.Entries()[FollowedEntry].Code;
+	}
 	return CameraNames.IsValidIndex(ActiveCamera) ? CameraNames[ActiveCamera] : FString();
 }
 

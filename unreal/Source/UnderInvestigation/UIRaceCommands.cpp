@@ -52,6 +52,7 @@ bool AUIRaceDirector::CanExecute(const FUICommand& Command) const
 	case EUICommand::ClosePitEntry: return !Snapshot.bPitEntryClosed;
 	case EUICommand::OpenPitEntry: return Snapshot.bPitEntryClosed;
 	case EUICommand::SetCamera: return !bReviewing && Cameras.IsValidIndex(Command.Index);
+	case EUICommand::FollowCar: return Command.Index == -1 || SimSession.Entries().IsValidIndex(Command.Index);
 	case EUICommand::SetTimeScale: return Command.Value > 0.0;
 	case EUICommand::SelectIncident: return IncidentCount > 0 && Command.Index >= -1 && Command.Index < IncidentCount;
 	case EUICommand::StartReview: return SimSession.Incidents().IsValidIndex(Command.Index < 0 ? SelectedIncident() : Command.Index);
@@ -67,7 +68,7 @@ bool AUIRaceDirector::CanExecute(const FUICommand& Command) const
 	return false;
 }
 
-FString AUIRaceDirector::CommandName(const FUICommand& Command)
+FString AUIRaceDirector::CommandName(const FUICommand& Command) const
 {
 	switch (Command.Type)
 	{
@@ -83,6 +84,9 @@ FString AUIRaceDirector::CommandName(const FUICommand& Command)
 	case EUICommand::ClosePitEntry: return TEXT("pit_close");
 	case EUICommand::OpenPitEntry: return TEXT("pit_open");
 	case EUICommand::SetCamera: return FString::Printf(TEXT("camera %d"), Command.Index + 1);
+	case EUICommand::FollowCar:
+		return SimSession.Entries().IsValidIndex(Command.Index) ? TEXT("follow ") + SimSession.Entries()[Command.Index].Code
+			: FString(TEXT("follow leader"));
 	case EUICommand::SetTimeScale: return FString::Printf(TEXT("timescale %g"), Command.Value);
 	case EUICommand::SelectIncident:
 		return Command.Index < 0 ? FString(TEXT("incident latest")) : FString::Printf(TEXT("incident %d"), Command.Index + 1);
@@ -121,6 +125,13 @@ bool AUIRaceDirector::Execute(const FUICommand& Command)
 	case EUICommand::ClosePitEntry: SimSession.ClosePitEntry(); break;
 	case EUICommand::OpenPitEntry: SimSession.OpenPitEntry(); break;
 	case EUICommand::SetCamera: ActiveCamera = Command.Index; break;
+	case EUICommand::FollowCar:
+		FollowedEntry = Command.Index;
+		if (!bReviewing)
+		{
+			ActiveCamera = 0; // the TV camera
+		}
+		break;
 	case EUICommand::SetTimeScale: SimTimeScale = Command.Value; break;
 	case EUICommand::SelectIncident: SelectedIncidentIndex = Command.Index; break;
 	case EUICommand::StartReview: StartReview(Command.Index < 0 ? SelectedIncident() : Command.Index); break;
@@ -205,6 +216,12 @@ bool AUIRaceDirector::LoadScript(const FString& File)
 		else if (Name == TEXT("pit_close")) { C.Type = EUICommand::ClosePitEntry; }
 		else if (Name == TEXT("pit_open")) { C.Type = EUICommand::OpenPitEntry; }
 		else if (Name == TEXT("camera")) { C.Type = EUICommand::SetCamera; C.Index = Number - 1; }
+		else if (Name == TEXT("follow"))
+		{
+			C.Type = EUICommand::FollowCar;
+			C.Index = SimSession.Entries().IndexOfByPredicate([&](const FUISimEntry& Entry) { return Entry.Code == Arg; });
+			bOk = Arg == TEXT("leader") || C.Index >= 0;
+		}
 		else if (Name == TEXT("timescale")) { C.Type = EUICommand::SetTimeScale; C.Value = FCString::Atod(*Arg); }
 		else if (Name == TEXT("incident"))
 		{
