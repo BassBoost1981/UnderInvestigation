@@ -54,7 +54,8 @@ struct Command {
         RedFlag,
         Restart,         // after a red flag: restart behind the Safety Car
         IssueVerdict,    // steward decision on an incident (one per incident)
-        InjectAccident   // scenario/test tool: `car` has an accident of type `accident`
+        InjectAccident,  // scenario/test tool: `car` has an accident of type `accident`
+        LappedCarsMayOvertake // under the SC: lapped cars pass and rejoin the back (B5.13.4 c, M8.2)
     };
     Type type = Type::SetSectorFlag;
     int sector = 0;          // SetSectorFlag only
@@ -208,6 +209,8 @@ private:
         bool releaseChecked = false;  // the team decided about traffic at the end of this stop
         int trackLimitStrikes = 0;    // offences counted by race control (M7.6)
         double boxOffset = 0.0;       // own team's pit box, metres from the line
+        bool unlapping = false;       // released under the SC, passing the queue and the SC (M8.2)
+        bool rejoining = false;       // past the SC, on the way to the back of the queue
         double stopTimer = 0.0;
         double spinTimer = 0.0; // > 0: spun, stationary
         bool retired = false;
@@ -237,12 +240,15 @@ private:
     struct SafetyCar {
         bool onTrack = false;
         bool inThisLap = false;
+        bool lappedCarsReleased = false; // "LAPPED CARS MAY NOW OVERTAKE" sent
+        int linesUntilIn = -1;           // Control Line crossings until "in this lap", -1 = not counting
         double distance = 0.0;
         double speed = 0.0;
     };
 
     void applyCommands();
     void deploySafetyCar(bool inThisLap);
+    void releaseLappedCars();
     void cancelAttacks();
     void moveSafetyCar();
     bool overtakingAllowed(int car) const;

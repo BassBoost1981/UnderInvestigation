@@ -30,7 +30,7 @@
       "value": 0.85,
       "source": "F1 SR 2026 Section B, B5.13.2 b",
       "verified": true,
-      "note": "Rule: queue up behind the Safety Car and stay above the minimum time per marshalling sector; the catch-up pace is a sim value. Not modelled yet: lapped cars overtaking on the Safety Car's green light."
+      "note": "Rule: queue up behind the Safety Car and stay above the minimum time per marshalling sector; the catch-up pace is a sim value. Lapped cars overtaking on the Safety Car's green light: see lapped_cars_may_overtake (M8.2)."
     },
     "red_flag_speed_fraction": {
       "value": 0.4,
@@ -135,7 +135,7 @@
       "value": true,
       "source": "F1 SR 2026 Section B, B5.13.4 c",
       "verified": true,
-      "note": "The Race Director may let the lapped cars pass the cars on the lead lap and the Safety Car; they then rejoin the back of the queue without overtaking. The rule fixes which cars count (lapped when crossing the Control Line at the end of the lap in which they crossed the first Safety Car line for the second time after deployment); the sim takes the cars lapped when the message is sent. Closing the pit exit meanwhile is not modelled."
+      "note": "The Race Director may let the lapped cars pass the cars on the lead lap and the Safety Car; they then rejoin the back of the queue without overtaking. The rule fixes which cars count (lapped when crossing the Control Line at the end of the lap in which they crossed the first Safety Car line for the second time after deployment); the sim takes the cars in the queue that are a lap or more behind the leader or between the leader and the Safety Car when the message is sent. For the 'appropriate speed' they drive at race pace until they reach the back of the queue. Closing the pit exit meanwhile is not modelled."
     },
     "safety_car_in_laps_after_lapped_cars": {
       "value": 1,

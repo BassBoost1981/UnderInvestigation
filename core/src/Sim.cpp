@@ -51,6 +51,7 @@ constexpr double kErrorSpeedFactor = 0.7;
 
 // Race control (M3).
 constexpr double kSafetyCarLead = 150.0;      // Safety Car joins this far ahead of the race leader
+constexpr double kUnlappedAhead = 50.0;       // a released lapped car this far ahead of the SC is past it
 constexpr double kPitEntryBeforeLine = 300.0; // Safety Car leaves the track here when "in this lap"
 constexpr double kRedFlagStopOffset = 2.0;    // red flag: cars stop this far before the line
 
@@ -212,6 +213,10 @@ void Sim::applyCommands() {
             if (state_ != RaceState::RedFlag) {
                 state_ = RaceState::RedFlag;
                 safetyCar_ = SafetyCar{};
+                for (Car& car : cars_) {
+                    car.unlapping = false;
+                    car.rejoining = false;
+                }
                 overtakeEnabled_ = false; // re-enabled after the restart behind the Safety Car
                 for (Car& car : cars_) {
                     car.overtakeActive = false;
@@ -234,6 +239,12 @@ void Sim::applyCommands() {
             break;
         case Type::IssueVerdict:
             applyVerdict(c);
+            break;
+        case Type::LappedCarsMayOvertake:
+            if (state_ == RaceState::SafetyCar && config_.rules.lappedCarsMayOvertake && !safetyCar_.inThisLap &&
+                !safetyCar_.lappedCarsReleased) {
+                releaseLappedCars();
+            }
             break;
         case Type::InjectAccident:
             if (c.car >= 0 && c.car < static_cast<int>(cars_.size()) && !outOfRace(c.car) && cars_[c.car].spinTimer <= 0.0) {
@@ -714,6 +725,44 @@ void Sim::deploySafetyCar(bool inThisLap) {
     }
 }
 
+void Sim::releaseLappedCars() {
+    // B5.13.4 c: every lapped car in the queue passes the cars on the lead lap and the Safety Car,
+    // then rejoins the back. Lapped (sim simplification): a lap or more behind the leader, or on the
+    // road between the leader and the Safety Car. Only cars inside the queue need to pass: from the
+    // Safety Car back to the last car on the lead lap.
+    const double lapLength = track_.length();
+    int leader = -1;
+    for (int i = 0; i < static_cast<int>(cars_.size()); ++i) {
+        if (!outOfRace(i) && (leader < 0 || cars_[i].distance > cars_[leader].distance)) {
+            leader = i;
+        }
+    }
+    if (leader < 0) {
+        return;
+    }
+    const double leaderToSafetyCar = track_.wrap(safetyCar_.distance - cars_[leader].distance);
+    auto lapped = [&](int i) {
+        const double behindLeader = cars_[leader].distance - cars_[i].distance;
+        const bool betweenLeaderAndSafetyCar =
+            i != leader && track_.wrap(cars_[i].distance - cars_[leader].distance) < leaderToSafetyCar;
+        return behindLeader >= lapLength || betweenLeaderAndSafetyCar;
+    };
+    double queueLength = 0.0; // road distance from the Safety Car back to the last lead-lap car
+    for (int i = 0; i < static_cast<int>(cars_.size()); ++i) {
+        if (!outOfRace(i) && !cars_[i].inPit && !lapped(i)) {
+            queueLength = std::max(queueLength, track_.wrap(safetyCar_.distance - cars_[i].distance));
+        }
+    }
+    for (int i = 0; i < static_cast<int>(cars_.size()); ++i) {
+        if (!outOfRace(i) && !cars_[i].inPit && cars_[i].spinTimer <= 0.0 && lapped(i) &&
+            track_.wrap(safetyCar_.distance - cars_[i].distance) < queueLength) {
+            cars_[i].unlapping = true;
+        }
+    }
+    safetyCar_.lappedCarsReleased = true;
+    safetyCar_.linesUntilIn = config_.rules.safetyCarInLapsAfterLappedCars; // B5.13.5 b
+}
+
 void Sim::cancelAttacks() {
     for (Car& car : cars_) {
         car.overtakeTarget = -1;
@@ -743,6 +792,9 @@ void Sim::moveSafetyCar() {
 
 bool Sim::overtakingAllowed(int i) const {
     const Car& car = cars_[i];
+    if (car.unlapping) {
+        return true; // B5.13.4 c: required to pass
+    }
     return state_ == RaceState::Green && !car.holdUntilLine && flagAt(car.distance) == Flag::Green;
 }
 
@@ -793,6 +845,9 @@ double Sim::paceFactor(int i) const {
     case RaceState::VirtualSafetyCar:
         return config_.rules.vscSpeedFraction; // same delta for everyone: time gaps hold
     case RaceState::SafetyCar:
+        if (cars_[i].unlapping || cars_[i].rejoining) {
+            return performance(i); // B5.13.4 c: "appropriate speed" to reach the back of the queue in time
+        }
         return performance(i) * config_.rules.safetyCarCatchUpFraction;
     case RaceState::RedFlag:
         return config_.rules.redFlagSpeedFraction;
@@ -971,6 +1026,16 @@ void Sim::step() {
         const int a = ahead[i];
         Car& car = cars_[i];
         const double scGap = safetyCarGap(i);
+        if (car.unlapping && !car.inPit) {
+            if (a >= 0 && car.overtakeTarget != a && gap[i] < kFollowGap && scGap > gap[i]) {
+                car.overtakeTarget = a; // the lead-lap car stays on the racing line
+                car.overtakeTimer = kOvertakeTimeout;
+            }
+            continue; // past the Safety Car on the side
+        }
+        if (car.rejoining && gap[i] < kFollowGap) {
+            car.rejoining = false; // at the back of the queue
+        }
         if (scGap < gap[i]) { // the Safety Car is the next thing on the road
             if (scGap < kFollowGap) {
                 speed[i] = std::min(speed[i], safetyCar_.speed);
@@ -1039,6 +1104,8 @@ void Sim::step() {
             car.releaseChecked = false;
             car.pitSpeedExcess = rng_.uniform() < kSpeedingChance ? rng_.uniform(kSpeedingMinKmh, kSpeedingMaxKmh) : 0.0;
             car.overtakeTarget = -1;
+            car.unlapping = false;
+            car.rejoining = false;
             car.lateral = kPitLateral;
         }
     }
@@ -1047,8 +1114,15 @@ void Sim::step() {
         safetyCar_.distance += safetyCar_.speed * kDt;
         const double after = track_.wrap(safetyCar_.distance);
         const double pitEntry = lapLength - kPitEntryBeforeLine;
+        if (after < before && safetyCar_.linesUntilIn > 0 && --safetyCar_.linesUntilIn == 0) {
+            safetyCar_.inThisLap = true; // B5.13.5 b: in at the end of the following lap
+        }
         if (safetyCar_.inThisLap && before < pitEntry && after >= pitEntry) {
             safetyCar_ = SafetyCar{};
+            for (Car& car : cars_) {
+                car.unlapping = false;
+                car.rejoining = false;
+            }
             state_ = RaceState::Green;
             for (Car& car : cars_) {
                 car.holdUntilLine = !car.finished; // racing resumes at the line
@@ -1077,11 +1151,15 @@ void Sim::step() {
                 car.overtakeTarget = -1;
             }
         }
-        car.lateral = car.overtakeTarget >= 0 ? kOvertakeLateral : 0.0;
+        if (car.unlapping && safetyCar_.onTrack && track_.wrap(car.distance - safetyCar_.distance) < kUnlappedAhead) {
+            car.unlapping = false; // past the Safety Car: on to the back of the queue
+            car.rejoining = true;
+        }
+        car.lateral = car.overtakeTarget >= 0 || car.unlapping ? kOvertakeLateral : 0.0;
         if (car.overtakeTarget < 0) {
             const double g = ahead[i] >= 0 ? track_.wrap(cars_[ahead[i]].distance - car.distance)
                                            : std::numeric_limits<double>::infinity();
-            const double scGap = safetyCarGap(i);
+            const double scGap = car.unlapping ? std::numeric_limits<double>::infinity() : safetyCarGap(i);
             const double nearest = std::min(g, scGap);
             if (nearest < kMinGap) {
                 car.distance -= kMinGap - nearest;
@@ -1253,6 +1331,7 @@ void Sim::buildSnapshot() {
     snapshot_.sectorFlags = sectorFlags_;
     snapshot_.safetyCarOnTrack = safetyCar_.onTrack;
     snapshot_.safetyCarInThisLap = safetyCar_.inThisLap;
+    snapshot_.lappedCarsReleased = safetyCar_.lappedCarsReleased;
     snapshot_.safetyCarDistance = safetyCar_.distance;
     snapshot_.cars.resize(n);
 
@@ -1285,6 +1364,7 @@ void Sim::buildSnapshot() {
         cs.pitStops = car.stops;
         cs.compoundsUsed = static_cast<int>(std::bitset<3>(car.compoundsUsed).count());
         cs.trackLimitStrikes = car.trackLimitStrikes;
+        cs.unlapping = car.unlapping;
         cs.blackWhiteFlag = car.trackLimitStrikes >= config_.rules.trackLimitsBlackWhiteAt;
         cs.detectionGap = car.detectionGap;
         cs.gapToLeader = 0.0;

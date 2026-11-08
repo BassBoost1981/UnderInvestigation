@@ -61,6 +61,7 @@ struct CarState {
     int compoundsUsed = 0; // number of different dry compounds so far
     int trackLimitStrikes = 0;
     bool blackWhiteFlag = false; // shown after the warning offence (track limits)
+    bool unlapping = false;      // lapped car passing the queue and the Safety Car (B5.13.4 c)
     double detectionGap = 0.0;   // seconds behind the car ahead at the last Detection Line crossing
     bool finished = false;
 };
@@ -76,6 +77,7 @@ struct SimSnapshot {
     bool safetyCarOnTrack = false;
     bool safetyCarInThisLap = false;
     double safetyCarDistance = 0.0; // metres, same scale as CarState::distance
+    bool lappedCarsReleased = false; // "LAPPED CARS MAY NOW OVERTAKE" sent in this SC period
     std::vector<HazardState> hazards; // not yet recovered
     bool overtakeEnabled = false;     // Overtake mode enabled by race control rules (B7.2.2)
     std::vector<CarState> cars; // sorted by position
