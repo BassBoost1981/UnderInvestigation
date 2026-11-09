@@ -95,6 +95,13 @@ TEST_CASE("Rules file loads with the documented defaults") {
     CHECK(rules.lappedCarsMayOvertake);                   // B5.13.4 c
     CHECK(rules.safetyCarInLapsAfterLappedCars == 1);     // B5.13.5 b
     CHECK(rules.pitEntryClosedPenalty == Penalty::StopAndGo); // B1.6.4 b
+    CHECK(rules.wetTyresVoidCompoundRule);                // B6.3.6
+    CHECK(rules.wetStartTyreChangePenalty == Penalty::StopAndGo); // B6.3.7
+    CHECK(rules.safetyCarStartLapsDeductedOffset == 1);   // B5.10.7
+    CHECK(rules.safetyCarStartStandingRestart);           // B5.10.8
+    CHECK_FALSE(rules.trackDeclaredWetInRace);            // practice/qualifying only
+    CHECK(rules.rainLightsWithWetTyres);                  // B1.5.5 a
+    CHECK(rules.rainHazardPrecipitationProbability == 0.4); // B1.5.11
 }
 
 TEST_CASE("Invalid marshal sector is rejected") {

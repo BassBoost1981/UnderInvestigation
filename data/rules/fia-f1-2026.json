@@ -148,6 +148,48 @@
       "source": "F1 SR 2026 Section B, B1.6.4 b",
       "verified": true,
       "note": "The Race Director may close the pit entry for safety reasons; only cars needing essential and evident repairs may enter. In the race any other entry is a stop-and-go. The sim has no repairs, so every entry while closed is an offence."
+    },
+    "wet_tyres_void_compound_rule": {
+      "value": true,
+      "source": "F1 SR 2026 Section B, B6.3.6",
+      "verified": true,
+      "note": "The two-dry-specifications duty applies only to drivers who used no intermediate or wet-weather tyres in the race."
+    },
+    "wet_start_tyre_change_penalty": {
+      "value": "stop_and_go",
+      "source": "F1 SR 2026 Section B, B6.3.7 (with B5.10.1 a, B5.15.2 a)",
+      "verified": true,
+      "note": "When the Race Director mandates wet-weather tyres for formation laps or a resumption behind the Safety Car, they are compulsory until the Safety Car has gone in; changing to another specification meanwhile is a stop-and-go."
+    },
+    "safety_car_start_laps_deducted_offset": {
+      "value": 1,
+      "source": "F1 SR 2026 Section B, B5.10.7 and B2.5.2 a",
+      "verified": true,
+      "note": "If the formation lap(s) start behind the Safety Car, the race is shortened by the laps behind the Safety Car minus this offset (one)."
+    },
+    "safety_car_start_standing_restart": {
+      "value": true,
+      "source": "F1 SR 2026 Section B, B5.10.8 (standing start) and B5.10.9 (rolling start)",
+      "verified": true,
+      "note": "After formation laps behind the Safety Car the Race Director chooses: standing start from the grid when conditions allow, otherwise a rolling start. true = the sim offers the standing start; the rolling start uses the existing restart behind the Safety Car."
+    },
+    "track_declared_wet_in_race": {
+      "value": false,
+      "source": "F1 SR 2026 Section B, B6.3.5 and the qualifying lap-time rules (B3)",
+      "verified": true,
+      "note": "Declaring the track wet only matters in free practice (tyre use) and qualifying (lap-time rules); Section B has no wet declaration for the race. The sim therefore has no such race command."
+    },
+    "rain_lights_with_wet_tyres": {
+      "value": true,
+      "source": "F1 SR 2026 Section B, B1.5.5 a",
+      "verified": true,
+      "note": "Rear lights must be on whenever intermediate or wet-weather tyres are used. Display only in the sim."
+    },
+    "rain_hazard_precipitation_probability": {
+      "value": 0.4,
+      "source": "F1 SR 2026 Section B, B1.5.11",
+      "verified": true,
+      "note": "A Rain Hazard may be declared when the official forecast gives more than 40 % probability of precipitation during the race (or at the Race Director's discretion). Used for the forecast display; the sim does not model what a Rain Hazard changes."
     }
   }
 }

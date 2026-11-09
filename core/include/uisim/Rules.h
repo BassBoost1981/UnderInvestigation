@@ -34,6 +34,14 @@ struct RaceRules {
     bool lappedCarsMayOvertake = true;        // B5.13.4 c, on the Race Director's message
     int safetyCarInLapsAfterLappedCars = 1;   // B5.13.5 b: SC returns at the end of the following lap
     Penalty pitEntryClosedPenalty = Penalty::StopAndGo; // B1.6.4 b
+    // M9 (from package 9.1)
+    bool wetTyresVoidCompoundRule = true;              // B6.3.6
+    Penalty wetStartTyreChangePenalty = Penalty::StopAndGo; // B6.3.7
+    int safetyCarStartLapsDeductedOffset = 1;          // B5.10.7: race shortened by SC laps minus this
+    bool safetyCarStartStandingRestart = true;         // B5.10.8 / B5.10.9
+    bool trackDeclaredWetInRace = false;               // no race declaration in Section B
+    bool rainLightsWithWetTyres = true;                // B1.5.5 a
+    double rainHazardPrecipitationProbability = 0.4;   // B1.5.11
 };
 
 } // namespace uisim

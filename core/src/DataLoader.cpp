@@ -120,15 +120,25 @@ RaceRules loadRules(const std::filesystem::path& path) {
         rules.trackLimitsPenaltySeconds = number("track_limits_penalty_seconds");
         rules.lappedCarsMayOvertake = r.at("lapped_cars_may_overtake").at("value").get<bool>();
         rules.safetyCarInLapsAfterLappedCars = static_cast<int>(number("safety_car_in_laps_after_lapped_cars"));
-        const std::string closedPenalty = r.at("pit_entry_closed_penalty").at("value").get<std::string>();
-        if (closedPenalty == "drive_through") {
-            rules.pitEntryClosedPenalty = Penalty::DriveThrough;
-        } else if (closedPenalty == "stop_and_go") {
-            rules.pitEntryClosedPenalty = Penalty::StopAndGo;
-        } else {
-            throw std::runtime_error("Bad rules data in " + displayName(path) + ": unknown pit_entry_closed_penalty '" +
-                                     closedPenalty + "'");
-        }
+        auto penalty = [&](const char* key) {
+            const std::string name = r.at(key).at("value").get<std::string>();
+            if (name == "drive_through") {
+                return Penalty::DriveThrough;
+            }
+            if (name == "stop_and_go") {
+                return Penalty::StopAndGo;
+            }
+            throw std::runtime_error("Bad rules data in " + displayName(path) + ": unknown " + key + " '" + name + "'");
+        };
+        auto flag = [&](const char* key) { return r.at(key).at("value").get<bool>(); };
+        rules.pitEntryClosedPenalty = penalty("pit_entry_closed_penalty");
+        rules.wetTyresVoidCompoundRule = flag("wet_tyres_void_compound_rule");
+        rules.wetStartTyreChangePenalty = penalty("wet_start_tyre_change_penalty");
+        rules.safetyCarStartLapsDeductedOffset = static_cast<int>(number("safety_car_start_laps_deducted_offset"));
+        rules.safetyCarStartStandingRestart = flag("safety_car_start_standing_restart");
+        rules.trackDeclaredWetInRace = flag("track_declared_wet_in_race");
+        rules.rainLightsWithWetTyres = flag("rain_lights_with_wet_tyres");
+        rules.rainHazardPrecipitationProbability = number("rain_hazard_precipitation_probability");
         return rules;
     } catch (const json::exception& e) {
         throw std::runtime_error("Bad rules data in " + displayName(path) + ": " + e.what());
