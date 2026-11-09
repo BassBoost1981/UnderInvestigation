@@ -46,6 +46,10 @@ bool FUISimSession::Start(const FString& TrackFile, const FString& EntriesFile, 
 		Config.laps = Laps;
 		Config.seed = static_cast<std::uint64_t>(Seed);
 		Config.rules = uisim::loadRules(std::filesystem::path(*RulesFile));
+		if (CompoundRuleMissChance >= 0.0)
+		{
+			Config.compoundRuleMissChance = CompoundRuleMissChance;
+		}
 		if (!WeatherFile.IsEmpty())
 		{
 			Config.weather = uisim::loadWeather(std::filesystem::path(*WeatherFile));

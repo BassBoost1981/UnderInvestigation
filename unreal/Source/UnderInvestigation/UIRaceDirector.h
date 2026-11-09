@@ -72,6 +72,7 @@ struct FUICommand
 //               -UISimTestVerdicts (5 s for every attacker, automated checks only)
 //               -UISimCrashAt=<seconds> (scripted crash, automated checks only)
 //               -UISimWeather=<file in data/weather> (rain, M9.7)
+//               -UISimCompoundMiss=<0..1> (checks only: teams overlook the two-compound rule)
 //               -UISimScript=<file> (commands at race times, see UIRaceCommands.cpp; relative to the project)
 // Keys: 1-6 cameras (6 = pit lane), +/- time scale.
 // Race control: V = VSC on/off, S = Safety Car out / in this lap, R = red flag / restart,
@@ -216,6 +217,7 @@ private:
 	UPROPERTY()
 	TObjectPtr<UMaterialInstanceDynamic> RoadMaterial; // darker when wet
 	int32 FollowedEntry = -1; // TV camera target, -1 = the leader
+	FString LoggedUnlapping;  // lapped cars passing under the SC, last logged
 	double CrashAtSeconds = 0.0; // -UISimCrashAt: scripted crash of the car in P9 (checks only)
 	bool bCrashReact = false;     // -UISimCrashReact: double yellow 10 s after the scripted crash
 	double CrashReactAt = 0.0;

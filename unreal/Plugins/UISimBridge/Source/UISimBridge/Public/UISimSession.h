@@ -212,6 +212,8 @@ public:
 	void RedFlag();
 	void Restart(bool bWetTyres = false);  // B5.15.2 a: optionally wet tyres compulsory
 	void SafetyCarStart(bool bWetTyres);  // before the start, B5.10
+	// Checks only (M9.8): chance per team to overlook the two-compound rule; set before Start, < 0 = default.
+	void SetCompoundRuleMissChance(double Chance) { CompoundRuleMissChance = Chance; }
 	// Weather (M9.7): rain the race will bring at a race time, and the plan's name.
 	double ForecastRain(double Time) const;
 	FString WeatherName() const;
@@ -231,6 +233,7 @@ private:
 	void Send(int32 Type, int32 Sector = 0, EUISimFlag Flag = EUISimFlag::Green, bool bWetTyres = false);
 
 	TUniquePtr<uisim::Sim> Sim;
+	double CompoundRuleMissChance = -1.0;
 	FUISimSnapshot CurrentSnapshot;
 	TArray<FUISimEntry> EntryList;
 	TArray<FUISimIncident> IncidentList;

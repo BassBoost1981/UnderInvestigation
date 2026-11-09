@@ -1,0 +1,18 @@
+# M9.8 check (testring, seed 1, 1600x900): UNLAP and DSQ in the timing tower.
+# Run with -UISimCompoundMiss=1 -UISimTimeScale=500. The log line "Lapped cars passing" says which screenshot shows UNLAP.
+4300 sc
+4400 timescale 20
+4450 lapped
+4452 screenshot unlap_1
+4456 screenshot unlap_2
+4462 screenshot unlap_3
+4470 timescale 500
+# After the flag: disqualify the latest two-compound breach, then a screenshot of the tower.
+99000 incident latest
+99001 review selected
+99002 verdict dsq
+99003 review_end
+99004 incident latest
+99005 incident latest
+99006 screenshot dsq
+99007 incident latest

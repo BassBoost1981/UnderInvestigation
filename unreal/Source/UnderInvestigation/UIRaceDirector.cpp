@@ -90,6 +90,11 @@ void AUIRaceDirector::BeginPlay()
 	const FString RulesPath = FPaths::Combine(DataDir, TEXT("rules/fia-f1-2026.json"));
 
 	FString Error;
+	double CompoundMiss = -1.0;
+	if (FParse::Value(CommandLine, TEXT("UISimCompoundMiss="), CompoundMiss)) // checks only: forces two-compound breaches
+	{
+		SimSession.SetCompoundRuleMissChance(CompoundMiss);
+	}
 	FString WeatherFile;
 	FString WeatherPath;
 	if (FParse::Value(CommandLine, TEXT("UISimWeather="), WeatherFile)) // file in data/weather, e.g. shower.json
@@ -417,6 +422,23 @@ void AUIRaceDirector::Tick(float DeltaSeconds)
 	}
 	HandleInput();
 	RunScript(); // lines after the finish (the race clock has stopped)
+	{
+		// Log which lapped cars are passing under the SC (checks, M9.8).
+		FString Passing;
+		for (const FUISimCar& Car : SimSession.Snapshot().Cars)
+		{
+			if (Car.bUnlapping)
+			{
+				Passing += SimSession.Entries()[Car.EntryIndex].Code + TEXT(" ");
+			}
+		}
+		if (Passing != LoggedUnlapping)
+		{
+			LoggedUnlapping = Passing;
+			UE_LOG(LogUISim, Display, TEXT("Lapped cars passing at %s: %s"), *FormatRaceTime(SimSession.Snapshot().Time),
+				Passing.IsEmpty() ? TEXT("none") : *Passing);
+		}
+	}
 	if (RoadMaterial)
 	{
 		// Wet asphalt looks darker (M9.7).
