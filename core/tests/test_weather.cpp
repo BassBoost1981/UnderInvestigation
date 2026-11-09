@@ -86,7 +86,7 @@ TEST_CASE("Weather: rain makes the race slower and more dangerous") {
         wetAccidents += static_cast<int>(wet.accidents().size());
     }
     INFO("race time dry ", dryTime, " s, wet ", wetTime, " s; accidents dry ", dryAccidents, ", wet ", wetAccidents);
-    CHECK(wetTime > 1.15 * dryTime);
+    CHECK(wetTime > 1.08 * dryTime); // on rain tyres since M9.3 (wet start), about 10 % slower
     CHECK(wetAccidents >= dryAccidents * 3 / 2 + 1);
 }
 

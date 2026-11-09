@@ -17,7 +17,7 @@ struct FUISimCar
 	bool bUnlapping = false; // lapped car passing the queue and the SC (B5.13.4 c)
 	bool bBlueFlag = false;
 	bool bOvertakeActive = false; // Overtake mode (B7.2) usable this lap
-	int32 Compound = 1;      // 0 soft, 1 medium, 2 hard
+	int32 Compound = 1;      // 0 soft, 1 medium, 2 hard, 3 intermediate, 4 wet
 	int32 TyreAge = 0;       // laps on the current set
 	int32 PitStops = 0;
 	int32 TrackLimitStrikes = 0;

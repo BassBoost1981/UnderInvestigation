@@ -6,7 +6,10 @@
     "comment": "Sim values: speed factor on a new set, loss per lap of age, age from which the set drops off, extra loss per lap after that.",
     "soft":   { "pace": 1.000, "wear_per_lap": 0.0010, "cliff_lap": 18, "cliff_loss_per_lap": 0.004 },
     "medium": { "pace": 0.997, "wear_per_lap": 0.0006, "cliff_lap": 30, "cliff_loss_per_lap": 0.004 },
-    "hard":   { "pace": 0.994, "wear_per_lap": 0.0004, "cliff_lap": 42, "cliff_loss_per_lap": 0.004 }
+    "hard":   { "pace": 0.994, "wear_per_lap": 0.0004, "cliff_lap": 42, "cliff_loss_per_lap": 0.004 },
+    "intermediate": { "pace": 0.940, "wear_per_lap": 0.0010, "cliff_lap": 25, "cliff_loss_per_lap": 0.004, "wet_grip_loss": 0.10, "dry_wear_factor": 2.0 },
+    "wet":          { "pace": 0.900, "wear_per_lap": 0.0008, "cliff_lap": 30, "cliff_loss_per_lap": 0.004, "wet_grip_loss": 0.05, "dry_wear_factor": 4.0 },
+    "wet_comment": "M9.3: wet_grip_loss = grip lost on a soaked racing line (slicks default 0.25); dry_wear_factor = extra age per lap on a dry line, rain tyres overheat. Crossovers: slick/intermediate at about 40 % wetness, intermediate/wet at about 80 %."
   },
   "comment": "Fictional M1 test track, 5.6 km. speed_kmh = apex speed in corners / top speed on straights. overtake = relative overtaking chance (0 = impossible). turn_deg = heading change over the segment, positive = left; must sum to 360. overtake_detection_m / overtake_activation_m = Overtake mode lines (B7.2), here in T10 and on the run to the line. track_limits = corner where drivers run wide (B1.8.6).",
   "segments": [

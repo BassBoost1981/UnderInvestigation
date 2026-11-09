@@ -221,6 +221,11 @@ private:
         bool unlapping = false;       // released under the SC, passing the queue and the SC (M8.2)
         bool rejoining = false;       // past the SC, on the way to the back of the queue
         bool forgetsCompoundRule = false; // strategy error: no second compound (M8.3)
+        double weatherBias = 0.0;  // the team reads the track this much wetter (+) or drier (-): poker (M9.3)
+        int wantedClass = 0;       // 0 slicks, 1 intermediate, 2 wet: best for the conditions as the team sees them
+        double callTimer = 0.0;    // seconds the team has wanted other tyres
+        double callDelay = 0.0;    // seconds until it calls the car in for them
+        bool weatherCall = false;  // stop for other tyres at the next pit entry
         bool disqualified = false;
         double stopTimer = 0.0;
         double spinTimer = 0.0; // > 0: spun, stationary
@@ -261,6 +266,8 @@ private:
     void deploySafetyCar(bool inThisLap);
     void releaseLappedCars();
     void updateWeather();
+    int bestTyreClass(int i) const;
+    void updateTyreCalls();
     double grip(int i) const; // 1 in the dry
     void cancelAttacks();
     void moveSafetyCar();

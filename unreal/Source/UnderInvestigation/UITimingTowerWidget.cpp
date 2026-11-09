@@ -153,8 +153,8 @@ void UUITimingTowerWidget::NativeTick(const FGeometry& MyGeometry, float InDelta
 		{
 			Penalty += FString::Printf(TEXT("+%.0fs"), Car.TimePenalty);
 		}
-		static const TCHAR* const CompoundLetters[] = {TEXT("S"), TEXT("M"), TEXT("H")};
-		const FString Tyre = FString::Printf(TEXT("%s%-2d %d"), CompoundLetters[FMath::Clamp(Car.Compound, 0, 2)], Car.TyreAge,
+		static const TCHAR* const CompoundLetters[] = {TEXT("S"), TEXT("M"), TEXT("H"), TEXT("I"), TEXT("W")};
+		const FString Tyre = FString::Printf(TEXT("%s%-2d %d"), CompoundLetters[FMath::Clamp(Car.Compound, 0, 4)], Car.TyreAge,
 			Car.PitStops);
 		if (Car.bBlackWhiteFlag)
 		{

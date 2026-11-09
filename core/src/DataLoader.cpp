@@ -50,12 +50,17 @@ Track loadTrack(const std::filesystem::path& path) {
             track.setOvertakeLines(root.at("overtake_detection_m").get<double>(), root.at("overtake_activation_m").get<double>());
         }
         if (root.contains("tyres")) {
-            CompoundSpecs specs;
-            const char* names[] = {"soft", "medium", "hard"};
-            for (int c = 0; c < 3; ++c) {
-                const json& t = root.at("tyres").at(names[c]);
+            CompoundSpecs specs = track.compounds(); // rain tyres keep their defaults without data
+            const char* names[] = {"soft", "medium", "hard", "intermediate", "wet"};
+            const json& tyres = root.at("tyres");
+            for (int c = 0; c < 5; ++c) {
+                if (c >= 3 && !tyres.contains(names[c])) {
+                    continue;
+                }
+                const json& t = tyres.at(names[c]);
                 specs[c] = {t.at("pace").get<double>(), t.at("wear_per_lap").get<double>(), t.at("cliff_lap").get<int>(),
-                            t.at("cliff_loss_per_lap").get<double>()};
+                            t.at("cliff_loss_per_lap").get<double>(), t.value("wet_grip_loss", specs[c].wetGripLoss),
+                            t.value("dry_wear_factor", specs[c].dryWearFactor)};
             }
             track.setCompounds(specs);
         }

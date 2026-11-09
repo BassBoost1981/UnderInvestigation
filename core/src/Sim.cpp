@@ -53,7 +53,9 @@ constexpr double kWetTargetPerRain = 1.4;         // wetness the rain drives tow
 constexpr double kWettingPerSecond = 1.0 / 120.0; // soaked in about two minutes
 constexpr double kDryingLinePerSecond = 1.0 / 900.0;     // the racing line dries in about 15 minutes
 constexpr double kDryingOffLinePerSecond = 1.0 / 1800.0; // off the line in about 30 minutes
-constexpr double kSlickWetGripLoss = 0.25;        // grip lost on slicks on a soaked racing line
+constexpr double kWeatherBiasMax = 0.15;          // teams read the wetness up to this much wrong (poker)
+constexpr double kCallDelayMax = 90.0;            // seconds a team may hesitate before calling the car in
+constexpr double kCallMargin = 0.01;              // the other tyre must be at least this much faster
 constexpr double kWetErrorFactor = 3.0;           // driver errors on a soaked racing line: x (1 + this)
 constexpr double kSprayRisk = 1.5;                // follow-up risk in spray: x (1 + this * rain)
 constexpr double kSprayDistance = 60.0;           // metres behind another car: in its spray
@@ -191,6 +193,14 @@ Sim::Sim(Track track, std::vector<Entry> entries, RaceConfig config)
         rain_ = rainAt(config_.weather, 0.0, weatherShift_, weatherScale_);
         wetness_ = std::min(1.0, rain_ * kWetTargetPerRain); // raining at the start: already wet
         lineWetness_ = wetness_;
+        for (int i = 0; i < n; ++i) {
+            cars_[i].weatherBias = weatherRng.uniform(-kWeatherBiasMax, kWeatherBiasMax);
+            const int wanted = bestTyreClass(i);
+            if (wanted > 0) { // a wet start: rain tyres from the grid
+                cars_[i].compound = wanted == 1 ? Compound::Intermediate : Compound::Wet;
+                cars_[i].compoundsUsed = 1u << static_cast<int>(cars_[i].compound);
+            }
+        }
     }
     for (int i = 0; i < n; ++i) {
         planNextStop(i);
@@ -596,6 +606,12 @@ void Sim::updateBlueFlags(const std::vector<int>& order) {
 
 Compound Sim::chooseCompound(int i) const {
     const Car& car = cars_[i];
+    if (car.wantedClass == 1) {
+        return Compound::Intermediate;
+    }
+    if (car.wantedClass == 2) {
+        return Compound::Wet;
+    }
     const int remaining = config_.laps - car.lapsCompleted;
     const CompoundSpecs& specs = track_.compounds();
     Compound choice = Compound::Hard;
@@ -617,6 +633,8 @@ void Sim::fitTyres(int i, Compound compound) {
     car.compound = compound;
     car.tyreWear = 0.0;
     car.compoundsUsed |= 1u << static_cast<int>(compound);
+    car.weatherCall = false;
+    car.callTimer = 0.0;
 }
 
 void Sim::planNextStop(int i) {
@@ -625,7 +643,8 @@ void Sim::planNextStop(int i) {
     const double margin = rng_.uniform(kStintMarginMin, kStintMarginMax);
     const int stint = std::max(1, static_cast<int>(track_.compounds()[static_cast<int>(car.compound)].cliffLap - margin -
                                                    car.tyreWear));
-    const bool ruleMet = car.forgetsCompoundRule ||
+    const bool usedRainTyres = (car.compoundsUsed >> static_cast<int>(Compound::Intermediate)) != 0;
+    const bool ruleMet = car.forgetsCompoundRule || (usedRainTyres && config_.rules.wetTyresVoidCompoundRule) ||
         std::bitset<3>(car.compoundsUsed).count() >= static_cast<std::size_t>(config_.rules.minDryCompounds);
     if (remaining <= stint) {
         car.plannedStopLap = ruleMet ? std::numeric_limits<int>::max()
@@ -637,8 +656,13 @@ void Sim::planNextStop(int i) {
 
 bool Sim::wantsTyreStop(int i) const {
     const Car& car = cars_[i];
-    if (state_ == RaceState::RedFlag || chequered_ || car.finished || car.inPit ||
-        car.plannedStopLap == std::numeric_limits<int>::max()) {
+    if (state_ == RaceState::RedFlag || chequered_ || car.finished || car.inPit) {
+        return false;
+    }
+    if (car.weatherCall) {
+        return true; // other tyres for the conditions (M9.3)
+    }
+    if (car.plannedStopLap == std::numeric_limits<int>::max()) {
         return false;
     }
     const int inLap = car.lapsCompleted + 1; // the stop ends this lap
@@ -823,8 +847,52 @@ void Sim::updateWeather() {
     approach(lineWetness_, kDryingLinePerSecond);
 }
 
-double Sim::grip(int /*i*/) const {
-    return 1.0 - kSlickWetGripLoss * lineWetness_; // slicks; wet tyres follow in 9.3
+double Sim::grip(int i) const {
+    return 1.0 - track_.compounds()[static_cast<int>(cars_[i].compound)].wetGripLoss * lineWetness_;
+}
+
+int Sim::bestTyreClass(int i) const {
+    // The tyres that are fastest on the racing line as the team reads it (wetness + its bias).
+    const CompoundSpecs& specs = track_.compounds();
+    const double wetness = std::clamp(lineWetness_ + cars_[i].weatherBias, 0.0, 1.0);
+    const Compound current = cars_[i].compound;
+    const double slick = wetSpeedFactor(specs[static_cast<int>(isWetCompound(current) ? Compound::Medium : current)], wetness);
+    const double inter = wetSpeedFactor(specs[static_cast<int>(Compound::Intermediate)], wetness);
+    const double wet = wetSpeedFactor(specs[static_cast<int>(Compound::Wet)], wetness);
+    const int currentClass = current == Compound::Wet ? 2 : current == Compound::Intermediate ? 1 : 0;
+    const double speeds[] = {slick, inter, wet};
+    int best = 0;
+    for (int c = 1; c < 3; ++c) {
+        if (speeds[c] > speeds[best]) {
+            best = c;
+        }
+    }
+    // Only worth a stop if clearly faster than what is on the car.
+    return speeds[best] > speeds[currentClass] * (1.0 + kCallMargin) ? best : currentClass;
+}
+
+void Sim::updateTyreCalls() {
+    if (config_.weather.points.empty()) {
+        return; // dry race: unchanged
+    }
+    for (int i = 0; i < static_cast<int>(cars_.size()); ++i) {
+        Car& car = cars_[i];
+        if (outOfRace(i) || car.inPit) {
+            continue;
+        }
+        car.wantedClass = bestTyreClass(i);
+        const int currentClass = car.compound == Compound::Wet ? 2 : car.compound == Compound::Intermediate ? 1 : 0;
+        if (car.wantedClass == currentClass) {
+            car.callTimer = 0.0;
+            car.weatherCall = false;
+            continue;
+        }
+        if (car.callTimer == 0.0) {
+            car.callDelay = rng_.uniform(0.0, kCallDelayMax); // some teams react at once, some wait
+        }
+        car.callTimer += kDt;
+        car.weatherCall = car.callTimer >= car.callDelay;
+    }
 }
 
 void Sim::cancelAttacks() {
@@ -1138,6 +1206,7 @@ void Sim::step() {
     // Phase C: integrate.
     time_ += kDt;
     updateWeather();
+    updateTyreCalls();
     std::vector<double> previous(n, 0.0);
     for (int i : order) {
         Car& car = cars_[i];
@@ -1338,7 +1407,7 @@ void Sim::processTimingLines(int i, double previousDistance) {
         }
         ++car.lapsCompleted;
         car.holdUntilLine = false;
-        car.tyreWear += 1.0;
+        car.tyreWear += 1.0 + track_.compounds()[static_cast<int>(car.compound)].dryWearFactor * (1.0 - lineWetness_);
         car.form = rollForm();
         if (chequered_ || car.lapsCompleted >= config_.laps) {
             chequered_ = true;
@@ -1346,7 +1415,8 @@ void Sim::processTimingLines(int i, double previousDistance) {
             car.speed = 0.0;
             // B6.3.6: two dry compounds, otherwise disqualification (no wet tyres in the sim yet).
             const auto used = static_cast<int>(std::bitset<3>(car.compoundsUsed).count());
-            if (used < config_.rules.minDryCompounds) {
+            const bool usedRainTyres = (car.compoundsUsed >> static_cast<int>(Compound::Intermediate)) != 0;
+            if (used < config_.rules.minDryCompounds && !(usedRainTyres && config_.rules.wetTyresVoidCompoundRule)) {
                 addIncident(Incident::Type::CompoundRule, i, i, 1.0);
                 incidents_.back().measure = used;
             }

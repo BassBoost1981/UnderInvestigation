@@ -84,7 +84,8 @@ private:
     std::vector<TrackPose> centerline_;
     std::vector<double> sampleDistances_; // s of each centre-line sample
     double closureError_ = 0.0;
-    CompoundSpecs compounds_{{{1.0, 0.0006, 99, 0.0}, {1.0, 0.0006, 99, 0.0}, {1.0, 0.0006, 99, 0.0}}}; // M1 wear if no data
+    CompoundSpecs compounds_{{{1.0, 0.0006, 99, 0.0}, {1.0, 0.0006, 99, 0.0}, {1.0, 0.0006, 99, 0.0},
+                              defaultIntermediate(), defaultWet()}}; // M1 wear if no data
 };
 
 } // namespace uisim
