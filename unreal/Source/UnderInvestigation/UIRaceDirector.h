@@ -17,6 +17,7 @@ class UUIRatingWidget;
 class UUIRadioWidget;
 class UUITrackMapWidget;
 class UUIControlPanelWidget;
+class UUIWeatherWidget;
 class USceneCaptureComponent2D;
 class UTextureRenderTarget2D;
 class FSlateVirtualUserHandle;
@@ -31,10 +32,11 @@ enum class EUICommand : uint8
 	DeploySafetyCar,
 	RecallSafetyCar,       // "Safety Car in this lap"
 	RedFlag,
-	Restart,
+	Restart,               // after a red flag; Index 1 = wet tyres compulsory (B5.15.2 a)
 	LappedCarsMayOvertake, // under the SC (B5.13.4 c)
 	ClosePitEntry,         // B1.6.4
 	OpenPitEntry,
+	SafetyCarStart,        // before the start; Index 1 = wet tyres compulsory (B5.10.1 a)
 	SetCamera,             // Index
 	FollowCar,             // Index = entry index for the TV camera, -1 = the leader
 	SetTimeScale,          // Value
@@ -69,6 +71,7 @@ struct FUICommand
 // Verdict while reviewing: Tab accused car, 0 none, 1 warning, 2 5 s, 3 10 s, 4 drive-through, 5 stop-and-go.
 //               -UISimTestVerdicts (5 s for every attacker, automated checks only)
 //               -UISimCrashAt=<seconds> (scripted crash, automated checks only)
+//               -UISimWeather=<file in data/weather> (rain, M9.7)
 //               -UISimScript=<file> (commands at race times, see UIRaceCommands.cpp; relative to the project)
 // Keys: 1-6 cameras (6 = pit lane), +/- time scale.
 // Race control: V = VSC on/off, S = Safety Car out / in this lap, R = red flag / restart,
@@ -208,6 +211,10 @@ private:
 	TObjectPtr<UUITrackMapWidget> TrackMap;
 	UPROPERTY()
 	TObjectPtr<UUIControlPanelWidget> ControlPanel;
+	UPROPERTY()
+	TObjectPtr<UUIWeatherWidget> WeatherPanel;
+	UPROPERTY()
+	TObjectPtr<UMaterialInstanceDynamic> RoadMaterial; // darker when wet
 	int32 FollowedEntry = -1; // TV camera target, -1 = the leader
 	double CrashAtSeconds = 0.0; // -UISimCrashAt: scripted crash of the car in P9 (checks only)
 	bool bCrashReact = false;     // -UISimCrashReact: double yellow 10 s after the scripted crash

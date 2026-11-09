@@ -113,6 +113,19 @@ TArray<UUIControlPanelWidget::FButton> UUIControlPanelWidget::Buttons() const
 		Add(Cell(366.0, 0, 110.0), TEXT("NEIN"), MakeCommand(EUICommand::RedFlag), false, EKind::ConfirmNo);
 	}
 
+	// Row 0 (right): start behind the SC and the wet tyre mandate for it and for a restart (M9.7).
+	if (!IsConfirming())
+	{
+		Add(Cell(PitLeft - 116.0, 0, 110.0), TEXT("SC-START"), MakeCommand(EUICommand::SafetyCarStart, bWetMandate ? 1 : 0), false);
+		FButton Wet;
+		Wet.Rect = Cell(PitLeft, 0, PitWidth);
+		Wet.Label = TEXT("REGEN-PFLICHT");
+		Wet.Kind = EKind::ToggleWet;
+		Wet.bActive = bWetMandate;
+		Wet.ActiveColor = FLinearColor(0.3f, 0.6f, 1.0f);
+		List.Add(Wet);
+	}
+
 	// Row 1: race control. Toggle buttons stand for the command that fits the state, like the keys.
 	const bool bVsc = State == EUISimRaceState::VirtualSafetyCar;
 	Add(Cell(VscLeft, 1, VscWidth), bVsc ? TEXT("VSC ENDE [V]") : TEXT("VSC [V]"),
@@ -124,7 +137,7 @@ TArray<UUIControlPanelWidget::FButton> UUIControlPanelWidget::Buttons() const
 	const bool bRed = State == EUISimRaceState::RedFlag;
 	if (bRed)
 	{
-		Add(Cell(RedLeft, 1, RedWidth), TEXT("NEUSTART [R]"), MakeCommand(EUICommand::Restart), true, EKind::Command,
+		Add(Cell(RedLeft, 1, RedWidth), TEXT("NEUSTART [R]"), MakeCommand(EUICommand::Restart, bWetMandate ? 1 : 0), true, EKind::Command,
 			FLinearColor(0.9f, 0.1f, 0.1f));
 	}
 	else
@@ -256,6 +269,10 @@ FReply UUIControlPanelWidget::NativeOnMouseButtonDown(const FGeometry& InGeometr
 			break;
 		case EKind::Command:
 			Race->Execute(Button.Command); // logs and refuses what is not allowed now
+			break;
+		case EKind::ToggleWet:
+			bWetMandate = !bWetMandate;
+			UE_LOG(LogUISim, Display, TEXT("Control panel: wet tyres compulsory %s"), bWetMandate ? TEXT("on") : TEXT("off"));
 			break;
 		}
 		return FReply::Handled();

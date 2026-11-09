@@ -1,0 +1,11 @@
+{
+  "name": "Nasser Start",
+  "comment": "Rain from the start that eases off (M9.7): soaked at the start, drying from minute 25. Same format as shower.json.",
+  "variation": 0.0,
+  "points": [
+    { "minute": 0,  "rain": 0.9 },
+    { "minute": 10, "rain": 0.8 },
+    { "minute": 20, "rain": 0.4 },
+    { "minute": 25, "rain": 0.0 }
+  ]
+}

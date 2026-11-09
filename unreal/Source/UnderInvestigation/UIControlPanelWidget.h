@@ -26,7 +26,7 @@ protected:
 	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 
 private:
-	enum class EKind : uint8 { Command, AskRedFlag, ConfirmYes, ConfirmNo };
+	enum class EKind : uint8 { Command, AskRedFlag, ConfirmYes, ConfirmNo, ToggleWet };
 
 	struct FButton
 	{
@@ -48,6 +48,7 @@ private:
 	UPROPERTY()
 	TObjectPtr<UBorder> ButtonArea;
 
+	bool bWetMandate = false; // SC start and restart with wet tyres compulsory (B6.3.7)
 	double ConfirmUntil = 0.0; // real time (FPlatformTime::Seconds) until the red flag question expires
 	mutable bool bTargetsLogged = false;
 };

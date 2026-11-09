@@ -65,6 +65,11 @@ struct FUISimSnapshot
 	bool bSafetyCarInThisLap = false;
 	bool bLappedCarsReleased = false; // "LAPPED CARS MAY NOW OVERTAKE" sent
 	bool bPitEntryClosed = false;
+	double Rain = 0.0;          // 0 dry .. 1 downpour (M9.2)
+	double TrackWetness = 0.0;  // off the racing line
+	double LineWetness = 0.0;   // on the racing line
+	double StandingWater = 0.0; // aquaplaning risk (M9.4)
+	bool bWetTyresMandated = false; // B6.3.7
 	double SafetyCarDistance = 0.0;
 	TArray<FUISimCar> Cars; // sorted by position
 };
@@ -163,7 +168,7 @@ public:
 
 	// Loads track, entries and rules and sets up the grid. On failure returns false with a message.
 	bool Start(const FString& TrackFile, const FString& EntriesFile, const FString& RulesFile, int32 Laps, int64 Seed,
-		FString& OutError);
+		FString& OutError, const FString& WeatherFile = FString());
 	bool IsStarted() const { return Sim.IsValid(); }
 
 	// Advances the race by one fixed tick (TickSeconds()).
@@ -205,7 +210,11 @@ public:
 	void DeploySafetyCar();
 	void RecallSafetyCar();
 	void RedFlag();
-	void Restart();
+	void Restart(bool bWetTyres = false);  // B5.15.2 a: optionally wet tyres compulsory
+	void SafetyCarStart(bool bWetTyres);  // before the start, B5.10
+	// Weather (M9.7): rain the race will bring at a race time, and the plan's name.
+	double ForecastRain(double Time) const;
+	FString WeatherName() const;
 	void LappedCarsMayOvertake(); // under the SC (B5.13.4 c)
 	void ClosePitEntry();         // B1.6.4
 	void OpenPitEntry();
@@ -219,7 +228,7 @@ public:
 
 private:
 	void CopySnapshot();
-	void Send(int32 Type, int32 Sector = 0, EUISimFlag Flag = EUISimFlag::Green);
+	void Send(int32 Type, int32 Sector = 0, EUISimFlag Flag = EUISimFlag::Green, bool bWetTyres = false);
 
 	TUniquePtr<uisim::Sim> Sim;
 	FUISimSnapshot CurrentSnapshot;

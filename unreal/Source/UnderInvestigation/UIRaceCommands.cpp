@@ -49,6 +49,7 @@ bool AUIRaceDirector::CanExecute(const FUICommand& Command) const
 	case EUICommand::RecallSafetyCar: return State == EUISimRaceState::SafetyCar && !Snapshot.bSafetyCarInThisLap;
 	case EUICommand::RedFlag: return State != EUISimRaceState::RedFlag;
 	case EUICommand::Restart: return State == EUISimRaceState::RedFlag;
+	case EUICommand::SafetyCarStart: return State == EUISimRaceState::Green && Snapshot.Time <= 0.0;
 	case EUICommand::LappedCarsMayOvertake:
 		return State == EUISimRaceState::SafetyCar && !Snapshot.bSafetyCarInThisLap && !Snapshot.bLappedCarsReleased;
 	case EUICommand::ClosePitEntry: return !Snapshot.bPitEntryClosed;
@@ -82,7 +83,8 @@ FString AUIRaceDirector::CommandName(const FUICommand& Command) const
 	case EUICommand::DeploySafetyCar: return TEXT("sc");
 	case EUICommand::RecallSafetyCar: return TEXT("sc_in");
 	case EUICommand::RedFlag: return TEXT("red");
-	case EUICommand::Restart: return TEXT("restart");
+	case EUICommand::Restart: return Command.Index == 1 ? TEXT("restart wet") : TEXT("restart");
+	case EUICommand::SafetyCarStart: return Command.Index == 1 ? TEXT("sc_start wet") : TEXT("sc_start");
 	case EUICommand::LappedCarsMayOvertake: return TEXT("lapped");
 	case EUICommand::ClosePitEntry: return TEXT("pit_close");
 	case EUICommand::OpenPitEntry: return TEXT("pit_open");
@@ -124,7 +126,8 @@ bool AUIRaceDirector::Execute(const FUICommand& Command)
 	case EUICommand::DeploySafetyCar: SimSession.DeploySafetyCar(); break;
 	case EUICommand::RecallSafetyCar: SimSession.RecallSafetyCar(); break;
 	case EUICommand::RedFlag: SimSession.RedFlag(); break;
-	case EUICommand::Restart: SimSession.Restart(); break;
+	case EUICommand::Restart: SimSession.Restart(Command.Index == 1); break;
+	case EUICommand::SafetyCarStart: SimSession.SafetyCarStart(Command.Index == 1); break;
 	case EUICommand::LappedCarsMayOvertake: SimSession.LappedCarsMayOvertake(); break;
 	case EUICommand::ClosePitEntry: SimSession.ClosePitEntry(); break;
 	case EUICommand::OpenPitEntry: SimSession.OpenPitEntry(); break;
@@ -218,7 +221,8 @@ bool AUIRaceDirector::LoadScript(const FString& File)
 		else if (Name == TEXT("sc")) { C.Type = EUICommand::DeploySafetyCar; }
 		else if (Name == TEXT("sc_in")) { C.Type = EUICommand::RecallSafetyCar; }
 		else if (Name == TEXT("red")) { C.Type = EUICommand::RedFlag; }
-		else if (Name == TEXT("restart")) { C.Type = EUICommand::Restart; }
+		else if (Name == TEXT("restart")) { C.Type = EUICommand::Restart; C.Index = Arg == TEXT("wet") ? 1 : 0; }
+		else if (Name == TEXT("sc_start")) { C.Type = EUICommand::SafetyCarStart; C.Index = Arg == TEXT("wet") ? 1 : 0; }
 		else if (Name == TEXT("lapped")) { C.Type = EUICommand::LappedCarsMayOvertake; }
 		else if (Name == TEXT("pit_close")) { C.Type = EUICommand::ClosePitEntry; }
 		else if (Name == TEXT("pit_open")) { C.Type = EUICommand::OpenPitEntry; }

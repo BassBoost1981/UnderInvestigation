@@ -20,6 +20,7 @@
 #include "UIRadioWidget.h"
 #include "UITrackMapWidget.h"
 #include "UIControlPanelWidget.h"
+#include "UIWeatherWidget.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "Engine/TextureRenderTarget2D.h"
 
@@ -89,7 +90,13 @@ void AUIRaceDirector::BeginPlay()
 	const FString RulesPath = FPaths::Combine(DataDir, TEXT("rules/fia-f1-2026.json"));
 
 	FString Error;
-	if (!SimSession.Start(TrackPath, EntriesPath, RulesPath, Laps, Seed, Error))
+	FString WeatherFile;
+	FString WeatherPath;
+	if (FParse::Value(CommandLine, TEXT("UISimWeather="), WeatherFile)) // file in data/weather, e.g. shower.json
+	{
+		WeatherPath = FPaths::Combine(DataDir, TEXT("weather"), WeatherFile);
+	}
+	if (!SimSession.Start(TrackPath, EntriesPath, RulesPath, Laps, Seed, Error, WeatherPath))
 	{
 		UE_LOG(LogUISim, Error, TEXT("Could not start race: %s"), *Error);
 		return;
@@ -140,6 +147,7 @@ void AUIRaceDirector::BuildTrack()
 
 	UMaterialInstanceDynamic* Asphalt = UMaterialInstanceDynamic::Create(BaseMaterial, this);
 	Asphalt->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.05f, 0.05f, 0.055f));
+	RoadMaterial = Asphalt;
 
 	for (int32 Start = 0; Start < Count; Start += SamplesPerRoadPiece)
 	{
@@ -396,6 +404,9 @@ void AUIRaceDirector::Tick(float DeltaSeconds)
 		ControlPanel = CreateWidget<UUIControlPanelWidget>(Player, UUIControlPanelWidget::StaticClass());
 		ControlPanel->SetRaceDirector(this);
 		ControlPanel->AddToViewport();
+		WeatherPanel = CreateWidget<UUIWeatherWidget>(Player, UUIWeatherWidget::StaticClass());
+		WeatherPanel->SetRaceDirector(this);
+		WeatherPanel->AddToViewport();
 
 		// Free mouse: visible cursor, never locked to the window.
 		FInputModeGameAndUI InputMode;
@@ -406,6 +417,12 @@ void AUIRaceDirector::Tick(float DeltaSeconds)
 	}
 	HandleInput();
 	RunScript(); // lines after the finish (the race clock has stopped)
+	if (RoadMaterial)
+	{
+		// Wet asphalt looks darker (M9.7).
+		const float Wet = static_cast<float>(SimSession.Snapshot().LineWetness);
+		RoadMaterial->SetVectorParameterValue(TEXT("Color"), FMath::Lerp(FLinearColor(0.05f, 0.05f, 0.055f), FLinearColor(0.012f, 0.014f, 0.022f), Wet));
+	}
 	if (TrackMap)
 	{
 		// The review panel needs the right side of the screen; the live map returns afterwards.

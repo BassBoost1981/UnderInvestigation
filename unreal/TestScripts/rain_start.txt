@@ -1,0 +1,6 @@
+# M9.7 check (1600x900): start behind the SC with wet tyres compulsory, then a rolling start.
+# Run with -UISimWeather=wet-start.json, e.g. on a private real circuit with -UISimTrack=private/<name>.json.
+0 sc_start wet
+150 screenshot rain_sc
+200 sc_in
+330 screenshot rain_race

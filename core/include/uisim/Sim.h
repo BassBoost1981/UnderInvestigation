@@ -180,6 +180,9 @@ public:
     const std::vector<Accident>& accidents() const { return accidents_; }
     const std::vector<RadioMessage>& radio() const { return radio_; } // marshal radio log, oldest first
     double neutralisedTime() const { return neutralisedTime_; } // seconds under VSC, SC or red flag
+    // Rain at a race time as this race's weather will bring it (forecast, M9.7); 0 in a dry race.
+    double forecastRain(double time) const { return rainAt(config_.weather, time, weatherShift_, weatherScale_); }
+    const std::string& weatherName() const { return config_.weather.name; }
     double finishTime() const { return finishTime_; }           // race time when the last car finished
 
     // Replay: one frame per tick since the start. Car samples are indexed by entry.

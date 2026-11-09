@@ -35,7 +35,7 @@ FUISimSession::FUISimSession() = default;
 FUISimSession::~FUISimSession() = default;
 
 bool FUISimSession::Start(const FString& TrackFile, const FString& EntriesFile, const FString& RulesFile, int32 Laps,
-	int64 Seed, FString& OutError)
+	int64 Seed, FString& OutError, const FString& WeatherFile)
 {
 	try
 	{
@@ -46,6 +46,10 @@ bool FUISimSession::Start(const FString& TrackFile, const FString& EntriesFile, 
 		Config.laps = Laps;
 		Config.seed = static_cast<std::uint64_t>(Seed);
 		Config.rules = uisim::loadRules(std::filesystem::path(*RulesFile));
+		if (!WeatherFile.IsEmpty())
+		{
+			Config.weather = uisim::loadWeather(std::filesystem::path(*WeatherFile));
+		}
 		Sim = MakeUnique<uisim::Sim>(std::move(Track), std::move(Entries), Config);
 	}
 	catch (const std::exception& Error)
@@ -194,7 +198,7 @@ FUISimRating FUISimSession::Rating() const
 	return Out;
 }
 
-void FUISimSession::Send(int32 Type, int32 Sector, EUISimFlag Flag)
+void FUISimSession::Send(int32 Type, int32 Sector, EUISimFlag Flag, bool bWetTyres)
 {
 	if (!Sim)
 	{
@@ -204,6 +208,7 @@ void FUISimSession::Send(int32 Type, int32 Sector, EUISimFlag Flag)
 	Command.type = static_cast<uisim::Command::Type>(Type);
 	Command.sector = Sector;
 	Command.flag = static_cast<uisim::Flag>(Flag);
+	Command.wetTyres = bWetTyres;
 	try
 	{
 		Sim->command(Command);
@@ -221,7 +226,10 @@ void FUISimSession::EndVirtualSafetyCar() { Send(static_cast<int32>(ECommand::En
 void FUISimSession::DeploySafetyCar() { Send(static_cast<int32>(ECommand::DeploySafetyCar)); }
 void FUISimSession::RecallSafetyCar() { Send(static_cast<int32>(ECommand::RecallSafetyCar)); }
 void FUISimSession::RedFlag() { Send(static_cast<int32>(ECommand::RedFlag)); }
-void FUISimSession::Restart() { Send(static_cast<int32>(ECommand::Restart)); }
+void FUISimSession::Restart(bool bWetTyres) { Send(static_cast<int32>(ECommand::Restart), 0, EUISimFlag::Green, bWetTyres); }
+void FUISimSession::SafetyCarStart(bool bWetTyres) { Send(static_cast<int32>(ECommand::SafetyCarStart), 0, EUISimFlag::Green, bWetTyres); }
+double FUISimSession::ForecastRain(double Time) const { return Sim ? Sim->forecastRain(Time) : 0.0; }
+FString FUISimSession::WeatherName() const { return Sim ? FromUtf8(Sim->weatherName()) : FString(); }
 void FUISimSession::LappedCarsMayOvertake() { Send(static_cast<int32>(ECommand::LappedCarsMayOvertake)); }
 void FUISimSession::ClosePitEntry() { Send(static_cast<int32>(ECommand::ClosePitEntry)); }
 void FUISimSession::OpenPitEntry() { Send(static_cast<int32>(ECommand::OpenPitEntry)); }
@@ -295,6 +303,11 @@ void FUISimSession::CopySnapshot()
 	CurrentSnapshot.bSafetyCarInThisLap = In.safetyCarInThisLap;
 	CurrentSnapshot.bLappedCarsReleased = In.lappedCarsReleased;
 	CurrentSnapshot.bPitEntryClosed = In.pitEntryClosed;
+	CurrentSnapshot.Rain = In.rain;
+	CurrentSnapshot.TrackWetness = In.trackWetness;
+	CurrentSnapshot.LineWetness = In.lineWetness;
+	CurrentSnapshot.StandingWater = In.standingWater;
+	CurrentSnapshot.bWetTyresMandated = In.wetTyresMandated;
 	CurrentSnapshot.SafetyCarDistance = In.safetyCarDistance;
 	CurrentSnapshot.Cars.SetNum(static_cast<int32>(In.cars.size()));
 	for (int32 Index = 0; Index < CurrentSnapshot.Cars.Num(); ++Index)
