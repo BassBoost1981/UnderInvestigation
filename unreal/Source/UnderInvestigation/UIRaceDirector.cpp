@@ -83,7 +83,7 @@ void AUIRaceDirector::BeginPlay()
 
 	const FString DataDir = FPaths::ConvertRelativePathToFull(FPaths::Combine(FPaths::ProjectDir(), TEXT("../data")));
 	FString TrackFile = TEXT("testring.json");
-	FParse::Value(CommandLine, TEXT("UISimTrack="), TrackFile); // file in data/tracks, e.g. valle-alta.json
+	FParse::Value(CommandLine, TEXT("UISimTrack="), TrackFile); // file in data/tracks, e.g. private/<name>.json (real circuits, M9.6)
 	const FString TrackPath = FPaths::Combine(DataDir, TEXT("tracks"), TrackFile);
 	const FString EntriesPath = FPaths::Combine(DataDir, TEXT("entries"), EntriesFile);
 	const FString RulesPath = FPaths::Combine(DataDir, TEXT("rules/fia-f1-2026.json"));

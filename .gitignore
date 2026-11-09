@@ -2,6 +2,8 @@
 
 # Recognisable real-name grids: private use only, never in the public repository (docs/DESIGN.md chapter 10)
 /data/entries/*-parody.json
+# Real circuits with parody names and their source data: private only (docs/DESIGN.md chapter 8.4, 10)
+/data/tracks/private/
 
 # Unreal build output
 /unreal/Binaries/
