@@ -13,6 +13,7 @@ constexpr double kAfterRaceDecisionCost = 0.1;
 constexpr double kFullReactionTime = 20.0; // seconds after the accident: radio delay plus a quick reaction
 constexpr double kZeroReactionTime = 120.0;
 constexpr double kFollowUpCost = 0.15;
+constexpr double kHeavyRainCostPer10Min = 0.5; // safety lost per 10 minutes of racing in standing water
 
 int severity(Penalty penalty) { return static_cast<int>(penalty); }
 
@@ -82,6 +83,8 @@ ExpectedVerdict expectedVerdict(const Incident& incident) {
         return {incident.car, Penalty::Disqualification};
     case Type::PitEntryClosed: // B1.6.4 b (data/rules: pit_entry_closed_penalty)
         return {incident.car, RaceRules{}.pitEntryClosedPenalty};
+    case Type::WetTyreRule: // B6.3.7 (data/rules: wet_start_tyre_change_penalty)
+        return {incident.car, RaceRules{}.wetStartTyreChangePenalty};
     case Type::UnsafeRelease: // 5 s (unsafe_release_penalty_seconds), 10 s if it nearly ended in contact
         return {incident.car, incident.measure < 10.0 ? Penalty::TenSeconds : Penalty::FiveSeconds};
     }
@@ -172,7 +175,11 @@ RaceRating rateRace(const Sim& sim) {
         }
     }
     const double reactionScore = rating.accidentSites > 0 ? reaction / rating.accidentSites : 1.0;
-    rating.safety = std::clamp(reactionScore - kFollowUpCost * rating.followUpAccidents, 0.0, 1.0);
+    // Racing on in standing water instead of neutralising (M9.4).
+    rating.heavyRainSeconds = sim.stats().heavyRainUnneutralised;
+    rating.safety = std::clamp(reactionScore - kFollowUpCost * rating.followUpAccidents -
+                                   kHeavyRainCostPer10Min * rating.heavyRainSeconds / 600.0,
+                               0.0, 1.0);
 
     rating.overall = 100.0 * (0.35 * rating.fairness + 0.15 * rating.consistency + 0.3 * rating.safety +
                               0.2 * rating.raceQuality);

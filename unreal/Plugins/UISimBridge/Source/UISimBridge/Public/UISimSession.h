@@ -77,7 +77,8 @@ enum class EUISimIncidentType : uint8
 	UnsafeRelease,
 	TrackLimits, // Car == OtherCar, offence after the black-and-white flag
 	CompoundRule, // Car == OtherCar, finished without two dry compounds
-	PitEntryClosed // Car == OtherCar, entered the closed pit lane
+	PitEntryClosed, // Car == OtherCar, entered the closed pit lane
+	WetTyreRule // Car == OtherCar, left the mandated wet tyres behind the SC
 };
 
 struct FUISimIncident

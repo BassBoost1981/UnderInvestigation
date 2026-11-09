@@ -171,7 +171,7 @@
       "value": true,
       "source": "F1 SR 2026 Section B, B5.10.8 (standing start) and B5.10.9 (rolling start)",
       "verified": true,
-      "note": "After formation laps behind the Safety Car the Race Director chooses: standing start from the grid when conditions allow, otherwise a rolling start. true = the sim offers the standing start; the rolling start uses the existing restart behind the Safety Car."
+      "note": "After formation laps behind the Safety Car the Race Director chooses: standing start from the grid when conditions allow, otherwise a rolling start. Not modelled yet: the sim always uses the rolling start (Safety Car in this lap, racing from the line); a standing start would need the cars back on the grid."
     },
     "track_declared_wet_in_race": {
       "value": false,

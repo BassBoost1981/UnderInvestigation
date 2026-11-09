@@ -28,6 +28,8 @@ struct RaceConfig {
     double blueFlagIgnoreChance = 0.05;
     // Chance per car that the team overlooks B6.3.6 and finishes on one dry compound (M8.3).
     double compoundRuleMissChance = 0.01;
+    // Chance per car that the team changes off mandated wet tyres behind the SC anyway (M9.4).
+    double wetMandateIgnoreChance = 0.02;
     // Scales follow-up accidents and punctures at accident sites (M6.4); 0 isolates scenarios.
     double followUpChanceScale = 1.0;
     // Rain over the race (M9.2, data/weather); empty = dry, the race is then unchanged.
@@ -46,6 +48,8 @@ struct RaceStats {
     int punctures = 0;         // from debris
     int blueFlagsIgnored = 0;
     int trackLimitOffences = 0; // every time a car left the track (lap deleted)
+    int aquaplanes = 0;         // accidents in standing water (M9.4)
+    double heavyRainUnneutralised = 0.0; // seconds of standing water under green (M9.4)
 };
 
 // Race-control action, applied at the start of the next step.
@@ -62,7 +66,8 @@ struct Command {
         InjectAccident,  // scenario/test tool: `car` has an accident of type `accident`
         LappedCarsMayOvertake, // under the SC: lapped cars pass and rejoin the back (B5.13.4 c, M8.2)
         ClosePitEntry,   // B1.6.4: planned stops wait, penalties are not served (M8.3)
-        OpenPitEntry
+        OpenPitEntry,
+        SafetyCarStart   // before the start: formation lap(s) behind the SC, `wetTyres` mandates wets (B5.10, M9.4)
     };
     Type type = Type::SetSectorFlag;
     int sector = 0;          // SetSectorFlag only
@@ -71,6 +76,7 @@ struct Command {
     int car = -1;            // IssueVerdict: entry index penalised, -1 = no one; InjectAccident: car
     Penalty penalty = Penalty::None; // IssueVerdict only
     AccidentType accident = AccidentType::Spin; // InjectAccident only
+    bool wetTyres = false;   // SafetyCarStart, Restart: wet-weather tyres compulsory behind the SC (B6.3.7)
 };
 
 struct Accident {
@@ -111,7 +117,8 @@ struct Incident {
         UnsafeRelease,            // car released into the path of otherCar; measure = gap in metres (M7.5)
         TrackLimits,              // otherCar == car; offence after the black-and-white flag, measure = offence number (M7.6)
         CompoundRule,             // otherCar == car; finished without two dry compounds (B6.3.6), measure = compounds used (M8.3)
-        PitEntryClosed            // otherCar == car; entered the pit lane while the entry was closed (B1.6.4 b, M8.3)
+        PitEntryClosed,           // otherCar == car; entered the pit lane while the entry was closed (B1.6.4 b, M8.3)
+        WetTyreRule               // otherCar == car; left the mandated wet tyres behind the SC (B6.3.7, M9.4)
     };
     int id = 0;          // 1-based, in order of occurrence
     Type type = Type::Collision;
@@ -226,6 +233,7 @@ private:
         double callTimer = 0.0;    // seconds the team has wanted other tyres
         double callDelay = 0.0;    // seconds until it calls the car in for them
         bool weatherCall = false;  // stop for other tyres at the next pit entry
+        bool breaksWetMandate = false; // this team ignores the wet tyre mandate (M9.4)
         bool disqualified = false;
         double stopTimer = 0.0;
         double spinTimer = 0.0; // > 0: spun, stationary
@@ -268,6 +276,7 @@ private:
     void updateWeather();
     int bestTyreClass(int i) const;
     void updateTyreCalls();
+    void mandateWetTyres();
     double grip(int i) const; // 1 in the dry
     void cancelAttacks();
     void moveSafetyCar();
@@ -318,6 +327,8 @@ private:
     double lineWetness_ = 0.0;
     double weatherShift_ = 0.0; // seconds, random per race
     double weatherScale_ = 1.0; // intensity, random per race
+    double standingWater_ = 0.0; // 0..1: aquaplaning risk in heavy rain (M9.4)
+    bool wetTyresMandated_ = false; // wets compulsory until the SC has gone in (B6.3.7)
     bool pitEntryClosed_ = false; // B1.6.4 (M8.3)
     RaceState state_ = RaceState::Green;
     SafetyCar safetyCar_;

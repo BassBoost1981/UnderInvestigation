@@ -56,7 +56,13 @@ constexpr double kDryingOffLinePerSecond = 1.0 / 1800.0; // off the line in abou
 constexpr double kWeatherBiasMax = 0.15;          // teams read the wetness up to this much wrong (poker)
 constexpr double kCallDelayMax = 90.0;            // seconds a team may hesitate before calling the car in
 constexpr double kCallMargin = 0.01;              // the other tyre must be at least this much faster
+// Race control in the rain (M9.4).
+constexpr double kStandingWaterFromRain = 0.6;    // heavier rain than this leaves standing water on a soaked track
+constexpr double kAquaplaneChance = 0.01;         // per fast-corner entry at full standing water and reference speed
+constexpr double kAquaplaneReferenceSpeed = 70.0; // m/s; risk grows with the cube of the speed
+constexpr double kWetOvertakePenalty = 0.5;       // overtaking chance lost in spray on a soaked track
 constexpr double kWetErrorFactor = 3.0;           // driver errors on a soaked racing line: x (1 + this)
+constexpr double kWetErrorNeutralised = 0.2;      // share of that behind the SC/VSC or under red (slow)
 constexpr double kSprayRisk = 1.5;                // follow-up risk in spray: x (1 + this * rain)
 constexpr double kSprayDistance = 60.0;           // metres behind another car: in its spray
 constexpr double kErrorDuration = 1.5;
@@ -271,7 +277,20 @@ void Sim::applyCommands() {
             break;
         case Type::Restart:
             if (state_ == RaceState::RedFlag) {
+                if (c.wetTyres) {
+                    mandateWetTyres(); // B5.15.2 a
+                }
                 deploySafetyCar(true); // one lap behind the Safety Car, then racing
+            }
+            break;
+        case Type::SafetyCarStart:
+            if (time_ <= 0.0 && state_ == RaceState::Green) {
+                if (c.wetTyres) {
+                    mandateWetTyres(); // B5.10.1 a
+                }
+                deploySafetyCar(false); // the race starts when the SC goes in (rolling start, B5.10.9)
+                // B5.10.7: shortened by the laps behind the SC minus one. Those laps count here, so one more.
+                config_.laps += config_.rules.safetyCarStartLapsDeductedOffset;
             }
             break;
         case Type::IssueVerdict:
@@ -659,6 +678,9 @@ bool Sim::wantsTyreStop(int i) const {
     if (state_ == RaceState::RedFlag || chequered_ || car.finished || car.inPit) {
         return false;
     }
+    if (wetTyresMandated_ && !car.breaksWetMandate) {
+        return false; // B6.3.7: no change while the wets are compulsory
+    }
     if (car.weatherCall) {
         return true; // other tyres for the conditions (M9.3)
     }
@@ -845,6 +867,11 @@ void Sim::updateWeather() {
     };
     approach(wetness_, kDryingOffLinePerSecond);
     approach(lineWetness_, kDryingLinePerSecond);
+    standingWater_ = wetness_ >= 0.95 ? std::clamp((rain_ - kStandingWaterFromRain) / (1.0 - kStandingWaterFromRain), 0.0, 1.0)
+                                       : 0.0;
+    if (standingWater_ > 0.5 && state_ == RaceState::Green) {
+        stats_.heavyRainUnneutralised += kDt; // racing on in standing water (safety rating)
+    }
 }
 
 double Sim::grip(int i) const {
@@ -871,6 +898,19 @@ int Sim::bestTyreClass(int i) const {
     return speeds[best] > speeds[currentClass] * (1.0 + kCallMargin) ? best : currentClass;
 }
 
+void Sim::mandateWetTyres() {
+    wetTyresMandated_ = true;
+    for (int i = 0; i < static_cast<int>(cars_.size()); ++i) {
+        if (outOfRace(i)) {
+            continue;
+        }
+        fitTyres(i, Compound::Wet);
+        cars_[i].wantedClass = 2;
+        cars_[i].breaksWetMandate = rng_.uniform() < config_.wetMandateIgnoreChance;
+        planNextStop(i);
+    }
+}
+
 void Sim::updateTyreCalls() {
     if (config_.weather.points.empty()) {
         return; // dry race: unchanged
@@ -878,6 +918,11 @@ void Sim::updateTyreCalls() {
     for (int i = 0; i < static_cast<int>(cars_.size()); ++i) {
         Car& car = cars_[i];
         if (outOfRace(i) || car.inPit) {
+            continue;
+        }
+        if (wetTyresMandated_ && !car.breaksWetMandate) {
+            car.callTimer = 0.0; // wets are compulsory until the SC has gone in
+            car.weatherCall = false;
             continue;
         }
         car.wantedClass = bestTyreClass(i);
@@ -1189,7 +1234,7 @@ void Sim::step() {
         // current speed: a follower held up behind a car is at that car's speed.
         const double advantage = cap[i] - cap[a];
         if (advantage > 0.0 && time_ >= car.startDelay) {
-            const double chancePerSecond = segments[car.segment].overtakeChance *
+            const double chancePerSecond = (1.0 - kWetOvertakePenalty * lineWetness_) * segments[car.segment].overtakeChance *
                 entries_[i].aggression * std::min(1.0, advantage / kOvertakeAdvantageScale);
             // Where overtaking is not allowed, only a rule-breaker still goes for it.
             if (rng_.uniform() < chancePerSecond * kDt &&
@@ -1237,6 +1282,9 @@ void Sim::step() {
                 addIncident(Incident::Type::PitEntryClosed, i, i, 1.0);
             }
         }
+        if (tyres && wetTyresMandated_) {
+            addIncident(Incident::Type::WetTyreRule, i, i, 1.0); // changing off the compulsory wets
+        }
         if (serve || tyres) {
             car.tyreStop = tyres;
             car.inPit = true;
@@ -1259,6 +1307,7 @@ void Sim::step() {
         }
         if (safetyCar_.inThisLap && before < pitEntry && after >= pitEntry) {
             safetyCar_ = SafetyCar{};
+            wetTyresMandated_ = false; // B6.3.7: free choice again once the SC has gone in
             for (Car& car : cars_) {
                 car.unlapping = false;
                 car.rejoining = false;
@@ -1334,6 +1383,18 @@ void Sim::onSegmentEntered(int i) {
     Car& car = cars_[i];
     const TrackSegment& seg = track_.segments()[car.segment];
 
+    // Aquaplaning in standing water (M9.4): fast, on slicks or intermediates, under green.
+    if (standingWater_ > 0.0 && !outOfRace(i) && car.spinTimer <= 0.0 && state_ != RaceState::RedFlag) {
+        const double tyre = car.compound == Compound::Wet ? 0.3 : car.compound == Compound::Intermediate ? 0.6 : 1.0;
+        const double speed = std::pow(car.speed / kAquaplaneReferenceSpeed, 3.0);
+        if (rng_.uniform() < kAquaplaneChance * standingWater_ * standingWater_ * speed * tyre * config_.accidentChanceScale) {
+            ++stats_.aquaplanes;
+            const double roll = rng_.uniform();
+            startAccident(i, roll < 0.35 ? AccidentType::Crash : roll < 0.7 ? AccidentType::OffTrack : AccidentType::Spin, false);
+            return;
+        }
+    }
+
     // Track limits (B1.8.6): every offence deletes the lap and counts; the warning offence brings
     // the black-and-white flag, every one after it is an incident for the stewards.
     if (seg.trackLimits && state_ == RaceState::Green && !outOfRace(i) && car.spinTimer <= 0.0 &&
@@ -1374,7 +1435,7 @@ void Sim::onSegmentEntered(int i) {
         return;
     }
     const double chance = kErrorChance * (2.0 - entries_[i].skill) * (1.0 + 0.02 * car.tyreWear) *
-                          (1.0 + kWetErrorFactor * lineWetness_);
+                          (1.0 + kWetErrorFactor * lineWetness_ * (state_ == RaceState::Green ? 1.0 : kWetErrorNeutralised));
     if (rng_.uniform() < chance) {
         car.errorTimer = kErrorDuration;
         ++stats_.driverErrors;
@@ -1475,6 +1536,8 @@ void Sim::buildSnapshot() {
     snapshot_.rain = rain_;
     snapshot_.trackWetness = wetness_;
     snapshot_.lineWetness = lineWetness_;
+    snapshot_.standingWater = standingWater_;
+    snapshot_.wetTyresMandated = wetTyresMandated_;
     snapshot_.totalLaps = config_.laps;
     snapshot_.leaderLap = std::min(config_.laps, leader.lapsCompleted + 1);
     snapshot_.chequered = chequered_;

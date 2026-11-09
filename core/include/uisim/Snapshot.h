@@ -72,6 +72,8 @@ struct SimSnapshot {
     double rain = 0.0;         // 0 dry .. 1 downpour (M9.2)
     double trackWetness = 0.0; // 0..1, off the racing line
     double lineWetness = 0.0;  // 0..1, on the racing line (dries first)
+    double standingWater = 0.0; // 0..1, aquaplaning risk (M9.4)
+    bool wetTyresMandated = false; // wet-weather tyres compulsory behind the SC (B6.3.7)
     int leaderLap = 0; // lap the leader is on (1-based), capped at totalLaps
     int totalLaps = 0;
     bool chequered = false; // leader has finished

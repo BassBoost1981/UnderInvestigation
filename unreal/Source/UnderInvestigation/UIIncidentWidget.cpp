@@ -60,6 +60,7 @@ namespace
 		case EUISimIncidentType::TrackLimits: return TEXT("Track Limits");
 		case EUISimIncidentType::CompoundRule: return TEXT("Mischungspflicht");
 		case EUISimIncidentType::PitEntryClosed: return TEXT("Boxengasse gesperrt");
+		case EUISimIncidentType::WetTyreRule: return TEXT("Regenreifen-Pflicht");
 		}
 		return FString();
 	}

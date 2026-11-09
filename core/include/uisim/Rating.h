@@ -32,6 +32,7 @@ struct RaceRating {
     double overall = 100.0;   // 0..100: 35 % fairness, 15 % consistency, 30 % safety, 20 % race quality
     int accidentSites = 0;
     int followUpAccidents = 0;
+    double heavyRainSeconds = 0.0; // racing on in standing water, not neutralised (M9.4)
     int decided = 0;
     std::vector<IncidentRating> incidents;
 };
