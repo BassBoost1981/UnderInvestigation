@@ -69,6 +69,9 @@ struct CarState {
 
 struct SimSnapshot {
     double time = 0.0; // race time in seconds
+    double rain = 0.0;         // 0 dry .. 1 downpour (M9.2)
+    double trackWetness = 0.0; // 0..1, off the racing line
+    double lineWetness = 0.0;  // 0..1, on the racing line (dries first)
     int leaderLap = 0; // lap the leader is on (1-based), capped at totalLaps
     int totalLaps = 0;
     bool chequered = false; // leader has finished

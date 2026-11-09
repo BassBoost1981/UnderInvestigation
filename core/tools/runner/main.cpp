@@ -28,7 +28,7 @@ std::string formatTime(double seconds) {
 }
 
 void printUsage() {
-    std::printf("Usage: uisim_runner [--laps N] [--seed S] [--track file.json] [--entries file.json]\n");
+    std::printf("Usage: uisim_runner [--laps N] [--seed S] [--track file.json] [--entries file.json] [--weather file.json]\n");
 }
 
 } // namespace
@@ -38,6 +38,7 @@ int main(int argc, char** argv) {
     const std::filesystem::path dataDir(UISIM_DATA_DIR);
     std::filesystem::path trackPath = dataDir / "tracks" / "testring.json";
     std::filesystem::path entriesPath = dataDir / "entries" / "fictional-grid.json";
+    std::filesystem::path weatherPath; // empty = dry
 
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
@@ -60,6 +61,8 @@ int main(int argc, char** argv) {
                 trackPath = value;
             } else if (arg == "--entries") {
                 entriesPath = value;
+            } else if (arg == "--weather") {
+                weatherPath = value;
             } else {
                 std::fprintf(stderr, "Unknown option %s\n", arg.c_str());
                 printUsage();
@@ -73,6 +76,9 @@ int main(int argc, char** argv) {
 
     try {
         const auto start = std::chrono::steady_clock::now();
+        if (!weatherPath.empty()) {
+            config.weather = loadWeather(weatherPath);
+        }
         Sim sim(loadTrack(trackPath), loadEntries(entriesPath), config);
         const long maxSteps = static_cast<long>(config.laps) * 600 * 20;
         long steps = 0;

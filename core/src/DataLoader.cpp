@@ -145,4 +145,26 @@ RaceRules loadRules(const std::filesystem::path& path) {
     }
 }
 
+WeatherPlan loadWeather(const std::filesystem::path& path) {
+    const json root = readJson(path);
+    try {
+        WeatherPlan plan;
+        plan.name = root.at("name").get<std::string>();
+        plan.variation = root.value("variation", 0.0);
+        for (const json& p : root.at("points")) {
+            WeatherPoint point;
+            point.time = p.at("minute").get<double>() * 60.0;
+            point.rain = p.at("rain").get<double>();
+            if (point.rain < 0.0 || point.rain > 1.0 || (!plan.points.empty() && point.time < plan.points.back().time)) {
+                throw std::runtime_error("Bad weather data in " + displayName(path) +
+                                         ": rain must be 0..1 and the points sorted by minute");
+            }
+            plan.points.push_back(point);
+        }
+        return plan;
+    } catch (const json::exception& e) {
+        throw std::runtime_error("Bad weather data in " + displayName(path) + ": " + e.what());
+    }
+}
+
 } // namespace uisim

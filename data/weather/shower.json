@@ -1,0 +1,12 @@
+{
+  "name": "Schauer",
+  "comment": "Rain over the race (M9.2). minute = race time, rain = 0 dry .. 1 downpour, linear in between. variation 0..1 shifts the rain by up to 5 minutes and makes it up to 30 % lighter or heavier, from the race seed.",
+  "variation": 0.5,
+  "points": [
+    { "minute": 0,  "rain": 0.0 },
+    { "minute": 15, "rain": 0.0 },
+    { "minute": 20, "rain": 0.6 },
+    { "minute": 35, "rain": 0.6 },
+    { "minute": 40, "rain": 0.0 }
+  ]
+}

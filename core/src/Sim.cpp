@@ -46,6 +46,17 @@ constexpr double kContactDuration = 3.0;  // both cars lose speed this long afte
 // Driver errors.
 constexpr double kSlowCorner = 200.0 / 3.6;
 constexpr double kErrorChance = 0.002; // per slow corner entry
+// Weather (M9.2).
+constexpr double kWeatherShiftMax = 300.0;        // seconds the rain may come earlier or later (variation 1)
+constexpr double kWeatherScaleMax = 0.3;          // share the rain may be lighter or heavier (variation 1)
+constexpr double kWetTargetPerRain = 1.4;         // wetness the rain drives towards: min(1, rain * this)
+constexpr double kWettingPerSecond = 1.0 / 120.0; // soaked in about two minutes
+constexpr double kDryingLinePerSecond = 1.0 / 900.0;     // the racing line dries in about 15 minutes
+constexpr double kDryingOffLinePerSecond = 1.0 / 1800.0; // off the line in about 30 minutes
+constexpr double kSlickWetGripLoss = 0.25;        // grip lost on slicks on a soaked racing line
+constexpr double kWetErrorFactor = 3.0;           // driver errors on a soaked racing line: x (1 + this)
+constexpr double kSprayRisk = 1.5;                // follow-up risk in spray: x (1 + this * rain)
+constexpr double kSprayDistance = 60.0;           // metres behind another car: in its spray
 constexpr double kErrorDuration = 1.5;
 constexpr double kErrorSpeedFactor = 0.7;
 
@@ -170,6 +181,16 @@ Sim::Sim(Track track, std::vector<Entry> entries, RaceConfig config)
     Pcg32 strategyRng(config_.seed, 77u);
     for (Car& car : cars_) {
         car.forgetsCompoundRule = strategyRng.uniform() < config_.compoundRuleMissChance;
+    }
+    if (!config_.weather.points.empty()) {
+        // The weather on its own random stream too: a dry race stays exactly as it was.
+        Pcg32 weatherRng(config_.seed, 91u);
+        const double variation = std::clamp(config_.weather.variation, 0.0, 1.0);
+        weatherShift_ = weatherRng.uniform(-1.0, 1.0) * variation * kWeatherShiftMax;
+        weatherScale_ = 1.0 + weatherRng.uniform(-1.0, 1.0) * variation * kWeatherScaleMax;
+        rain_ = rainAt(config_.weather, 0.0, weatherShift_, weatherScale_);
+        wetness_ = std::min(1.0, rain_ * kWetTargetPerRain); // raining at the start: already wet
+        lineWetness_ = wetness_;
     }
     for (int i = 0; i < n; ++i) {
         planNextStop(i);
@@ -350,9 +371,19 @@ void Sim::checkHazardPasses(const std::vector<int>& racing, const std::vector<do
             }
             SiteMemory& site = siteMemory_[static_cast<std::size_t>(hazard.id)];
             const double learning = std::pow(kPassRiskLearning, site.passes++);
+            double spray = 1.0; // in the rain a car close behind another sees less (M9.2)
+            if (rain_ > 0.0) {
+                for (int j = 0; j < static_cast<int>(cars_.size()); ++j) {
+                    if (j != i && !outOfRace(j) && !cars_[j].inPit &&
+                        track_.wrap(cars_[j].distance - car.distance) < kSprayDistance) {
+                        spray = 1.0 + kSprayRisk * rain_;
+                        break;
+                    }
+                }
+            }
             const double risk = site.followUps >= kMaxFollowUpsPerSite ? 0.0
                 : (hazard.onTrack ? kPassRiskCrashSite : kPassRiskOffTrackSite) * flagFactor * speedFactor *
-                  learning * config_.followUpChanceScale;
+                  learning * config_.followUpChanceScale * spray;
             if (rng_.uniform() < risk) {
                 ++site.followUps;
                 ++stats_.followUpAccidents;
@@ -778,6 +809,24 @@ void Sim::releaseLappedCars() {
     safetyCar_.linesUntilIn = config_.rules.safetyCarInLapsAfterLappedCars; // B5.13.5 b
 }
 
+void Sim::updateWeather() {
+    if (config_.weather.points.empty()) {
+        return;
+    }
+    rain_ = rainAt(config_.weather, time_, weatherShift_, weatherScale_);
+    const double target = std::min(1.0, rain_ * kWetTargetPerRain);
+    auto approach = [&](double& wetness, double dryingPerSecond) {
+        wetness = wetness < target ? std::min(target, wetness + kWettingPerSecond * kDt)
+                                   : std::max(target, wetness - dryingPerSecond * kDt);
+    };
+    approach(wetness_, kDryingOffLinePerSecond);
+    approach(lineWetness_, kDryingLinePerSecond);
+}
+
+double Sim::grip(int /*i*/) const {
+    return 1.0 - kSlickWetGripLoss * lineWetness_; // slicks; wet tyres follow in 9.3
+}
+
 void Sim::cancelAttacks() {
     for (Car& car : cars_) {
         car.overtakeTarget = -1;
@@ -886,7 +935,7 @@ double Sim::performance(int i) const {
 double Sim::speedCap(int i, double gapAhead) const {
     const Car& car = cars_[i];
     const TrackSegment& seg = track_.segments()[car.segment];
-    double cap = seg.speed * paceFactor(i);
+    double cap = seg.speed * paceFactor(i) * grip(i);
     if (state_ == RaceState::Green) {
         if (car.overtakeActive && seg.speed >= kFastSegment) {
             cap *= 1.0 + kOvertakeBoost;
@@ -929,7 +978,7 @@ double Sim::desiredSpeed(int i, double cap) const {
     const auto& segments = track_.segments();
     const int count = static_cast<int>(segments.size());
     const TrackSegment& seg = segments[car.segment];
-    const double pace = paceFactor(i);
+    const double pace = paceFactor(i) * grip(i);
 
     // Brake early enough for the next corners: v^2 = v_next^2 + 2*b*d.
     const double brake = car.overtakeTarget >= 0 ? kBrake * kLateBrakeFactor : kBrake;
@@ -1088,6 +1137,7 @@ void Sim::step() {
 
     // Phase C: integrate.
     time_ += kDt;
+    updateWeather();
     std::vector<double> previous(n, 0.0);
     for (int i : order) {
         Car& car = cars_[i];
@@ -1254,7 +1304,8 @@ void Sim::onSegmentEntered(int i) {
     if (seg.speed >= kSlowCorner) {
         return;
     }
-    const double chance = kErrorChance * (2.0 - entries_[i].skill) * (1.0 + 0.02 * car.tyreWear);
+    const double chance = kErrorChance * (2.0 - entries_[i].skill) * (1.0 + 0.02 * car.tyreWear) *
+                          (1.0 + kWetErrorFactor * lineWetness_);
     if (rng_.uniform() < chance) {
         car.errorTimer = kErrorDuration;
         ++stats_.driverErrors;
@@ -1351,6 +1402,9 @@ void Sim::buildSnapshot() {
 
     const Car& leader = cars_[rank[0]];
     snapshot_.time = time_;
+    snapshot_.rain = rain_;
+    snapshot_.trackWetness = wetness_;
+    snapshot_.lineWetness = lineWetness_;
     snapshot_.totalLaps = config_.laps;
     snapshot_.leaderLap = std::min(config_.laps, leader.lapsCompleted + 1);
     snapshot_.chequered = chequered_;

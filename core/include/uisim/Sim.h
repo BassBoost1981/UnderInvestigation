@@ -5,6 +5,7 @@
 #include "uisim/Rules.h"
 #include "uisim/Snapshot.h"
 #include "uisim/Track.h"
+#include "uisim/Weather.h"
 
 #include <array>
 #include <cstddef>
@@ -29,6 +30,8 @@ struct RaceConfig {
     double compoundRuleMissChance = 0.01;
     // Scales follow-up accidents and punctures at accident sites (M6.4); 0 isolates scenarios.
     double followUpChanceScale = 1.0;
+    // Rain over the race (M9.2, data/weather); empty = dry, the race is then unchanged.
+    WeatherPlan weather{};
 };
 
 struct RaceStats {
@@ -257,6 +260,8 @@ private:
     void applyCommands();
     void deploySafetyCar(bool inThisLap);
     void releaseLappedCars();
+    void updateWeather();
+    double grip(int i) const; // 1 in the dry
     void cancelAttacks();
     void moveSafetyCar();
     bool overtakingAllowed(int car) const;
@@ -300,6 +305,12 @@ private:
     std::array<double, 3> boundaries_{}; // s1 start, s2 start, lap length
     double time_ = 0.0;
     bool chequered_ = false;
+    // Weather (M9.2): rain now, wetness off the line and on the racing line (0..1).
+    double rain_ = 0.0;
+    double wetness_ = 0.0;
+    double lineWetness_ = 0.0;
+    double weatherShift_ = 0.0; // seconds, random per race
+    double weatherScale_ = 1.0; // intensity, random per race
     bool pitEntryClosed_ = false; // B1.6.4 (M8.3)
     RaceState state_ = RaceState::Green;
     SafetyCar safetyCar_;
