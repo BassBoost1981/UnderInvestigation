@@ -16,13 +16,14 @@ using namespace uisim;
 
 namespace {
 
-Sim makeRace(std::uint64_t seed) {
+Sim makeRace(std::uint64_t seed, bool autoRelease = false) {
     const std::filesystem::path data(UISIM_DATA_DIR);
     RaceConfig config;
     config.laps = 50;
     config.seed = seed;
     config.rules = loadRules(data / "rules" / "fia-f1-2026.json");
     config.ruleBreakChance = 0.0;     // only the released cars may pass
+    config.autoReleaseLappedCars = autoRelease;
     config.accidentChanceScale = 0.0; // no stranded cars in the queue
     return Sim(loadTrack(data / "tracks" / "testring.json"), loadEntries(data / "entries" / "fictional-grid.json"),
                config);
@@ -162,4 +163,40 @@ TEST_CASE("Lapped cars may overtake: ignored outside a Safety Car period") {
     for (const CarState& car : sim.snapshot().cars) {
         CHECK_FALSE(car.unlapping);
     }
+}
+
+TEST_CASE("Lapped cars under the SC: released automatically if the player does nothing (M9.5)") {
+    int released = 0;
+    int inWithoutCommand = 0;
+    for (std::uint64_t seed = 1; seed <= 4; ++seed) {
+        Sim sim = makeRace(seed, true);
+        runUntilLeaderLap(sim, 40);
+        sim.command(simple(Command::Type::DeploySafetyCar));
+        bool anyUnlapping = false;
+        for (long steps = 0; sim.snapshot().leaderLap < 46 && !sim.finished() && steps < 2'000'000; ++steps) {
+            sim.step();
+            for (const CarState& car : sim.snapshot().cars) {
+                anyUnlapping = anyUnlapping || car.unlapping;
+            }
+            if (sim.snapshot().state == RaceState::Green) {
+                break; // the SC came in by itself
+            }
+        }
+        released += anyUnlapping ? 1 : 0;
+        inWithoutCommand += sim.snapshot().state == RaceState::Green ? 1 : 0;
+        CHECK(sim.stats().flagViolations == 0);
+    }
+    CHECK(released == 4);
+    CHECK(inWithoutCommand == 4); // B5.13.5 b after the release, no "in this lap" command
+}
+
+TEST_CASE("Lapped cars under the SC: no automatic release without lapped cars in the queue") {
+    Sim sim = makeRace(1, true);
+    runUntilLeaderLap(sim, 3); // nobody lapped yet
+    sim.command(simple(Command::Type::DeploySafetyCar));
+    for (long steps = 0; sim.snapshot().leaderLap < 7 && steps < 2'000'000; ++steps) {
+        sim.step();
+    }
+    CHECK(sim.snapshot().state == RaceState::SafetyCar); // stays out until race control calls it in
+    CHECK_FALSE(sim.snapshot().lappedCarsReleased);
 }

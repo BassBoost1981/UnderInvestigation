@@ -30,6 +30,8 @@ struct RaceConfig {
     double compoundRuleMissChance = 0.01;
     // Chance per car that the team changes off mandated wet tyres behind the SC anyway (M9.4).
     double wetMandateIgnoreChance = 0.02;
+    // Race control releases lapped cars under the SC by itself if the player does not (M9.5).
+    bool autoReleaseLappedCars = true;
     // Scales follow-up accidents and punctures at accident sites (M6.4); 0 isolates scenarios.
     double followUpChanceScale = 1.0;
     // Rain over the race (M9.2, data/weather); empty = dry, the race is then unchanged.
@@ -266,13 +268,14 @@ private:
         bool inThisLap = false;
         bool lappedCarsReleased = false; // "LAPPED CARS MAY NOW OVERTAKE" sent
         int linesUntilIn = -1;           // Control Line crossings until "in this lap", -1 = not counting
+        int linesSinceDeploy = 0;        // Control Line crossings of the SC in this period
         double distance = 0.0;
         double speed = 0.0;
     };
 
     void applyCommands();
     void deploySafetyCar(bool inThisLap);
-    void releaseLappedCars();
+    int releaseLappedCars(bool onlyIfNeeded = false); // returns the number of cars released
     void updateWeather();
     int bestTyreClass(int i) const;
     void updateTyreCalls();

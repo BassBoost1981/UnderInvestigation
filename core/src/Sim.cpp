@@ -817,7 +817,7 @@ void Sim::deploySafetyCar(bool inThisLap) {
     }
 }
 
-void Sim::releaseLappedCars() {
+int Sim::releaseLappedCars(bool onlyIfNeeded) {
     // B5.13.4 c: every lapped car in the queue passes the cars on the lead lap and the Safety Car,
     // then rejoins the back. Lapped (sim simplification): a lap or more behind the leader, or on the
     // road between the leader and the Safety Car. Only cars inside the queue need to pass: from the
@@ -830,7 +830,7 @@ void Sim::releaseLappedCars() {
         }
     }
     if (leader < 0) {
-        return;
+        return 0;
     }
     const double leaderToSafetyCar = track_.wrap(safetyCar_.distance - cars_[leader].distance);
     auto lapped = [&](int i) {
@@ -845,14 +845,20 @@ void Sim::releaseLappedCars() {
             queueLength = std::max(queueLength, track_.wrap(safetyCar_.distance - cars_[i].distance));
         }
     }
+    int released = 0;
     for (int i = 0; i < static_cast<int>(cars_.size()); ++i) {
         if (!outOfRace(i) && !cars_[i].inPit && cars_[i].spinTimer <= 0.0 && lapped(i) &&
             track_.wrap(safetyCar_.distance - cars_[i].distance) < queueLength) {
             cars_[i].unlapping = true;
+            ++released;
         }
+    }
+    if (released == 0 && onlyIfNeeded) {
+        return 0; // nobody to wave past: race control keeps the SC out
     }
     safetyCar_.lappedCarsReleased = true;
     safetyCar_.linesUntilIn = config_.rules.safetyCarInLapsAfterLappedCars; // B5.13.5 b
+    return released;
 }
 
 void Sim::updateWeather() {
@@ -1304,6 +1310,12 @@ void Sim::step() {
         const double pitEntry = lapLength - kPitEntryBeforeLine;
         if (after < before && safetyCar_.linesUntilIn > 0 && --safetyCar_.linesUntilIn == 0) {
             safetyCar_.inThisLap = true; // B5.13.5 b: in at the end of the following lap
+        }
+        // M9.5: on its second crossing of the line the queue has formed; release the lapped cars if
+        // the player has not (B5.13.4 c, timing a sim simplification).
+        if (after < before && ++safetyCar_.linesSinceDeploy >= 2 && config_.autoReleaseLappedCars &&
+            config_.rules.lappedCarsMayOvertake && !safetyCar_.lappedCarsReleased && !safetyCar_.inThisLap) {
+            releaseLappedCars(true);
         }
         if (safetyCar_.inThisLap && before < pitEntry && after >= pitEntry) {
             safetyCar_ = SafetyCar{};
