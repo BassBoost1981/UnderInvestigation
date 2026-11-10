@@ -1,6 +1,6 @@
 {
   "name": "FIA F1 Sporting Regulations 2026 (simplified for the sim)",
-  "comment": "Parameters of the rule mechanics, not regulation text. Checked against '2026 F1 Regulations - Section B [Sporting] - Iss 09' (2026-10-01), ISC Appendix H 2026 (published 2026-06-23), the 2026 F1 Penalty Guidelines v01 (FIA: no regulatory value) and the Race Director's Competition Notes Sao Paulo GP 2026 V2; Section B and Appendix H were the newest 2026 issues listed by the FIA on 2026-11-08. verified = the cited article exists in that issue and describes this mechanic; values from the Penalty Guidelines are marked verified false because they are guidance, not regulation; 'note' says where a value is a sim simplification.",
+  "comment": "Parameters of the rule mechanics, not regulation text. Checked against '2026 F1 Regulations - Section B [Sporting] - Iss 09' (2026-10-01), ISC Appendix H 2026 (published 2026-06-23), '2026 F1 Regulations - Section A [General Provisions] - Iss 03' (2026-06-25, for points and penalty points), the 2026 F1 Penalty Guidelines v01 (FIA: no regulatory value) and the Race Director's Competition Notes Sao Paulo GP 2026 V2; Section B and Appendix H were the newest 2026 issues listed by the FIA on 2026-11-08. verified = the cited article exists in that issue and describes this mechanic; values from the Penalty Guidelines are marked verified false because they are guidance, not regulation; 'note' says where a value is a sim simplification.",
   "rules": {
     "yellow_speed_factor": {
       "value": 0.95,
@@ -190,6 +190,120 @@
       "source": "F1 SR 2026 Section B, B1.5.11",
       "verified": true,
       "note": "A Rain Hazard may be declared when the official forecast gives more than 40 % probability of precipitation during the race (or at the Race Director's discretion). Used for the forecast display; the sim does not model what a Rain Hazard changes."
+    },
+    "race_points": {
+      "value": [25, 18, 15, 12, 10, 8, 6, 4, 2, 1],
+      "source": "2026 F1 Regulations Section A, A2.2.1 d (column 4)",
+      "verified": true,
+      "note": "Points for places 1 to 10 when the leader has completed 75 % or more of the scheduled distance; the same points count for the Drivers' and the Constructors' Championship (both cars of a team). There is no point for the fastest lap. Ties in the championship are decided by the number of first places, then second places and so on (A2.1, World Championship titles, c)."
+    },
+    "race_points_from_50_percent": {
+      "value": [19, 14, 12, 10, 8, 6, 4, 3, 2, 1],
+      "source": "2026 F1 Regulations Section A, A2.2.1 c (column 3)",
+      "verified": true,
+      "note": "Leader has completed 50 % but less than 75 % of the scheduled distance."
+    },
+    "race_points_from_25_percent": {
+      "value": [13, 10, 8, 6, 5, 4, 3, 2, 1],
+      "source": "2026 F1 Regulations Section A, A2.2.1 b (column 2)",
+      "verified": true,
+      "note": "Leader has completed 25 % but less than 50 % of the scheduled distance."
+    },
+    "race_points_from_two_laps": {
+      "value": [6, 4, 3, 2, 1],
+      "source": "2026 F1 Regulations Section A, A2.2.1 a (column 1)",
+      "verified": true,
+      "note": "Leader has completed two laps but less than 25 % of the scheduled distance."
+    },
+    "race_points_min_green_laps": {
+      "value": 2,
+      "source": "2026 F1 Regulations Section A, A2.2.1",
+      "verified": true,
+      "note": "No points unless the leader has completed at least two complete, consecutive laps without Safety Car or Virtual Safety Car."
+    },
+    "classified_min_distance_fraction": {
+      "value": 0.9,
+      "source": "F1 SR 2026 Section B, B2.5.5 b",
+      "verified": true,
+      "note": "Cars with less than 90 % of the winner's laps (rounded down) are not classified."
+    },
+    "race_distance_km": {
+      "value": 305.0,
+      "source": "F1 SR 2026 Section B, B2.5.2",
+      "verified": true,
+      "note": "The race has the least number of complete laps that exceeds this distance. Not modelled: the two-hour limit and the three-hour limit including suspensions (B2.5.3)."
+    },
+    "race_distance_short_km": {
+      "value": 260.0,
+      "source": "F1 SR 2026 Section B, B2.5.2 b",
+      "verified": true,
+      "note": "Exception for one named street circuit; the season calendar marks the race that uses it."
+    },
+    "start_lights": {
+      "value": 5,
+      "source": "F1 SR 2026 Section B, B5.7.1 a and b",
+      "verified": true,
+      "note": "Standing start: five red lights come on one after the other, the start signal is all lights going out. Before that the grid panels flash blue for five seconds."
+    },
+    "start_light_interval_seconds": {
+      "value": 1.0,
+      "source": "F1 SR 2026 Section B, B5.7.1 b i",
+      "verified": true,
+      "note": "One second between the red lights. The time from the fifth light to lights out is at the starter's discretion (B5.7.1 b ii); the sim draws it from the seed."
+    },
+    "false_start_penalty_seconds": {
+      "value": 5.0,
+      "source": "F1 SR 2026 Section B, B5.11; 2026 F1 Penalty Guidelines v01 (jump start / incorrect starting location)",
+      "verified": false,
+      "note": "B5.11: cars must be stationary in their grid position from the third red light until the start signal, with the front tyres inside the lines. The stewards choose between 5 s, 10 s, drive-through and stop-and-go; the guidelines name 5 s or 10 s and no penalty points. Sim: 5 s is the correct penalty for a small breach."
+    },
+    "false_start_serious_penalty_seconds": {
+      "value": 10.0,
+      "source": "F1 SR 2026 Section B, B5.11; 2026 F1 Penalty Guidelines v01 (jump start / incorrect starting location)",
+      "verified": false,
+      "note": "Sim: 10 s is the correct penalty when the driver gained positions through the breach."
+    },
+    "start_repeat_laps_deducted": {
+      "value": 1,
+      "source": "F1 SR 2026 Section B, B5.8 (aborted start) and B5.9 (extra formation lap)",
+      "verified": true,
+      "note": "Each aborted start and each extra formation lap shortens the race by one lap. A driver who caused it starts from the pit lane, otherwise stop-and-go."
+    },
+    "standing_restart_after_red": {
+      "value": true,
+      "source": "F1 SR 2026 Section B, B5.15.4 (standing start resumption)",
+      "verified": true,
+      "note": "After a suspension the Race Director chooses a standing start from the grid or a rolling start behind the Safety Car."
+    },
+    "penalty_points_suspension_at": {
+      "value": 12,
+      "source": "2026 F1 Regulations Section A, A3.3.1 b",
+      "verified": true,
+      "note": "A driver who reaches 12 penalty points on the Super Licence is suspended for the next Competition; afterwards 12 points are removed. No points with a reprimand or a fine."
+    },
+    "penalty_points_valid_months": {
+      "value": 12,
+      "source": "2026 F1 Regulations Section A, A3.3.1 b",
+      "verified": true,
+      "note": "Penalty points expire 12 months after they were imposed. Sim: a season is shorter than that, so points stay for the whole season."
+    },
+    "penalty_points_collision": {
+      "value": 2,
+      "source": "2026 F1 Penalty Guidelines v01 (causing a collision)",
+      "verified": false,
+      "note": "Guideline for a race: 0 up to 3 depending on severity. Sim value for a penalised collision. Forcing another driver off the track: 0 in the normal case."
+    },
+    "penalty_points_yellow_flag": {
+      "value": 3,
+      "source": "2026 F1 Penalty Guidelines v01 (failing to slow for yellow flags, B1.8.4)",
+      "verified": false,
+      "note": "Guideline maximum for single and double yellow flags in a race."
+    },
+    "penalty_points_overtaking_neutralised": {
+      "value": 2,
+      "source": "2026 F1 Penalty Guidelines v01 (overtaking behind the SC, B5.13.2 c; under VSC, B5.12.2 c)",
+      "verified": false,
+      "note": "Overtaking one car behind the Safety Car or under the VSC without giving the place back. Speeding in the pit lane, unsafe release, track limits, two-compound rule, closed pit entry and the wet tyre mandate carry no penalty points."
     }
   }
 }

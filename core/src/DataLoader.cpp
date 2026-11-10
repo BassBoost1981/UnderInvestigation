@@ -144,6 +144,27 @@ RaceRules loadRules(const std::filesystem::path& path) {
         rules.trackDeclaredWetInRace = flag("track_declared_wet_in_race");
         rules.rainLightsWithWetTyres = flag("rain_lights_with_wet_tyres");
         rules.rainHazardPrecipitationProbability = number("rain_hazard_precipitation_probability");
+        auto integer = [&](const char* key) { return static_cast<int>(number(key)); };
+        auto integers = [&](const char* key) { return r.at(key).at("value").get<std::vector<int>>(); };
+        rules.racePoints = integers("race_points");
+        rules.racePointsFrom50Percent = integers("race_points_from_50_percent");
+        rules.racePointsFrom25Percent = integers("race_points_from_25_percent");
+        rules.racePointsFromTwoLaps = integers("race_points_from_two_laps");
+        rules.racePointsMinGreenLaps = integer("race_points_min_green_laps");
+        rules.classifiedMinDistanceFraction = number("classified_min_distance_fraction");
+        rules.raceDistanceKm = number("race_distance_km");
+        rules.raceDistanceShortKm = number("race_distance_short_km");
+        rules.startLights = integer("start_lights");
+        rules.startLightIntervalSeconds = number("start_light_interval_seconds");
+        rules.falseStartPenaltySeconds = number("false_start_penalty_seconds");
+        rules.falseStartSeriousPenaltySeconds = number("false_start_serious_penalty_seconds");
+        rules.startRepeatLapsDeducted = integer("start_repeat_laps_deducted");
+        rules.standingRestartAfterRed = flag("standing_restart_after_red");
+        rules.penaltyPointsSuspensionAt = integer("penalty_points_suspension_at");
+        rules.penaltyPointsValidMonths = integer("penalty_points_valid_months");
+        rules.penaltyPointsCollision = integer("penalty_points_collision");
+        rules.penaltyPointsYellowFlag = integer("penalty_points_yellow_flag");
+        rules.penaltyPointsOvertakingNeutralised = integer("penalty_points_overtaking_neutralised");
         return rules;
     } catch (const json::exception& e) {
         throw std::runtime_error("Bad rules data in " + displayName(path) + ": " + e.what());

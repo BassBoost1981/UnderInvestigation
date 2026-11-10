@@ -2,6 +2,8 @@
 
 #include "uisim/Snapshot.h"
 
+#include <vector>
+
 namespace uisim {
 
 // Rule parameters used by the sim. Defaults match data/rules/fia-f1-2026.json;
@@ -42,6 +44,26 @@ struct RaceRules {
     bool trackDeclaredWetInRace = false;               // no race declaration in Section B
     bool rainLightsWithWetTyres = true;                // B1.5.5 a
     double rainHazardPrecipitationProbability = 0.4;   // B1.5.11
+    // M10 (from package 10.1)
+    std::vector<int> racePoints = {25, 18, 15, 12, 10, 8, 6, 4, 2, 1};             // A2.2.1 d: leader at 75 % or more
+    std::vector<int> racePointsFrom50Percent = {19, 14, 12, 10, 8, 6, 4, 3, 2, 1}; // A2.2.1 c
+    std::vector<int> racePointsFrom25Percent = {13, 10, 8, 6, 5, 4, 3, 2, 1};      // A2.2.1 b
+    std::vector<int> racePointsFromTwoLaps = {6, 4, 3, 2, 1};                      // A2.2.1 a
+    int racePointsMinGreenLaps = 2;             // A2.2.1: laps without SC or VSC before any points
+    double classifiedMinDistanceFraction = 0.9; // B2.5.5 b
+    double raceDistanceKm = 305.0;              // B2.5.2: least number of laps exceeding this
+    double raceDistanceShortKm = 260.0;         // B2.5.2 b: one named street circuit
+    int startLights = 5;                        // B5.7.1
+    double startLightIntervalSeconds = 1.0;     // B5.7.1 b i
+    double falseStartPenaltySeconds = 5.0;      // B5.11, Penalty Guidelines
+    double falseStartSeriousPenaltySeconds = 10.0; // sim: positions gained through the breach
+    int startRepeatLapsDeducted = 1;            // B5.8, B5.9: per aborted start or extra formation lap
+    bool standingRestartAfterRed = true;        // B5.15.4
+    int penaltyPointsSuspensionAt = 12;         // A3.3.1 b: suspended for the next Competition
+    int penaltyPointsValidMonths = 12;          // A3.3.1 b
+    int penaltyPointsCollision = 2;             // Penalty Guidelines (0 to 3)
+    int penaltyPointsYellowFlag = 3;            // Penalty Guidelines (maximum)
+    int penaltyPointsOvertakingNeutralised = 2; // Penalty Guidelines: behind the SC or under VSC
 };
 
 } // namespace uisim

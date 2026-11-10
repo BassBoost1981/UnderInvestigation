@@ -102,6 +102,27 @@ TEST_CASE("Rules file loads with the documented defaults") {
     CHECK_FALSE(rules.trackDeclaredWetInRace);            // practice/qualifying only
     CHECK(rules.rainLightsWithWetTyres);                  // B1.5.5 a
     CHECK(rules.rainHazardPrecipitationProbability == 0.4); // B1.5.11
+    // M10.1: the file and the defaults in Rules.h agree
+    CHECK(rules.racePoints == std::vector<int>{25, 18, 15, 12, 10, 8, 6, 4, 2, 1}); // A2.2.1 d
+    CHECK(rules.racePoints == defaults.racePoints);
+    CHECK(rules.racePointsFrom50Percent == defaults.racePointsFrom50Percent); // A2.2.1 c
+    CHECK(rules.racePointsFrom25Percent == defaults.racePointsFrom25Percent); // A2.2.1 b
+    CHECK(rules.racePointsFromTwoLaps == defaults.racePointsFromTwoLaps);     // A2.2.1 a
+    CHECK(rules.racePointsMinGreenLaps == 2);             // A2.2.1
+    CHECK(rules.classifiedMinDistanceFraction == 0.9);    // B2.5.5 b
+    CHECK(rules.raceDistanceKm == 305.0);                 // B2.5.2
+    CHECK(rules.raceDistanceShortKm == 260.0);            // B2.5.2 b
+    CHECK(rules.startLights == 5);                        // B5.7.1
+    CHECK(rules.startLightIntervalSeconds == 1.0);        // B5.7.1 b i
+    CHECK(rules.falseStartPenaltySeconds == 5.0);         // B5.11, guidelines
+    CHECK(rules.falseStartSeriousPenaltySeconds == 10.0);
+    CHECK(rules.startRepeatLapsDeducted == 1);            // B5.8, B5.9
+    CHECK(rules.standingRestartAfterRed);                 // B5.15.4
+    CHECK(rules.penaltyPointsSuspensionAt == 12);         // A3.3.1 b
+    CHECK(rules.penaltyPointsValidMonths == 12);
+    CHECK(rules.penaltyPointsCollision == 2);             // guidelines
+    CHECK(rules.penaltyPointsYellowFlag == 3);
+    CHECK(rules.penaltyPointsOvertakingNeutralised == 2);
 }
 
 TEST_CASE("Invalid marshal sector is rejected") {
