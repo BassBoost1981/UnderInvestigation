@@ -14,6 +14,17 @@ namespace {
 constexpr double kBrake = 38.0;       // m/s^2
 constexpr double kGridSpacing = 8.0;  // metres between grid slots
 constexpr double kGridOffset = 5.0;   // pole position behind the line
+// Standing start (M10.3).
+constexpr double kStartHoldMin = 0.5; // s from the fifth light to lights out: the starter decides (B5.7.1 b ii)
+constexpr double kStartHoldMax = 3.0;
+constexpr double kReactionMin = 0.2;  // s from the signal to pulling away
+constexpr double kReactionMax = 0.5;
+constexpr double kPoorStartMin = 0.4; // extra seconds lost with wheelspin or anti-stall
+constexpr double kPoorStartMax = 1.2;
+constexpr double kJumpStartMin = 0.05; // seconds before the signal
+constexpr double kJumpStartMax = 0.4;
+constexpr double kGridErrorMin = 0.5; // metres past the grid box
+constexpr double kGridErrorMax = 1.5;
 constexpr double kQualifyingSpread = 0.010; // grid noise: qualifying is not race pace
 // Drag-limited acceleration: falls to zero at the car's own top speed, which
 // scales with performance and slipstream. Without this, pace and slipstream
@@ -141,7 +152,7 @@ constexpr double kFormSpread = 0.002;
 } // namespace
 
 Sim::Sim(Track track, std::vector<Entry> entries, RaceConfig config)
-    : track_(std::move(track)), entries_(std::move(entries)), config_(config), rng_(config.seed) {
+    : track_(std::move(track)), entries_(std::move(entries)), config_(config), rng_(config.seed), startRng_(config.seed, 101u) {
     if (entries_.empty()) {
         throw std::invalid_argument("Sim needs at least one entry");
     }
@@ -180,7 +191,7 @@ Sim::Sim(Track track, std::vector<Entry> entries, RaceConfig config)
         car.gridPosition = slot + 1;
         car.distance = -(kGridOffset + kGridSpacing * slot);
         car.segment = track_.segmentIndexAt(track_.wrap(car.distance));
-        car.startDelay = rng_.uniform(0.2, 0.5);
+        car.startDelay = rng_.uniform(kReactionMin, kReactionMax); // reaction; made absolute by beginStartLights
         car.form = rollForm();
         // Start tyres (sim strategy): front half on medium, then hard, the last four gamble on soft.
         car.compound = slot < n / 2 ? Compound::Medium : slot < n - 4 ? Compound::Hard : Compound::Soft;
@@ -213,6 +224,7 @@ Sim::Sim(Track track, std::vector<Entry> entries, RaceConfig config)
         planNextStop(i);
     }
     sectorFlags_.assign(track_.marshalSectorCount(), Flag::Green);
+    beginStartLights(false); // B5.7.1: the race starts with the lights going out
     buildSnapshot();
     recordReplayFrame();
 }
@@ -233,7 +245,7 @@ void Sim::applyCommands() {
             sectorFlags_[c.sector] = c.flag;
             break;
         case Type::DeployVirtualSafetyCar:
-            if (state_ == RaceState::Green) {
+            if (state_ == RaceState::Green && !gridStart_) {
                 state_ = RaceState::VirtualSafetyCar;
                 cancelAttacks();
             }
@@ -244,19 +256,23 @@ void Sim::applyCommands() {
             }
             break;
         case Type::DeploySafetyCar:
-            if (state_ == RaceState::Green || state_ == RaceState::VirtualSafetyCar) {
+            if ((state_ == RaceState::Green || state_ == RaceState::VirtualSafetyCar) && !gridStart_) {
                 deploySafetyCar(false);
             }
             break;
         case Type::RecallSafetyCar:
-            if (state_ == RaceState::SafetyCar) {
+            if (state_ == RaceState::SafetyCar && safetyCar_.onTrack) {
                 safetyCar_.inThisLap = true;
+                if (c.standing && formation_) {
+                    standingPending_ = true; // B5.10.8: STANDING START instead of a rolling start
+                }
             }
             break;
         case Type::RedFlag:
             if (state_ != RaceState::RedFlag) {
                 state_ = RaceState::RedFlag;
                 safetyCar_ = SafetyCar{};
+                cancelStandingStart();
                 for (Car& car : cars_) {
                     car.unlapping = false;
                     car.rejoining = false;
@@ -282,6 +298,7 @@ void Sim::applyCommands() {
                     mandateWetTyres(); // B5.15.2 a
                 }
                 deploySafetyCar(true); // one lap behind the Safety Car, then racing
+                standingPending_ = c.standing && config_.rules.standingRestartAfterRed; // B5.15.4
             }
             break;
         case Type::SafetyCarStart:
@@ -289,7 +306,13 @@ void Sim::applyCommands() {
                 if (c.wetTyres) {
                     mandateWetTyres(); // B5.10.1 a
                 }
-                deploySafetyCar(false); // the race starts when the SC goes in (rolling start, B5.10.9)
+                // No lights: the cars leave the grid behind the SC.
+                for (Car& car : cars_) {
+                    car.startDelay = std::max(0.0, car.startDelay - startSignalTime_);
+                }
+                cancelStandingStart();
+                formation_ = true;
+                deploySafetyCar(false); // the race starts when the SC goes in (rolling start, B5.10.9, or standing, B5.10.8)
                 // B5.10.7: shortened by the laps behind the SC minus one. Those laps count here, so one more.
                 config_.laps += config_.rules.safetyCarStartLapsDeductedOffset;
             }
@@ -952,6 +975,115 @@ void Sim::updateTyreCalls() {
     }
 }
 
+void Sim::formGrid() {
+    // The state stays SafetyCar until the start signal: no overtaking, reduced pace.
+    gridForming_ = true;
+    std::vector<int> queue;
+    for (int i = 0; i < static_cast<int>(cars_.size()); ++i) {
+        if (!outOfRace(i) && !cars_[i].inPit && cars_[i].spinTimer <= 0.0) {
+            queue.push_back(i);
+        }
+    }
+    // Grid order = order on the road: least distance to go to the line first.
+    std::sort(queue.begin(), queue.end(), [&](int a, int b) {
+        const double da = track_.wrap(-cars_[a].distance);
+        const double db = track_.wrap(-cars_[b].distance);
+        return da != db ? da < db : a < b;
+    });
+    for (int k = 0; k < static_cast<int>(queue.size()); ++k) {
+        Car& car = cars_[queue[k]];
+        const double slot = -(kGridOffset + kGridSpacing * k); // relative to the line
+        car.gridTarget = car.distance + track_.wrap(slot - car.distance);
+    }
+}
+
+void Sim::beginStartLights(bool newReactions) {
+    gridForming_ = false;
+    gridStart_ = true;
+    lightsBegin_ = time_;
+    startSignalTime_ = time_ + config_.rules.startLights * config_.rules.startLightIntervalSeconds +
+        startRng_.uniform(kStartHoldMin, kStartHoldMax);
+    for (int i = 0; i < static_cast<int>(cars_.size()); ++i) {
+        Car& car = cars_[i];
+        if (outOfRace(i) || car.inPit || (newReactions && car.gridTarget < 0.0)) {
+            continue; // not on the grid
+        }
+        double reaction = newReactions ? startRng_.uniform(kReactionMin, kReactionMax) : car.startDelay;
+        car.jumpEarly = 0.0;
+        car.gridError = 0.0;
+        if (startRng_.uniform() < config_.poorStartChance) {
+            reaction += startRng_.uniform(kPoorStartMin, kPoorStartMax);
+        }
+        if (startRng_.uniform() < config_.jumpStartChance) {
+            car.jumpEarly = startRng_.uniform(kJumpStartMin, kJumpStartMax);
+            reaction = -car.jumpEarly;
+        }
+        if (startRng_.uniform() < config_.gridPositionErrorChance) {
+            car.gridError = startRng_.uniform(kGridErrorMin, kGridErrorMax);
+            car.distance += car.gridError;
+            if (car.gridTarget >= 0.0) {
+                car.gridTarget += car.gridError;
+            }
+        }
+        car.startDelay = startSignalTime_ + reaction;
+    }
+}
+
+void Sim::cancelStandingStart() {
+    gridStart_ = false;
+    gridForming_ = false;
+    standingPending_ = false;
+    for (Car& car : cars_) {
+        car.gridTarget = -1.0;
+        car.jumpEarly = 0.0;
+        car.gridError = 0.0;
+    }
+}
+
+void Sim::updateStandingStart() {
+    if (gridForming_) {
+        for (const Car& car : cars_) {
+            if (car.gridTarget >= 0.0 && (car.gridTarget - car.distance > 0.1 || car.speed > 0.0)) {
+                return; // still taking up its slot
+            }
+        }
+        beginStartLights(true); // B5.7.1: once all cars have come to a halt
+        return;
+    }
+    if (!gridStart_) {
+        return;
+    }
+    for (Car& car : cars_) {
+        if (car.gridTarget >= 0.0 && time_ >= car.startDelay) {
+            car.gridTarget = -1.0; // away (a jump start leaves before the signal)
+        }
+    }
+    if (time_ < startSignalTime_) {
+        return;
+    }
+    gridStart_ = false; // lights out
+    for (int i = 0; i < static_cast<int>(cars_.size()); ++i) {
+        Car& car = cars_[i];
+        car.gridTarget = -1.0;
+        if (car.jumpEarly > 0.0) {
+            addIncident(Incident::Type::FalseStart, i, i, 1.0);
+            incidents_.back().measure = car.jumpEarly;
+        }
+        if (car.gridError > 0.0) {
+            addIncident(Incident::Type::GridPosition, i, i, 1.0);
+            incidents_.back().measure = car.gridError;
+        }
+        car.jumpEarly = 0.0;
+        car.gridError = 0.0;
+    }
+    if (state_ == RaceState::SafetyCar) { // after formation laps or a suspension
+        state_ = RaceState::Green;
+        formation_ = false;
+        overtakeAfterSafetyCar_ = false; // B7.2.2 b applies as at any start
+        overtakeEnabled_ = false;
+    }
+}
+
 void Sim::cancelAttacks() {
     for (Car& car : cars_) {
         car.overtakeTarget = -1;
@@ -1126,6 +1258,15 @@ double Sim::desiredSpeed(int i, double cap) const {
         target = std::min(target, std::sqrt(2.0 * brake * remaining));
     }
 
+    // Standing (re)start: take up the grid slot and wait there.
+    if (car.gridTarget >= 0.0) {
+        const double remaining = car.gridTarget - car.distance;
+        if (remaining <= 0.1) {
+            return 0.0;
+        }
+        target = std::min(target, std::sqrt(2.0 * brake * remaining));
+    }
+
     // cap / segment speed = combined factor of performance, slipstream, dirty air, errors.
     const double topSpeed = kCarTopSpeed * cap / seg.speed;
     const double v = car.speed;
@@ -1142,6 +1283,7 @@ void Sim::step() {
         return;
     }
     applyCommands();
+    updateStandingStart();
     if (state_ != RaceState::Green) {
         neutralisedTime_ += kDt;
     }
@@ -1224,6 +1366,9 @@ void Sim::step() {
         }
         if (car.rejoining && gap[i] < kFollowGap) {
             car.rejoining = false; // at the back of the queue
+        }
+        if (car.gridTarget >= 0.0) {
+            continue; // braking for its own grid slot, closer together than a queue
         }
         if (scGap < gap[i]) { // the Safety Car is the next thing on the road
             if (scGap < kFollowGap) {
@@ -1330,9 +1475,15 @@ void Sim::step() {
                 car.unlapping = false;
                 car.rejoining = false;
             }
-            state_ = RaceState::Green;
-            for (Car& car : cars_) {
-                car.holdUntilLine = !car.finished; // racing resumes at the line
+            if (standingPending_) {
+                standingPending_ = false;
+                formGrid(); // B5.10.8 / B5.15.4: back to the grid for a standing start
+            } else {
+                state_ = RaceState::Green;
+                formation_ = false;
+                for (Car& car : cars_) {
+                    car.holdUntilLine = !car.finished; // racing resumes at the line
+                }
             }
         }
     }
@@ -1567,6 +1718,10 @@ void Sim::buildSnapshot() {
     snapshot_.safetyCarOnTrack = safetyCar_.onTrack;
     snapshot_.safetyCarInThisLap = safetyCar_.inThisLap;
     snapshot_.pitEntryClosed = pitEntryClosed_;
+    snapshot_.gridStart = gridStart_ || gridForming_;
+    snapshot_.startLights = gridStart_ ? std::clamp(static_cast<int>((time_ - lightsBegin_) / config_.rules.startLightIntervalSeconds), 0,
+                                                    config_.rules.startLights)
+                                       : 0;
     snapshot_.lappedCarsReleased = safetyCar_.lappedCarsReleased;
     snapshot_.safetyCarDistance = safetyCar_.distance;
     snapshot_.cars.resize(n);

@@ -83,7 +83,9 @@ enum class EUISimIncidentType : uint8
 	TrackLimits, // Car == OtherCar, offence after the black-and-white flag
 	CompoundRule, // Car == OtherCar, finished without two dry compounds
 	PitEntryClosed, // Car == OtherCar, entered the closed pit lane
-	WetTyreRule // Car == OtherCar, left the mandated wet tyres behind the SC
+	WetTyreRule, // Car == OtherCar, left the mandated wet tyres behind the SC
+	FalseStart,  // Car == OtherCar, moved before the start signal (B5.11), Measure = seconds early
+	GridPosition // Car == OtherCar, outside the grid box at the start signal (B5.11), Measure = metres
 };
 
 struct FUISimIncident

@@ -42,7 +42,8 @@ TEST_CASE("Collisions are recorded with a ground truth") {
             CHECK(incident.time >= previousTime);
             const bool single = incident.type == Incident::Type::Accident || incident.type == Incident::Type::PitLaneSpeeding ||
                                 incident.type == Incident::Type::TrackLimits || incident.type == Incident::Type::CompoundRule ||
-                                incident.type == Incident::Type::PitEntryClosed || incident.type == Incident::Type::WetTyreRule;
+                                incident.type == Incident::Type::PitEntryClosed || incident.type == Incident::Type::WetTyreRule ||
+                                incident.type == Incident::Type::FalseStart || incident.type == Incident::Type::GridPosition;
             CHECK(single == (incident.car == incident.otherCar));
             CHECK(incident.blame >= 0.0);
             CHECK(incident.blame <= 1.0);
@@ -56,7 +57,8 @@ TEST_CASE("Collisions are recorded with a ground truth") {
         const auto pitLane = std::count_if(sim.incidents().begin(), sim.incidents().end(), [](const Incident& v) {
             return v.type == Incident::Type::PitLaneSpeeding || v.type == Incident::Type::UnsafeRelease ||
                    v.type == Incident::Type::TrackLimits || v.type == Incident::Type::CompoundRule ||
-                   v.type == Incident::Type::PitEntryClosed || v.type == Incident::Type::WetTyreRule;
+                   v.type == Incident::Type::PitEntryClosed || v.type == Incident::Type::WetTyreRule ||
+                   v.type == Incident::Type::FalseStart || v.type == Incident::Type::GridPosition;
         });
         CHECK(sim.stats().collisions + sim.stats().flagViolations + sim.stats().blueFlagsIgnored + soloAccidents + pitLane ==
               static_cast<long long>(sim.incidents().size()));

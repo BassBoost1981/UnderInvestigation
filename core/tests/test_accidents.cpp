@@ -189,10 +189,10 @@ TEST_CASE("Accident rate per race is in the target range") {
 }
 
 TEST_CASE("Unprotected accident sites cause follow-up accidents, flags prevent them") {
-    // Same scenario over many seeds: a crash on the racing line, then 5 minutes of racing.
+    // Same scenario over 30 seeds: a crash on the racing line, then 5 minutes of racing.
     auto followUps = [](bool yellow, bool doubleYellow) {
         int total = 0;
-        for (std::uint64_t seed = 1; seed <= 15; ++seed) {
+        for (std::uint64_t seed = 1; seed <= 30; ++seed) {
             Sim sim = makeRace(seed, 20, 0.0, 1.0); // no random accidents; follow-ups active
             runSeconds(sim, 400.0);
             inject(sim, victim(sim), AccidentType::Crash);
@@ -213,7 +213,7 @@ TEST_CASE("Unprotected accident sites cause follow-up accidents, flags prevent t
     const int none = followUps(false, false);
     const int yellow = followUps(true, false);
     const int doubleYellow = followUps(false, true);
-    INFO("follow-up accidents in 15 scenarios: no flag ", none, ", yellow ", yellow, ", double yellow ", doubleYellow);
+    INFO("follow-up accidents in 30 scenarios: no flag ", none, ", yellow ", yellow, ", double yellow ", doubleYellow);
     CHECK(none >= 5); // damped since M7.2
     CHECK(yellow < none);
     CHECK(doubleYellow * 4 < none);

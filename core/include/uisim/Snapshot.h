@@ -82,6 +82,8 @@ struct SimSnapshot {
     std::vector<Flag> sectorFlags; // one per marshal sector
     bool safetyCarOnTrack = false;
     bool pitEntryClosed = false; // B1.6.4 (M8.3)
+    bool gridStart = false; // standing start: cars forming on the grid or waiting for the signal (M10.3)
+    int startLights = 0;    // red lights lit on the gantry, all out = start signal (B5.7.1)
     bool safetyCarInThisLap = false;
     double safetyCarDistance = 0.0; // metres, same scale as CarState::distance
     bool lappedCarsReleased = false; // "LAPPED CARS MAY NOW OVERTAKE" sent in this SC period

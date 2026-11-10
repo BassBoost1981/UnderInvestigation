@@ -32,6 +32,11 @@ struct RaceConfig {
     double wetMandateIgnoreChance = 0.02;
     // Race control releases lapped cars under the SC by itself if the player does not (M9.5).
     bool autoReleaseLappedCars = true;
+    // Standing starts (M10.3), each a chance per car and start: moving before the signal (B5.11),
+    // stopping outside the grid box (B5.11), a poor getaway.
+    double jumpStartChance = 0.01;
+    double gridPositionErrorChance = 0.005;
+    double poorStartChance = 0.06;
     // Scales follow-up accidents and punctures at accident sites (M6.4); 0 isolates scenarios.
     double followUpChanceScale = 1.0;
     // Rain over the race (M9.2, data/weather); empty = dry, the race is then unchanged.
@@ -79,6 +84,7 @@ struct Command {
     Penalty penalty = Penalty::None; // IssueVerdict only
     AccidentType accident = AccidentType::Spin; // InjectAccident only
     bool wetTyres = false;   // SafetyCarStart, Restart: wet-weather tyres compulsory behind the SC (B6.3.7)
+    bool standing = false;   // Restart, RecallSafetyCar after SafetyCarStart: standing start from the grid (B5.15.4, B5.10.8)
 };
 
 struct Accident {
@@ -120,7 +126,9 @@ struct Incident {
         TrackLimits,              // otherCar == car; offence after the black-and-white flag, measure = offence number (M7.6)
         CompoundRule,             // otherCar == car; finished without two dry compounds (B6.3.6), measure = compounds used (M8.3)
         PitEntryClosed,           // otherCar == car; entered the pit lane while the entry was closed (B1.6.4 b, M8.3)
-        WetTyreRule               // otherCar == car; left the mandated wet tyres behind the SC (B6.3.7, M9.4)
+        WetTyreRule,              // otherCar == car; left the mandated wet tyres behind the SC (B6.3.7, M9.4)
+        FalseStart,               // otherCar == car; moved before the start signal (B5.11), measure = seconds early (M10.3)
+        GridPosition              // otherCar == car; outside the grid box at the start signal (B5.11), measure = metres (M10.3)
     };
     int id = 0;          // 1-based, in order of occurrence
     Type type = Type::Collision;
@@ -205,7 +213,10 @@ private:
         double distance = 0.0;
         double speed = 0.0;
         double lateral = 0.0;
-        double startDelay = 0.0; // reaction time at the start
+        double startDelay = 0.0; // race time at which the car pulls away at a standing start
+        double gridTarget = -1.0; // standing (re)start: drive to this distance and wait, -1 = none (M10.3)
+        double jumpEarly = 0.0;  // seconds moved before the start signal (B5.11)
+        double gridError = 0.0;  // metres outside the grid box (B5.11)
         int gridPosition = 0;
         int segment = 0;
         double form = 1.0;      // re-rolled every lap
@@ -286,6 +297,10 @@ private:
     void mandateWetTyres();
     double grip(int i) const; // 1 in the dry
     void cancelAttacks();
+    void formGrid();
+    void beginStartLights(bool newReactions);
+    void updateStandingStart();
+    void cancelStandingStart();
     void moveSafetyCar();
     bool overtakingAllowed(int car) const;
     void recordViolation(int car, int passedCar);
@@ -324,6 +339,7 @@ private:
     std::vector<Entry> entries_;
     RaceConfig config_;
     Pcg32 rng_;
+    Pcg32 startRng_; // start lights and getaways, own stream (M10.3)
     std::vector<Car> cars_;
     std::array<double, 3> boundaries_{}; // s1 start, s2 start, lap length
     double time_ = 0.0;
@@ -337,6 +353,14 @@ private:
     double standingWater_ = 0.0; // 0..1: aquaplaning risk in heavy rain (M9.4)
     bool wetTyresMandated_ = false; // wets compulsory until the SC has gone in (B6.3.7)
     bool pitEntryClosed_ = false; // B1.6.4 (M8.3)
+    // Standing start (M10.3): cars wait on the grid for the lights; after formation laps behind
+    // the SC or a suspension they first take up their grid slots.
+    bool gridStart_ = false;       // lights sequence running, cars held until the signal
+    bool gridForming_ = false;     // cars driving to their grid slots
+    bool standingPending_ = false; // standing start once the SC has gone in
+    bool formation_ = false;       // formation laps behind the SC before the start (B5.10)
+    double lightsBegin_ = 0.0;
+    double startSignalTime_ = 0.0;
     RaceState state_ = RaceState::Green;
     SafetyCar safetyCar_;
     std::vector<Flag> sectorFlags_;

@@ -43,6 +43,9 @@ int role(const Incident& incident, int car, Penalty penalty) {
 
 } // namespace
 
+// A jump start earlier than this is a clear advantage: 10 s instead of 5 s (sim, B5.11).
+constexpr double kFalseStartSerious = 0.2;
+
 ExpectedVerdict expectedVerdict(const Incident& incident) {
     using Type = Incident::Type;
     switch (incident.type) {
@@ -85,6 +88,10 @@ ExpectedVerdict expectedVerdict(const Incident& incident) {
         return {incident.car, RaceRules{}.pitEntryClosedPenalty};
     case Type::WetTyreRule: // B6.3.7 (data/rules: wet_start_tyre_change_penalty)
         return {incident.car, RaceRules{}.wetStartTyreChangePenalty};
+    case Type::FalseStart: // B5.11 (data/rules: false_start_penalty_seconds, false_start_serious_penalty_seconds)
+        return {incident.car, incident.measure > kFalseStartSerious ? Penalty::TenSeconds : Penalty::FiveSeconds};
+    case Type::GridPosition: // B5.11: outside the grid box
+        return {incident.car, Penalty::FiveSeconds};
     case Type::UnsafeRelease: // 5 s (unsafe_release_penalty_seconds), 10 s if it nearly ended in contact
         return {incident.car, incident.measure < 10.0 ? Penalty::TenSeconds : Penalty::FiveSeconds};
     }

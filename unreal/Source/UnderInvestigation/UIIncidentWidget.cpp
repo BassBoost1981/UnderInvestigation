@@ -61,6 +61,8 @@ namespace
 		case EUISimIncidentType::CompoundRule: return TEXT("Mischungspflicht");
 		case EUISimIncidentType::PitEntryClosed: return TEXT("Boxengasse gesperrt");
 		case EUISimIncidentType::WetTyreRule: return TEXT("Regenreifen-Pflicht");
+		case EUISimIncidentType::FalseStart: return TEXT("Fruehstart");
+		case EUISimIncidentType::GridPosition: return TEXT("Startposition");
 		}
 		return FString();
 	}

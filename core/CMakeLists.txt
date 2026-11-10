@@ -60,7 +60,8 @@ if(UISIM_BUILD_TESTS)
         tests/test_pit_rules.cpp
         tests/test_weather.cpp
         tests/test_wet_tyres.cpp
-        tests/test_rain_control.cpp)
+        tests/test_rain_control.cpp
+        tests/test_standing_start.cpp)
     target_link_libraries(uisim_tests PRIVATE uisim uisim_datadir doctest::doctest)
 
     enable_testing()

@@ -261,7 +261,7 @@
       "value": 10.0,
       "source": "F1 SR 2026 Section B, B5.11; 2026 F1 Penalty Guidelines v01 (jump start / incorrect starting location)",
       "verified": false,
-      "note": "Sim: 10 s is the correct penalty when the driver gained positions through the breach."
+      "note": "Sim: 10 s is the correct penalty when the car moved more than 0.2 s before the signal (a clear advantage). A car outside its grid box: 5 s."
     },
     "start_repeat_laps_deducted": {
       "value": 1,

@@ -56,7 +56,7 @@ struct RaceRules {
     int startLights = 5;                        // B5.7.1
     double startLightIntervalSeconds = 1.0;     // B5.7.1 b i
     double falseStartPenaltySeconds = 5.0;      // B5.11, Penalty Guidelines
-    double falseStartSeriousPenaltySeconds = 10.0; // sim: positions gained through the breach
+    double falseStartSeriousPenaltySeconds = 10.0; // sim: moved more than 0.2 s before the signal
     int startRepeatLapsDeducted = 1;            // B5.8, B5.9: per aborted start or extra formation lap
     bool standingRestartAfterRed = true;        // B5.15.4
     int penaltyPointsSuspensionAt = 12;         // A3.3.1 b: suspended for the next Competition
