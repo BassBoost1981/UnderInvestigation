@@ -107,6 +107,7 @@ TEST_CASE("Real circuits (private, only if present): data and a full race on eac
         Sim sim = makeRace(path, 1);
         runToEnd(sim);
         CHECK(sim.stats().overtakes > 0);
+        CHECK(sim.stats().overtakes <= 70); // M10.2: no pass-fest on the long full-throttle circuits
         int finishers = 0;
         for (const CarState& car : sim.snapshot().cars) {
             finishers += car.finished ? 1 : 0;

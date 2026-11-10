@@ -213,6 +213,7 @@ private:
         Compound compound = Compound::Medium;
         double errorTimer = 0.0;
         int overtakeTarget = -1;
+        double overtakeEnergy = 0.0; // seconds of Overtake boost left in this lap
         double overtakeTimer = 0.0;
         double yieldTimer = 0.0; // lost a contested corner, backing off
         bool holdUntilLine = false; // after the Safety Car: no overtaking before the line

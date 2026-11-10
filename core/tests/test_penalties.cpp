@@ -13,6 +13,9 @@ using namespace uisim;
 
 namespace {
 
+// A 20-lap race with incidents early enough for these tests (since M10.2 seed 1 has none).
+constexpr std::uint64_t kSeed = 3;
+
 Sim makeRace(std::uint64_t seed, int laps = 20) {
     const std::filesystem::path data(UISIM_DATA_DIR);
     RaceConfig config;
@@ -57,9 +60,9 @@ const CarState& stateOf(const Sim& sim, int entry) {
 
 // Race time lost by `entry` through a penalty given at the first incident.
 double timeLost(Penalty penalty, int entry, bool* sawPitLane = nullptr) {
-    Sim clean = makeRace(1);
+    Sim clean = makeRace(kSeed);
     runToEnd(clean);
-    Sim penalised = makeRace(1);
+    Sim penalised = makeRace(kSeed);
     bool pit = false;
     std::size_t seen = 0;
     for (long steps = 0; !penalised.finished() && steps < 2'000'000; ++steps) {
@@ -86,13 +89,13 @@ double timeLost(Penalty penalty, int entry, bool* sawPitLane = nullptr) {
 } // namespace
 
 TEST_CASE("Time penalty changes the final classification") {
-    Sim clean = makeRace(1);
+    Sim clean = makeRace(kSeed);
     runToEnd(clean);
     const int winner = clean.snapshot().cars[0].entryIndex;
     const double margin = clean.snapshot().cars[1].gapToLeader;
     REQUIRE(margin < 10.0);
 
-    Sim sim = makeRace(1);
+    Sim sim = makeRace(kSeed);
     runToEnd(sim, [&](Sim& s, const Incident& incident) {
         if (incident.id == 1) {
             s.command(verdict(1, winner, Penalty::TenSeconds));
@@ -109,7 +112,7 @@ TEST_CASE("Time penalty changes the final classification") {
 }
 
 TEST_CASE("A time penalty after the last stop is added to the race time") {
-    Sim sim = makeRace(1);
+    Sim sim = makeRace(kSeed);
     for (long steps = 0; !sim.finished() && sim.snapshot().leaderLap < sim.snapshot().totalLaps - 2; ++steps) {
         sim.step();
     }
@@ -121,7 +124,7 @@ TEST_CASE("A time penalty after the last stop is added to the race time") {
 }
 
 TEST_CASE("Drive-through is served in the pit lane and costs about 20 s") {
-    Sim probe = makeRace(1);
+    Sim probe = makeRace(kSeed);
     runToEnd(probe);
     const int entry = probe.snapshot().cars[5].entryIndex;
     bool pit = false;
@@ -138,7 +141,7 @@ TEST_CASE("Drive-through is served in the pit lane and costs about 20 s") {
 }
 
 TEST_CASE("Penalties after the flag become time; one verdict per incident") {
-    Sim sim = makeRace(1);
+    Sim sim = makeRace(kSeed);
     runToEnd(sim);
     REQUIRE(sim.incidents().size() >= 2);
     const int entry = sim.incidents()[0].car;
@@ -179,7 +182,7 @@ TEST_CASE("Rating: penalising the wrong driver is punished") {
 }
 
 TEST_CASE("Rating: long neutralisation lowers race quality") {
-    Sim sim = makeRace(1);
+    Sim sim = makeRace(kSeed);
     for (long steps = 0; steps < 6000; ++steps) {
         sim.step();
     }

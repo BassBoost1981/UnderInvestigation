@@ -35,6 +35,7 @@ constexpr double kDirtyAirFactor = 0.99;  // corner-speed loss right behind anot
 constexpr double kFastSegment = 250.0 / 3.6;
 constexpr double kOvertakeAdvantageScale = 1.35; // m/s of potential for the full chance (M7.4: fresh-tyre passes)
 constexpr double kOvertakeTimeout = 8.0;
+constexpr double kOvertakeEnergySeconds = 12.0; // Overtake mode: the extra energy lasts this long per lap (M10.2)
 constexpr double kOvertakeLateral = 0.6;
 constexpr double kLateBrakeFactor = 1.15; // an attacker brakes later than usual
 constexpr double kAlongsideGap = 5.0;     // at corner entry: closer = alongside, corner is contested
@@ -576,6 +577,11 @@ void Sim::updateOvertakeMode(const std::vector<int>& racing, const std::vector<i
         }
         if (crossed(i, activation)) {
             car.overtakeActive = overtakeEnabled_ && car.overtakeEligible; // B7.2.3 c
+            car.overtakeEnergy = kOvertakeEnergySeconds;
+        }
+        // The extra energy is limited per lap: it drains while the boost is in use.
+        if (car.overtakeActive && state_ == RaceState::Green && track_.segments()[car.segment].speed >= kFastSegment) {
+            car.overtakeEnergy -= kDt;
         }
     }
 }
@@ -1056,7 +1062,7 @@ double Sim::speedCap(int i, double gapAhead) const {
     const TrackSegment& seg = track_.segments()[car.segment];
     double cap = seg.speed * paceFactor(i) * grip(i);
     if (state_ == RaceState::Green) {
-        if (car.overtakeActive && seg.speed >= kFastSegment) {
+        if (car.overtakeActive && car.overtakeEnergy > 0.0 && seg.speed >= kFastSegment) {
             cap *= 1.0 + kOvertakeBoost;
         }
         if (gapAhead < kSlipstreamGap && seg.speed >= kFastSegment) {
@@ -1587,8 +1593,8 @@ void Sim::buildSnapshot() {
         cs.inPitLane = car.inPit;
         cs.spinning = car.spinTimer > 0.0;
         cs.retired = car.retired;
-        cs.blueFlag = car.blueLapper >= 0;
-        cs.overtakeActive = car.overtakeActive;
+        cs.blueFlag = car.blueLapper >= 0 && !car.retired && !car.finished;
+        cs.overtakeActive = car.overtakeActive && !car.retired && !car.finished;
         cs.compound = car.compound;
         cs.tyreAge = static_cast<int>(car.tyreWear);
         cs.pitStops = car.stops;

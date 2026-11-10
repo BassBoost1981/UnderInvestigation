@@ -70,7 +70,7 @@ TEST_CASE("Rain control: standing water without neutralisation is dangerous and 
     double safetyOpen = 0.0;
     double safetyNeutralised = 0.0;
     int aquaplanes = 0;
-    constexpr int kSeeds = 6;
+    constexpr int kSeeds = 12;
     for (std::uint64_t seed = 1; seed <= kSeeds; ++seed) {
         Sim open = makeRace(seed, kDownpour, 30);
         runToEnd(open);
@@ -82,7 +82,10 @@ TEST_CASE("Rain control: standing water without neutralisation is dangerous and 
         Sim neutralised = makeRace(seed, kDownpour, 30);
         runUntil(neutralised, 330.0);
         neutralised.command(command(Command::Type::DeploySafetyCar));
-        runUntil(neutralised, 1530.0);
+        // The SC stays out until the rain has stopped and the standing water has drained.
+        while (!neutralised.finished() && (neutralised.snapshot().time < 1560.0 || neutralised.snapshot().standingWater > 0.0)) {
+            neutralised.step();
+        }
         neutralised.command(command(Command::Type::RecallSafetyCar));
         runToEnd(neutralised);
         accidentsNeutralised += static_cast<int>(neutralised.stats().accidents);

@@ -381,3 +381,26 @@ TEST_CASE("Race-control commands keep the sim deterministic") {
         CHECK(a.snapshot().cars[r].lastLineTime == b.snapshot().cars[r].lastLineTime);
     }
 }
+
+TEST_CASE("Retired and finished cars show neither a blue flag nor Overtake mode (M10.2)") {
+    int retired = 0;
+    int finished = 0;
+    for (std::uint64_t seed = 1; seed <= 4; ++seed) {
+        Sim sim = makeRace(seed, 0.0);
+        for (long steps = 0; !sim.finished() && steps < 2'000'000; ++steps) {
+            sim.step();
+            for (const CarState& car : sim.snapshot().cars) {
+                if (car.retired || car.finished) {
+                    CHECK_FALSE(car.blueFlag);
+                    CHECK_FALSE(car.overtakeActive);
+                }
+            }
+        }
+        for (const CarState& car : sim.snapshot().cars) {
+            retired += car.retired ? 1 : 0;
+            finished += car.finished ? 1 : 0;
+        }
+    }
+    CHECK(retired > 0); // the case occurs in these races
+    CHECK(finished > 0);
+}
