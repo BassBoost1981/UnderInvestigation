@@ -304,6 +304,12 @@
       "source": "2026 F1 Penalty Guidelines v01 (overtaking behind the SC, B5.13.2 c; under VSC, B5.12.2 c)",
       "verified": false,
       "note": "Overtaking one car behind the Safety Car or under the VSC without giving the place back. Speeding in the pit lane, unsafe release, track limits, two-compound rule, closed pit entry and the wet tyre mandate carry no penalty points."
+    },
+    "penalty_points_red_flag": {
+      "value": 4,
+      "source": "2026 F1 Penalty Guidelines v01 (failing to slow for red flags, ISC Appendix H 2.5.4.1 b)",
+      "verified": false,
+      "note": "Guideline maximum. Sim: goes with a penalty for overtaking under the red flag. Overtaking before the line after the Safety Car counts like overtaking behind it."
     }
   }
 }

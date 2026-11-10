@@ -165,6 +165,7 @@ RaceRules loadRules(const std::filesystem::path& path) {
         rules.penaltyPointsCollision = integer("penalty_points_collision");
         rules.penaltyPointsYellowFlag = integer("penalty_points_yellow_flag");
         rules.penaltyPointsOvertakingNeutralised = integer("penalty_points_overtaking_neutralised");
+        rules.penaltyPointsRedFlag = integer("penalty_points_red_flag");
         return rules;
     } catch (const json::exception& e) {
         throw std::runtime_error("Bad rules data in " + displayName(path) + ": " + e.what());

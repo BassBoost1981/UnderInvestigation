@@ -123,6 +123,7 @@ TEST_CASE("Rules file loads with the documented defaults") {
     CHECK(rules.penaltyPointsCollision == 2);             // guidelines
     CHECK(rules.penaltyPointsYellowFlag == 3);
     CHECK(rules.penaltyPointsOvertakingNeutralised == 2);
+    CHECK(rules.penaltyPointsRedFlag == 4);
 }
 
 TEST_CASE("Invalid marshal sector is rejected") {

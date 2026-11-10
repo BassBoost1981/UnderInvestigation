@@ -1,15 +1,19 @@
 // Console runner: simulates a full race without graphics and prints the result.
 // Usage: uisim_runner [--laps N] [--seed S] [--track file.json] [--entries file.json] [--weather file.json]
-//        uisim_runner --season file.json [--seed S] [--entries file.json]   (M10.4: a whole season)
+//        uisim_runner --season file.json [--seed S] [--entries file.json] [--career save.json] [--races N]
+//                     [--verdicts none|expected]   (M10.4/M10.5: a season, optionally continued from a save file)
 
 #include "uisim/DataDir.h"
+#include "uisim/Career.h"
 #include "uisim/DataLoader.h"
+#include "uisim/Rating.h"
 #include "uisim/Season.h"
 #include "uisim/Sim.h"
 
 #include <chrono>
 #include <cstdio>
 #include <exception>
+#include <stdexcept>
 #include <string>
 
 using namespace uisim;
@@ -31,7 +35,8 @@ std::string formatTime(double seconds) {
 
 void printUsage() {
     std::printf("Usage: uisim_runner [--laps N] [--seed S] [--track file.json] [--entries file.json] [--weather file.json]\n");
-    std::printf("       uisim_runner --season file.json [--seed S] [--entries file.json]\n");
+    std::printf("       uisim_runner --season file.json [--seed S] [--entries file.json] [--career save.json] [--races N]\n");
+    std::printf("                    [--verdicts none|expected]\n");
 }
 
 void printStandings(const char* title, const std::vector<ChampionshipLine>& lines, std::size_t count) {
@@ -44,42 +49,90 @@ void printStandings(const char* title, const std::vector<ChampionshipLine>& line
     std::printf("\n");
 }
 
-// Runs every race of the calendar and prints the championship after each one.
+void printNames(const char* title, const std::vector<int>& list, const std::vector<Entry>& entries) {
+    if (list.empty()) {
+        return;
+    }
+    std::printf("%s:", title);
+    for (std::size_t k = 0; k < list.size(); ++k) {
+        std::printf("%s %s", k == 0 ? "" : ",", entries[list[k]].name.c_str());
+    }
+    std::printf("\n");
+}
+
+// Runs the races of the calendar as a career and prints the championship after each one.
+// With a career file the season continues from it and is saved after every race (M10.5).
+// `expectedVerdicts`: a stand-in player gives every incident the verdict the ground truth asks for.
 int runSeason(const std::filesystem::path& seasonPath, const std::filesystem::path& entriesPath,
-              const std::filesystem::path& dataDir, std::uint64_t seed) {
+              const std::filesystem::path& dataDir, std::uint64_t seed, const std::filesystem::path& careerPath,
+              int maxRaces, bool expectedVerdicts) {
     const SeasonCalendar calendar = loadSeason(seasonPath);
     const std::vector<Entry> entries = loadEntries(entriesPath);
     const RaceRules rules = loadRules(dataDir / "rules" / "fia-f1-2026.json");
-    Championship championship = newChampionship(entries);
+    const bool resume = !careerPath.empty() && std::filesystem::exists(careerPath);
+    Career career = resume ? loadCareer(careerPath, calendar, entries) : newCareer(calendar, entries, seed);
     std::printf("%s - %zu races, seed %llu\n", calendar.name.c_str(), calendar.races.size(),
-                static_cast<unsigned long long>(seed));
-    for (int k = 0; k < static_cast<int>(calendar.races.size()); ++k) {
-        Sim sim = makeSeasonRace(calendar, k, seed, dataDir, entries, rules);
+                static_cast<unsigned long long>(career.seed));
+    if (career.nextRace > 0) {
+        std::printf("Continuing after race %d\n", career.nextRace);
+    }
+    for (int run = 0; !careerFinished(career, calendar) && (maxRaces <= 0 || run < maxRaces); ++run) {
+        const int k = career.nextRace;
+        Sim sim = makeCareerRace(career, calendar, dataDir, entries, rules);
         const int laps = sim.snapshot().totalLaps;
         const long maxSteps = static_cast<long>(laps) * 600 * 20;
+        std::size_t judged = 0;
+        auto judge = [&] {
+            for (; expectedVerdicts && judged < sim.incidents().size(); ++judged) {
+                const Incident& incident = sim.incidents()[judged];
+                const ExpectedVerdict expected = expectedVerdict(incident);
+                Command c;
+                c.type = Command::Type::IssueVerdict;
+                c.incidentId = incident.id;
+                c.car = expected.car;
+                c.penalty = expected.penalty;
+                sim.command(c);
+            }
+        };
         for (long steps = 0; !sim.finished() && steps < maxSteps; ++steps) {
             sim.step();
+            judge();
         }
         if (!sim.finished()) {
             std::fprintf(stderr, "Race %d did not finish within the step limit\n", k + 1);
             return 1;
         }
-        const RaceResult result = classifyRace(sim, rules);
-        addResult(championship, entries, result);
-        std::printf("\nRace %d: %s (%s, %d laps, %.1f km)\n", k + 1, calendar.races[k].name.c_str(),
-                    sim.track().name().c_str(), laps, laps * sim.track().length() / 1000.0);
-        for (const RaceResultLine& line : result.lines) {
-            if (line.classified && line.position <= 3) {
-                std::printf("  %d. %-18s %-20s %d pts\n", line.position, entries[line.entry].name.c_str(),
-                            entries[line.entry].team.c_str(), line.points);
-            }
+        judge();
+        sim.step(); // verdicts on incidents raised at the flag still count
+        finishCareerRace(career, calendar, sim, entries, rules);
+        if (!careerPath.empty()) {
+            saveCareer(careerPath, career);
         }
-        printStandings("  Drivers", championship.drivers, 5);
-        printStandings("  Teams", championship.teams, 3);
+        const CareerRace& race = career.races.back();
+        std::printf("\nRace %d: %s (%s, %d laps, %.1f km)\n", k + 1, race.name.c_str(), sim.track().name().c_str(), laps,
+                    laps * sim.track().length() / 1000.0);
+        for (std::size_t p = 0; p < race.podium.size(); ++p) {
+            std::printf("  %zu. %-18s %s\n", p + 1, entries[race.podium[p]].name.c_str(), entries[race.podium[p]].team.c_str());
+        }
+        std::printf("  Rating %.1f (incidents %d, decided %d)\n", race.overall, race.incidents, race.decided);
+        printNames("  Sat out", race.suspended, entries);
+        printNames("  Suspended for the next race", career.suspended, entries);
+        printStandings("  Drivers", career.championship.drivers, 5);
+        printStandings("  Teams", career.championship.teams, 3);
     }
-    std::printf("\nFinal standings after %d races\n", championship.racesRun);
-    printStandings("Drivers", championship.drivers, championship.drivers.size());
-    printStandings("Teams", championship.teams, championship.teams.size());
+    std::printf("\nStandings after %d of %zu races\n", career.nextRace, calendar.races.size());
+    printStandings("Drivers", career.championship.drivers, career.championship.drivers.size());
+    printStandings("Teams", career.championship.teams, career.championship.teams.size());
+    std::printf("Race director rating: %.1f\n", careerRating(career));
+    std::printf("Penalty points:");
+    bool any = false;
+    for (std::size_t entry = 0; entry < entries.size(); ++entry) {
+        if (career.penaltyPoints[entry] > 0) {
+            std::printf("%s %s %d", any ? "," : "", entries[entry].name.c_str(), career.penaltyPoints[entry]);
+            any = true;
+        }
+    }
+    std::printf("%s\n", any ? "" : " none");
     return 0;
 }
 
@@ -92,6 +145,9 @@ int main(int argc, char** argv) {
     std::filesystem::path entriesPath = dataDir / "entries" / "fictional-grid.json";
     std::filesystem::path weatherPath; // empty = dry
     std::filesystem::path seasonPath;  // empty = a single race
+    std::filesystem::path careerPath;  // season only: save file to continue from and to write
+    int maxRaces = 0;                  // season only: races to run now, 0 = all that are left
+    bool expectedVerdicts = false;     // season only: a stand-in player judges every incident
 
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
@@ -118,6 +174,15 @@ int main(int argc, char** argv) {
                 weatherPath = value;
             } else if (arg == "--season") {
                 seasonPath = value;
+            } else if (arg == "--career") {
+                careerPath = value;
+            } else if (arg == "--races") {
+                maxRaces = std::stoi(value);
+            } else if (arg == "--verdicts") {
+                if (value != "none" && value != "expected") {
+                    throw std::invalid_argument("verdicts");
+                }
+                expectedVerdicts = value == "expected";
             } else {
                 std::fprintf(stderr, "Unknown option %s\n", arg.c_str());
                 printUsage();
@@ -131,7 +196,7 @@ int main(int argc, char** argv) {
 
     try {
         if (!seasonPath.empty()) {
-            return runSeason(seasonPath, entriesPath, dataDir, config.seed);
+            return runSeason(seasonPath, entriesPath, dataDir, config.seed, careerPath, maxRaces, expectedVerdicts);
         }
         const auto start = std::chrono::steady_clock::now();
         if (!weatherPath.empty()) {

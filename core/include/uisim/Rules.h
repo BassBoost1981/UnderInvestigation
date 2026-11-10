@@ -64,6 +64,7 @@ struct RaceRules {
     int penaltyPointsCollision = 2;             // Penalty Guidelines (0 to 3)
     int penaltyPointsYellowFlag = 3;            // Penalty Guidelines (maximum)
     int penaltyPointsOvertakingNeutralised = 2; // Penalty Guidelines: behind the SC or under VSC
+    int penaltyPointsRedFlag = 4;               // Penalty Guidelines (maximum): overtaking under the red flag
 };
 
 } // namespace uisim

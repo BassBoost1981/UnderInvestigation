@@ -1,0 +1,80 @@
+#pragma once
+
+#include "uisim/Entry.h"
+#include "uisim/Rules.h"
+#include "uisim/Season.h"
+#include "uisim/Sim.h"
+
+#include <cstdint>
+#include <filesystem>
+#include <string>
+#include <vector>
+
+namespace uisim {
+
+// The player's career over a season (M10.5): the championships, the rating of every race,
+// penalty points on the drivers' licences with the suspension (A3.3.1 b), and a save file
+// written between the races. Entry indices here always mean the season's entry list; a race
+// with suspended drivers runs with fewer cars (see careerRaceEntries).
+
+struct CareerPenaltyPoints {
+    int entry = 0;
+    int points = 0;
+};
+
+// One finished race, as shown on the season screen.
+struct CareerRace {
+    std::string name;
+    std::vector<int> podium;    // entries in places 1 to 3
+    std::vector<int> suspended; // entries that sat this race out
+    std::vector<CareerPenaltyPoints> penaltyPoints; // imposed in this race, in order of the verdicts
+    // The player's rating (Rating.h).
+    double overall = 0.0;
+    double fairness = 0.0;
+    double consistency = 0.0;
+    double raceQuality = 0.0;
+    double safety = 0.0;
+    int incidents = 0;
+    int decided = 0;
+};
+
+struct Career {
+    std::string season;     // name of the calendar
+    std::uint64_t seed = 1; // season seed (see seasonRaceSeed)
+    int nextRace = 0;       // index into the calendar
+    Championship championship;
+    std::vector<int> penaltyPoints; // per entry: on the licence now
+    std::vector<int> suspended;     // entries that sit out the next race
+    std::vector<CareerRace> races;  // finished races
+};
+
+// Penalty points that go with a penalty for this kind of incident (Penalty Guidelines, data/rules).
+int penaltyPointsFor(Incident::Type type, const RaceRules& rules);
+
+Career newCareer(const SeasonCalendar& calendar, const std::vector<Entry>& entries, std::uint64_t seed);
+bool careerFinished(const Career& career, const SeasonCalendar& calendar);
+
+// The player's rating over the season: mean of the race ratings (0..100), 0 before the first race.
+double careerRating(const Career& career);
+
+// Season entry index of every car in the next race, in the order of the race's entry list:
+// all entries except the suspended ones.
+std::vector<int> careerRaceEntries(const Career& career);
+
+// Builds the next race of the career (track, weather, laps and seed as in makeSeasonRace),
+// without the suspended drivers.
+Sim makeCareerRace(const Career& career, const SeasonCalendar& calendar, const std::filesystem::path& dataDir,
+                   const std::vector<Entry>& entries, const RaceRules& rules);
+
+// Books a finished race built by makeCareerRace: championship points, the rating, penalty points
+// for every penalty the player imposed (none with "no action" or a warning), then the
+// suspensions for the following race (at the limit; the limit is then taken off the licence).
+void finishCareerRace(Career& career, const SeasonCalendar& calendar, const Sim& sim, const std::vector<Entry>& entries,
+                      const RaceRules& rules);
+
+// Save file (JSON), written between races. Loading checks that the file fits the calendar
+// and the entry list; both throw std::runtime_error with the file name on failure.
+void saveCareer(const std::filesystem::path& path, const Career& career);
+Career loadCareer(const std::filesystem::path& path, const SeasonCalendar& calendar, const std::vector<Entry>& entries);
+
+} // namespace uisim
