@@ -193,4 +193,30 @@ WeatherPlan loadWeather(const std::filesystem::path& path) {
     }
 }
 
+SeasonCalendar loadSeason(const std::filesystem::path& path) {
+    const json root = readJson(path);
+    try {
+        SeasonCalendar calendar;
+        calendar.name = root.at("name").get<std::string>();
+        for (const json& r : root.at("races")) {
+            SeasonRace race;
+            race.name = r.at("name").get<std::string>();
+            race.track = r.at("track").get<std::string>();
+            race.weather = r.value("weather", std::string());
+            race.shortDistance = r.value("short_distance", false);
+            race.laps = r.value("laps", 0);
+            if (race.laps < 0) {
+                throw std::runtime_error("Bad season data in " + displayName(path) + ": laps must not be negative");
+            }
+            calendar.races.push_back(race);
+        }
+        if (calendar.races.empty()) {
+            throw std::runtime_error("Bad season data in " + displayName(path) + ": no races");
+        }
+        return calendar;
+    } catch (const json::exception& e) {
+        throw std::runtime_error("Bad season data in " + displayName(path) + ": " + e.what());
+    }
+}
+
 } // namespace uisim

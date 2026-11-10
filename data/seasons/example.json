@@ -1,0 +1,10 @@
+{
+  "name": "Testring Series",
+  "comment": "Public example season. 'track' is a file below data/tracks, 'weather' (optional) a file below data/weather. Without 'laps' the race has the least number of laps exceeding the race distance (data/rules: race_distance_km); 'short_distance' selects race_distance_short_km.",
+  "races": [
+    { "name": "Testring Grand Prix", "track": "testring.json" },
+    { "name": "Testring Shower Grand Prix", "track": "testring.json", "weather": "shower.json" },
+    { "name": "Testring Short Grand Prix", "track": "testring.json", "short_distance": true },
+    { "name": "Testring Finale", "track": "testring.json", "weather": "wet-start.json" }
+  ]
+}

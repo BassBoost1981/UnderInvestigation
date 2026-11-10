@@ -4,6 +4,8 @@
 /data/entries/*-parody.json
 # Real circuits with parody names and their source data: private only (docs/DESIGN.md chapter 8.4, 10)
 /data/tracks/private/
+# Season calendars with those circuits: private only (docs/DESIGN.md chapter 8.5)
+/data/seasons/private/
 
 # Unreal build output
 /unreal/Binaries/

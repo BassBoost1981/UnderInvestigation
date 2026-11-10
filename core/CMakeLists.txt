@@ -25,7 +25,8 @@ add_library(uisim STATIC
     src/Track.cpp
     src/DataLoader.cpp
     src/Sim.cpp
-    src/Rating.cpp)
+    src/Rating.cpp
+    src/Season.cpp)
 target_include_directories(uisim PUBLIC include)
 target_link_libraries(uisim PRIVATE nlohmann_json::nlohmann_json)
 
@@ -61,7 +62,8 @@ if(UISIM_BUILD_TESTS)
         tests/test_weather.cpp
         tests/test_wet_tyres.cpp
         tests/test_rain_control.cpp
-        tests/test_standing_start.cpp)
+        tests/test_standing_start.cpp
+        tests/test_season.cpp)
     target_link_libraries(uisim_tests PRIVATE uisim uisim_datadir doctest::doctest)
 
     enable_testing()

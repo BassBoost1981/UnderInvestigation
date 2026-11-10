@@ -2,6 +2,7 @@
 
 #include "uisim/Entry.h"
 #include "uisim/Rules.h"
+#include "uisim/Season.h"
 #include "uisim/Track.h"
 #include "uisim/Weather.h"
 
@@ -22,5 +23,8 @@ RaceRules loadRules(const std::filesystem::path& path);
 
 // Load data/weather/*.json (rain over the race, M9.2). Same error handling.
 WeatherPlan loadWeather(const std::filesystem::path& path);
+
+// Load data/seasons/*.json (calendar of races, M10.4). Same error handling.
+SeasonCalendar loadSeason(const std::filesystem::path& path);
 
 } // namespace uisim
