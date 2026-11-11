@@ -18,6 +18,7 @@ class UUIRadioWidget;
 class UUITrackMapWidget;
 class UUIControlPanelWidget;
 class UUIWeatherWidget;
+class UUISeasonWidget;
 class USceneCaptureComponent2D;
 class UTextureRenderTarget2D;
 class FSlateVirtualUserHandle;
@@ -48,7 +49,10 @@ enum class EUICommand : uint8
 	SetReviewOffset,       // Value = seconds relative to the incident (-5..+5)
 	NextReviewCamera,
 	SetAccused,            // Index: 0 = car, 1 = other car
-	Verdict                // Penalty, against the accused car of the incident under review
+	Verdict,               // Penalty, against the accused car of the incident under review
+	StartSeasonRace,       // season screen: start the next race of the calendar (M10.6)
+	BackToSeason,          // after the flag: book the race and return to the season screen
+	NewSeason              // season screen after the last race: a fresh season
 };
 
 struct FUICommand
@@ -74,6 +78,10 @@ struct FUICommand
 //               -UISimWeather=<file in data/weather> (rain, M9.7)
 //               -UISimCompoundMiss=<0..1> (checks only: teams overlook the two-compound rule)
 //               -UISimScript=<file> (commands at race times, see UIRaceCommands.cpp; relative to the project)
+// Season (M10.6): -UISimSeason=<file in data/seasons> shows the season screen and runs the races of the calendar
+//               as a career; this is also the default when none of -UISimSeed, -UISimTrack, -UISimLaps asks for
+//               a single race. -UISimCareer=<name> picks the save file Saved/Career/<name>.json (default career),
+//               -UISimNewCareer ignores an existing one. Every race gets a race director of its own.
 // Keys: 1-6 cameras (6 = pit lane), +/- time scale.
 // Race control: V = VSC on/off, S = Safety Car out / in this lap, R = red flag / restart,
 //               L = lapped cars may overtake (SC), P = close / open the pit entry,
@@ -87,6 +95,7 @@ public:
 	AUIRaceDirector();
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	const FUISimSession& Session() const { return SimSession; }
 	FString ActiveCameraName() const;
@@ -118,8 +127,14 @@ public:
 	bool Execute(const FUICommand& Command);
 	FString CommandName(const FUICommand& Command) const; // script syntax, e.g. "flag 3 yellow"
 	int32 FollowedCar() const { return FollowedEntry; } // entry index, -1 = the leader
+	bool IsSeasonMode() const { return bSeasonMode; }       // the races belong to a career (M10.6)
+	bool IsOnSeasonScreen() const { return bSeasonScreen; } // between the races
 
 private:
+	void SetupRace();        // world and state for the race in SimSession
+	void TickSeasonScreen();
+	void StartSeasonRace();
+	void BackToSeason();
 	void BuildTrack();
 	void SpawnCars();
 	void SpawnCameras();
@@ -152,6 +167,11 @@ private:
 	double Accumulator = 0.0;
 	double SimTimeScale = 1.0;
 	bool bReady = false;
+	bool bSeasonMode = false;
+	bool bSeasonScreen = false;
+	double SeasonLineAt = 0.0; // real time from which the next script line may run on the season screen
+	UPROPERTY()
+	TObjectPtr<UUISeasonWidget> SeasonPanel;
 	bool bResultLogged = false;
 	bool bQuitWhenDone = false;
 	bool bInputEnabled = true;

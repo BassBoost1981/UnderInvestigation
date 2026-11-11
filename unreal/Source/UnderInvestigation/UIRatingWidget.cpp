@@ -23,6 +23,7 @@ namespace
 	// Page buttons (in ButtonArea coordinates).
 	const FBox2D PrevButton(FVector2D(0.0, 4.0), FVector2D(130.0, 28.0));
 	const FBox2D NextButton(FVector2D(140.0, 4.0), FVector2D(270.0, 28.0));
+	const FBox2D SeasonButton(FVector2D(280.0, 4.0), FVector2D(420.0, 28.0)); // season only (M10.6)
 
 	FString Decision(const TArray<FUISimEntry>& Entries, int32 Car, EUISimPenalty Penalty)
 	{
@@ -58,7 +59,7 @@ TSharedRef<SWidget> UUIRatingWidget::RebuildWidget()
 		Body->SetVisibility(ESlateVisibility::HitTestInvisible);
 		Column->AddChildToVerticalBox(Body);
 		USizeBox* Box = WidgetTree->ConstructWidget<USizeBox>();
-		Box->SetWidthOverride(270.0);
+		Box->SetWidthOverride(420.0);
 		Box->SetHeightOverride(32.0);
 		ButtonArea = WidgetTree->ConstructWidget<UBorder>();
 		ButtonArea->SetBrushColor(FLinearColor(0.0f, 0.0f, 0.0f, 0.01f)); // visible, so it takes the clicks
@@ -141,6 +142,11 @@ int32 UUIRatingWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Allo
 	};
 	Button(PrevButton, TEXT("< ZURUECK"), Page > 0);
 	Button(NextButton, TEXT("WEITER >"), Page + 1 < PageCount);
+	const bool bSeason = Director.IsValid() && Director->IsSeasonMode();
+	if (bSeason)
+	{
+		Button(SeasonButton, TEXT("ZUR SAISON >>"), true);
+	}
 	Layer += 2;
 
 	if (FVector2D(Area.GetAbsolutePosition()) != LoggedAt)
@@ -156,6 +162,11 @@ int32 UUIRatingWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Allo
 			const FVector2D Prev = FVector2D(Area.LocalToAbsolute(PrevButton.GetCenter())) - Origin;
 			const FVector2D Next = FVector2D(Area.LocalToAbsolute(NextButton.GetCenter())) - Origin;
 			UE_LOG(LogUISim, Display, TEXT("Rating: '< ZURUECK' at %.0f %.0f, 'WEITER >' at %.0f %.0f"), Prev.X, Prev.Y, Next.X, Next.Y);
+			if (bSeason)
+			{
+				const FVector2D Season = FVector2D(Area.LocalToAbsolute(SeasonButton.GetCenter())) - Origin;
+				UE_LOG(LogUISim, Display, TEXT("Rating: 'ZUR SAISON' at %.0f %.0f"), Season.X, Season.Y);
+			}
 		}
 	}
 	return Layer;
@@ -168,6 +179,14 @@ FReply UUIRatingWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, con
 		return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
 	}
 	const FVector2D Local = FVector2D(ButtonArea->GetCachedGeometry().AbsoluteToLocal(InMouseEvent.GetScreenSpacePosition()));
+	AUIRaceDirector* Race = Director.Get();
+	if (Race && Race->IsSeasonMode() && SeasonButton.IsInside(Local))
+	{
+		FUICommand Command;
+		Command.Type = EUICommand::BackToSeason;
+		Race->Execute(Command); // books the race; this screen goes with it
+		return FReply::Handled();
+	}
 	const int32 Before = Page;
 	if (PrevButton.IsInside(Local))
 	{

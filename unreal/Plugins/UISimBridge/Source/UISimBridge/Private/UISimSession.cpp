@@ -54,7 +54,7 @@ bool FUISimSession::Start(const FString& TrackFile, const FString& EntriesFile, 
 		{
 			Config.weather = uisim::loadWeather(std::filesystem::path(*WeatherFile));
 		}
-		Sim = MakeUnique<uisim::Sim>(std::move(Track), std::move(Entries), Config);
+		Adopt(MakeUnique<uisim::Sim>(std::move(Track), std::move(Entries), Config));
 	}
 	catch (const std::exception& Error)
 	{
@@ -62,8 +62,16 @@ bool FUISimSession::Start(const FString& TrackFile, const FString& EntriesFile, 
 		Sim.Reset();
 		return false;
 	}
+	return true;
+}
 
+void FUISimSession::Adopt(TUniquePtr<uisim::Sim> NewSim)
+{
+	Sim = MoveTemp(NewSim);
 	EntryList.Reset();
+	IncidentList.Reset();
+	VerdictList.Reset();
+	RadioList.Reset();
 	for (const uisim::Entry& Entry : Sim->entries())
 	{
 		FUISimEntry& Out = EntryList.AddDefaulted_GetRef();
@@ -73,7 +81,6 @@ bool FUISimSession::Start(const FString& TrackFile, const FString& EntriesFile, 
 		Out.Team = FromUtf8(Entry.team);
 	}
 	CopySnapshot();
-	return true;
 }
 
 void FUISimSession::Step()

@@ -21,6 +21,8 @@
 #include "UITrackMapWidget.h"
 #include "UIControlPanelWidget.h"
 #include "UIWeatherWidget.h"
+#include "UISeasonWidget.h"
+#include "UISimCareer.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "Engine/TextureRenderTarget2D.h"
 
@@ -90,6 +92,37 @@ void AUIRaceDirector::BeginPlay()
 	const FString RulesPath = FPaths::Combine(DataDir, TEXT("rules/fia-f1-2026.json"));
 
 	FString Error;
+	// Season (M10.6): asked for with -UISimSeason, and the default when no single race is asked for.
+	FString SeasonFile;
+	const bool bSingleRace = FCString::Strifind(CommandLine, TEXT("UISimSeed=")) || FCString::Strifind(CommandLine, TEXT("UISimTrack=")) ||
+		FCString::Strifind(CommandLine, TEXT("UISimLaps="));
+	bSeasonMode = FParse::Value(CommandLine, TEXT("UISimSeason="), SeasonFile) || !bSingleRace;
+	if (bSeasonMode)
+	{
+		if (SeasonFile.IsEmpty())
+		{
+			// The private calendar with the real circuits if it is there, else the public example.
+			SeasonFile = FPaths::FileExists(FPaths::Combine(DataDir, TEXT("seasons/private/season-2026.json")))
+				? TEXT("private/season-2026.json") : TEXT("example.json");
+		}
+		FString CareerName = TEXT("career");
+		FParse::Value(CommandLine, TEXT("UISimCareer="), CareerName);
+		const FString SaveFile = FPaths::ConvertRelativePathToFull(
+			FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Career"), CareerName + TEXT(".json")));
+		FUISimCareer& Career = FUISimCareer::Get();
+		if (!Career.IsOpen() &&
+			!Career.Open(DataDir, SeasonFile, EntriesFile, SaveFile, Seed, FParse::Param(CommandLine, TEXT("UISimNewCareer")), Error))
+		{
+			UE_LOG(LogUISim, Error, TEXT("Could not open the season: %s"), *Error);
+			return;
+		}
+		UE_LOG(LogUISim, Display, TEXT("SEASON %s: %d of %d races run, seed %lld, rating %.1f"), *Career.SeasonName(),
+			Career.NextRace(), Career.RaceCount(), Career.Seed(), Career.Rating());
+		UE_LOG(LogUISim, Display, TEXT("SEASON %s"), *Career.StandingsLine(false));
+		UE_LOG(LogUISim, Display, TEXT("SEASON %s"), *Career.StandingsLine(true));
+		bSeasonScreen = true; // the race starts from the season screen
+		return;
+	}
 	double CompoundMiss = -1.0;
 	if (FParse::Value(CommandLine, TEXT("UISimCompoundMiss="), CompoundMiss)) // checks only: forces two-compound breaches
 	{
@@ -109,6 +142,11 @@ void AUIRaceDirector::BeginPlay()
 	UE_LOG(LogUISim, Display, TEXT("Race started: %s, %d laps, seed %lld, %d cars"),
 		*SimSession.TrackName(), Laps, Seed, SimSession.Entries().Num());
 
+	SetupRace();
+}
+
+void AUIRaceDirector::SetupRace()
+{
 	CubeMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
 	PlaneMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Plane.Plane"));
 	BaseMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
@@ -129,6 +167,109 @@ void AUIRaceDirector::BeginPlay()
 	SpawnCameras();
 	SpawnReviewView();
 	bReady = true;
+}
+
+void AUIRaceDirector::TickSeasonScreen()
+{
+	APlayerController* Player = GetWorld()->GetFirstPlayerController();
+	if (Player && !SeasonPanel)
+	{
+		SeasonPanel = CreateWidget<UUISeasonWidget>(Player, UUISeasonWidget::StaticClass());
+		SeasonPanel->SetRaceDirector(this);
+		SeasonPanel->AddToViewport();
+		// Free mouse: visible cursor, never locked to the window.
+		FInputModeGameAndUI InputMode;
+		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		InputMode.SetHideCursorDuringCapture(false);
+		Player->SetInputMode(InputMode);
+		Player->SetShowMouseCursor(true);
+	}
+	// Script lines with a negative time belong to this screen: one per frame, from half a second
+	// after it appeared, with a pause after a screenshot so the picture is taken first.
+	const double Now = FPlatformTime::Seconds();
+	if (SeasonLineAt <= 0.0)
+	{
+		SeasonLineAt = Now + 0.5;
+	}
+	if (Now < SeasonLineAt)
+	{
+		return;
+	}
+	if (ScriptNext < Script.Num() && Script[ScriptNext].Time < 0.0)
+	{
+		const FScriptLine Line = Script[ScriptNext++];
+		SeasonLineAt = Now + (Line.bScreenshot ? 0.3 : 0.0);
+		RunScriptLine(Line);
+		return;
+	}
+	if (bQuitWhenDone && ScriptNext >= Script.Num() && Now - SeasonLineAt > 1.0)
+	{
+		bQuitWhenDone = false;
+		FPlatformMisc::RequestExit(false, TEXT("UISimQuitWhenDone")); // nothing left to do on the season screen
+	}
+}
+
+void AUIRaceDirector::StartSeasonRace()
+{
+	FString Error;
+	FUISimCareer& Career = FUISimCareer::Get();
+	if (!Career.StartNextRace(SimSession, Error))
+	{
+		UE_LOG(LogUISim, Error, TEXT("Could not start race: %s"), *Error);
+		return;
+	}
+	UE_LOG(LogUISim, Display, TEXT("Race started: %s, %d laps, race %d of the season, %d cars"), *SimSession.TrackName(),
+		SimSession.Snapshot().TotalLaps, Career.NextRace() + 1, SimSession.Entries().Num());
+	bSeasonScreen = false;
+	if (SeasonPanel)
+	{
+		SeasonPanel->RemoveFromParent();
+		SeasonPanel = nullptr;
+	}
+	SetupRace();
+}
+
+void AUIRaceDirector::BackToSeason()
+{
+	FString Error;
+	FUISimCareer& Career = FUISimCareer::Get();
+	if (!Career.FinishRace(SimSession, Error))
+	{
+		UE_LOG(LogUISim, Error, TEXT("Could not book the race: %s"), *Error);
+		return;
+	}
+	UE_LOG(LogUISim, Display, TEXT("Season: race %d of %d booked and saved"), Career.NextRace(), Career.RaceCount());
+	// A race director of its own for the season screen and the next race; this one goes with its race.
+	GetWorld()->SpawnActor<AUIRaceDirector>();
+	Destroy();
+}
+
+void AUIRaceDirector::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (EndPlayReason == EEndPlayReason::Destroyed)
+	{
+		// Leaving a race for the season screen: its panels and cameras go with it.
+		UUserWidget* Panels[] = {TimingTower, IncidentPanel, RatingPanel, RadioPanel, TrackMap, ControlPanel, WeatherPanel, SeasonPanel};
+		for (UUserWidget* Panel : Panels)
+		{
+			if (Panel)
+			{
+				Panel->RemoveFromParent();
+			}
+		}
+		for (ACameraActor* Camera : Cameras)
+		{
+			if (Camera)
+			{
+				Camera->Destroy();
+			}
+		}
+		if (ReviewCamera)
+		{
+			ReviewCamera->Destroy();
+		}
+	}
+	Super::EndPlay(EndPlayReason);
 }
 
 UStaticMeshComponent* AUIRaceDirector::AddMesh(UStaticMesh* Mesh, const FLinearColor& Color)
@@ -383,6 +524,11 @@ FVector AUIRaceDirector::CarLocation(int32 EntryIndex) const
 void AUIRaceDirector::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	if (bSeasonScreen)
+	{
+		TickSeasonScreen();
+		return;
+	}
 	if (!bReady)
 	{
 		return;
@@ -422,6 +568,10 @@ void AUIRaceDirector::Tick(float DeltaSeconds)
 	}
 	HandleInput();
 	RunScript(); // lines after the finish (the race clock has stopped)
+	if (IsActorBeingDestroyed())
+	{
+		return; // back to the season screen: another race director has taken over
+	}
 	{
 		// Log which lapped cars are passing under the SC (checks, M9.8).
 		FString Passing;

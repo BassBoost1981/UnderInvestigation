@@ -2,6 +2,7 @@
 // actions through Execute(), so every way of operating the game behaves the same and is logged.
 
 #include "UIRaceDirector.h"
+#include "UISimCareer.h"
 
 #include "Engine/Engine.h"
 #include "Engine/GameViewportClient.h"
@@ -68,6 +69,10 @@ bool AUIRaceDirector::CanExecute(const FUICommand& Command) const
 	case EUICommand::SetAccused: return bReviewing && (Command.Index == 0 || Command.Index == 1);
 	case EUICommand::Verdict:
 		return bReviewing && !SimSession.VerdictFor(SimSession.Incidents()[ReviewIncidentIndex].Id);
+	case EUICommand::StartSeasonRace: return bSeasonScreen && !FUISimCareer::Get().IsFinished();
+	case EUICommand::NewSeason: return bSeasonScreen && FUISimCareer::Get().IsFinished();
+	case EUICommand::BackToSeason:
+		return bSeasonMode && bReady && Snapshot.bFinished && !bReviewing && !IsActorBeingDestroyed();
 	}
 	return false;
 }
@@ -104,6 +109,9 @@ FString AUIRaceDirector::CommandName(const FUICommand& Command) const
 	case EUICommand::NextReviewCamera: return TEXT("review_camera");
 	case EUICommand::SetAccused: return Command.Index == 0 ? TEXT("accused car") : TEXT("accused other");
 	case EUICommand::Verdict: return FString::Printf(TEXT("verdict %s"), PenaltyWords[static_cast<uint8>(Command.Penalty)]);
+	case EUICommand::StartSeasonRace: return TEXT("season_start");
+	case EUICommand::BackToSeason: return TEXT("season_back");
+	case EUICommand::NewSeason: return TEXT("season_new");
 	}
 	return TEXT("?");
 }
@@ -164,6 +172,17 @@ bool AUIRaceDirector::Execute(const FUICommand& Command)
 			Car >= 0 ? *SimSession.Entries()[Car].Code : TEXT(""));
 		break;
 	}
+	case EUICommand::StartSeasonRace: StartSeasonRace(); break;
+	case EUICommand::BackToSeason: BackToSeason(); break;
+	case EUICommand::NewSeason:
+	{
+		FString Error;
+		if (!FUISimCareer::Get().StartNewSeason(Error))
+		{
+			UE_LOG(LogUISim, Error, TEXT("Could not start a new season: %s"), *Error);
+		}
+		break;
+	}
 	}
 	return true;
 }
@@ -181,6 +200,11 @@ bool AUIRaceDirector::LoadScript(const FString& File)
 	{
 		UE_LOG(LogUISim, Error, TEXT("Script %s line %d: %s"), *File, LineNumber, *Why);
 	};
+	// A season runs one race director per race (M10.6): the n-th one loads the n-th part of the
+	// script; a line with only --- separates the parts. Lines with a negative time run on the season screen.
+	static int32 Loads = 0;
+	const int32 Wanted = Loads++;
+	int32 Part = 0;
 	for (int32 LineIndex = 0; LineIndex < Lines.Num(); ++LineIndex)
 	{
 		FString Text = Lines[LineIndex];
@@ -192,6 +216,15 @@ bool AUIRaceDirector::LoadScript(const FString& File)
 		TArray<FString> Words;
 		Text.ParseIntoArrayWS(Words);
 		if (Words.Num() == 0)
+		{
+			continue;
+		}
+		if (Words.Num() == 1 && Words[0] == TEXT("---"))
+		{
+			++Part;
+			continue;
+		}
+		if (Part != Wanted)
 		{
 			continue;
 		}
@@ -268,6 +301,9 @@ bool AUIRaceDirector::LoadScript(const FString& File)
 				}
 			}
 		}
+		else if (Name == TEXT("season_start")) { C.Type = EUICommand::StartSeasonRace; }
+		else if (Name == TEXT("season_back")) { C.Type = EUICommand::BackToSeason; }
+		else if (Name == TEXT("season_new")) { C.Type = EUICommand::NewSeason; }
 		else if (Name == TEXT("screenshot")) { Line.bScreenshot = true; Line.ShotName = Arg.IsEmpty() ? FString(TEXT("uisim_check")) : Arg; }
 		else if (Name == TEXT("click") && Words.Num() == 4)
 		{

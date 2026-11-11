@@ -1,0 +1,16 @@
+# M10.6 check: season screen, two races of the example season, back to the season screen each time.
+# Run with -UISimSeason=example.json -UISimSeed=4 -UISimCareer=check -UISimNewCareer -UISimTimeScale=500
+#          -UISimScript=TestScripts/season_two_races.txt -UISimQuitWhenDone
+# Every race has a race director of its own: one part of the script each, separated by ---.
+# Lines with a negative time run on the season screen. The log lines "SEASON Drivers/Teams" after the
+# second race match "uisim_runner --season data/seasons/example.json --seed 4 --races 2".
+-1 screenshot season_before
+-1 season_start
+99000 screenshot season_rating
+99001 season_back
+---
+-1 screenshot season_after_1
+-1 season_start
+99001 season_back
+---
+-1 screenshot season_after_2

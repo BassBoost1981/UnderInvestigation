@@ -231,6 +231,8 @@ public:
 	FTransform CarTransform(double Distance, double Lateral) const;
 
 private:
+	friend class FUISimCareer;
+	void Adopt(TUniquePtr<uisim::Sim> NewSim); // takes over a race built elsewhere (career, M10.6)
 	void CopySnapshot();
 	void Send(int32 Type, int32 Sector = 0, EUISimFlag Flag = EUISimFlag::Green, bool bWetTyres = false);
 
