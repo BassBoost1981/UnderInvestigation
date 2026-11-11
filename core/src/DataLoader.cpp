@@ -86,6 +86,7 @@ std::vector<Entry> loadEntries(const std::filesystem::path& path) {
                 e.teamPace = team.at("pace").get<double>();
                 e.skill = driver.at("skill").get<double>();
                 e.aggression = driver.value("aggression", 0.5);
+                e.honesty = driver.value("honesty", 0.7);
                 entries.push_back(std::move(e));
             }
         }

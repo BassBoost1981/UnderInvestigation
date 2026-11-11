@@ -1711,6 +1711,9 @@ void Sim::onSegmentEntered(int i) {
             car.overtakeTarget = -1;
             ++stats_.collisions;
             addIncident(Incident::Type::Collision, i, target, blame);
+            incidents_.back().turnInGap = gap;
+            incidents_.back().attackerPush = attack;
+            incidents_.back().defenderPush = defend;
             maybeAccident(target, kCollisionCrashChance, 0.0, kCollisionSpinChance, true);
         } else if (gap < kAlongsideGap && rng_.uniform() < attack / (attack + defend)) {
             defender.yieldTimer = kYieldTime;

@@ -13,6 +13,7 @@ struct Entry {
     double teamPace = 1.0;   // car performance multiplier, 1.0 = best
     double skill = 1.0;      // driver performance multiplier, 1.0 = best
     double aggression = 0.5; // 0..1, willingness to attempt overtakes
+    double honesty = 0.7;    // 0..1, chance to tell a hearing the truth when at fault (M11.4)
 };
 
 } // namespace uisim

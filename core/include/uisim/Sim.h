@@ -147,6 +147,10 @@ struct Incident {
     double distance = 0.0; // total distance of `car` at the incident
     double blame = 0.0;  // ground truth: share of fault of `car`, 0..1 (rest: otherCar)
     double measure = 0.0; // ground truth detail: speeding km/h over the limit, unsafe release gap in metres
+    // Collision only, what the blame came from (evidence for a hearing, M11.4):
+    double turnInGap = 0.0;    // metres the attacker was behind at turn-in
+    double attackerPush = 0.0; // 0..1, how hard the attacker went for it
+    double defenderPush = 0.0; // 0..1, how hard the defender closed the door
 };
 
 // Marshal radio to race control (M6.5). Structured; the presentation layer words it.
@@ -216,6 +220,7 @@ public:
     // Metres from the line (negative = before it) of the pit box of an entry's team (M7.8).
     double boxOffset(int entryIndex) const { return cars_[static_cast<std::size_t>(entryIndex)].boxOffset; }
     const std::vector<Entry>& entries() const { return entries_; }
+    std::uint64_t seed() const { return config_.seed; }
 
 private:
     struct Car {
