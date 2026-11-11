@@ -178,7 +178,7 @@ TEST_CASE("Rating: penalising the wrong driver is punished") {
     const RaceRating rating = rateRace(sim);
     INFO("fairness ", rating.fairness, ", overall ", rating.overall);
     CHECK(rating.fairness < 0.4);
-    CHECK(rating.overall < 75.0);
+    CHECK(rating.overall < 80.0); // fairness alone: 35 % of the rating
 }
 
 TEST_CASE("Rating: long neutralisation lowers race quality") {

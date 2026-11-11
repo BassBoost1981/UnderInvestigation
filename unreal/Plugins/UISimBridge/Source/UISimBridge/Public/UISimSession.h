@@ -72,6 +72,7 @@ struct FUISimSnapshot
 	bool bWetTyresMandated = false; // B6.3.7
 	bool bGridStart = false; // standing start: cars forming on the grid or waiting for the signal (M10.3)
 	int32 StartLights = 0;   // red lights lit on the gantry, all out = start signal (B5.7.1)
+	bool bFormationLap = false; // the formation lap before the start is being driven (B5.6, M11.3)
 	double SafetyCarDistance = 0.0;
 	TArray<FUISimCar> Cars; // sorted by position
 };

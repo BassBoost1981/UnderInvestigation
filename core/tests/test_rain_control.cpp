@@ -27,6 +27,7 @@ Sim makeRace(std::uint64_t seed, const WeatherPlan& weather, int laps, double we
     RaceConfig config;
     config.laps = laps;
     config.seed = seed;
+    config.formationLap = false; // the rain plans of these tests count from the lights
     config.rules = loadRules(kData / "rules" / "fia-f1-2026.json");
     config.weather = weather;
     config.ruleBreakChance = 0.0;

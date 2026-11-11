@@ -328,6 +328,7 @@ void FUISimSession::CopySnapshot()
 	CurrentSnapshot.bWetTyresMandated = In.wetTyresMandated;
 	CurrentSnapshot.bGridStart = In.gridStart;
 	CurrentSnapshot.StartLights = In.startLights;
+	CurrentSnapshot.bFormationLap = In.formationLap;
 	CurrentSnapshot.SafetyCarDistance = In.safetyCarDistance;
 	CurrentSnapshot.Cars.SetNum(static_cast<int32>(In.cars.size()));
 	for (int32 Index = 0; Index < CurrentSnapshot.Cars.Num(); ++Index)

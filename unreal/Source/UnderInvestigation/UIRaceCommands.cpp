@@ -50,7 +50,7 @@ bool AUIRaceDirector::CanExecute(const FUICommand& Command) const
 	case EUICommand::RecallSafetyCar: return State == EUISimRaceState::SafetyCar && !Snapshot.bSafetyCarInThisLap;
 	case EUICommand::RedFlag: return State != EUISimRaceState::RedFlag;
 	case EUICommand::Restart: return State == EUISimRaceState::RedFlag;
-	case EUICommand::SafetyCarStart: return State == EUISimRaceState::Green && Snapshot.Time <= 0.0;
+	case EUICommand::SafetyCarStart: return (State == EUISimRaceState::Green || Snapshot.bFormationLap) && Snapshot.Time <= 0.0;
 	case EUICommand::LappedCarsMayOvertake:
 		return State == EUISimRaceState::SafetyCar && !Snapshot.bSafetyCarInThisLap && !Snapshot.bLappedCarsReleased;
 	case EUICommand::ClosePitEntry: return !Snapshot.bPitEntryClosed;

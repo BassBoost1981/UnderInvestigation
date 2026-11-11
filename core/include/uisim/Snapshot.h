@@ -63,6 +63,7 @@ struct CarState {
     int trackLimitStrikes = 0;
     bool blackWhiteFlag = false; // shown after the warning offence (track limits)
     bool unlapping = false;      // lapped car passing the queue and the Safety Car (B5.13.4 c)
+    bool stalled = false;        // immobilised on the grid before the start (B5.7, M11.3)
     double detectionGap = 0.0;   // seconds behind the car ahead at the last Detection Line crossing
     bool finished = false;
 };
@@ -83,6 +84,7 @@ struct SimSnapshot {
     bool safetyCarOnTrack = false;
     bool pitEntryClosed = false; // B1.6.4 (M8.3)
     bool gridStart = false; // standing start: cars forming on the grid or waiting for the signal (M10.3)
+    bool formationLap = false; // the formation lap before the start is being driven (B5.6, M11.3)
     int startLights = 0;    // red lights lit on the gantry, all out = start signal (B5.7.1)
     bool safetyCarInThisLap = false;
     double safetyCarDistance = 0.0; // metres, same scale as CarState::distance

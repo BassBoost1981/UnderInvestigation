@@ -37,6 +37,10 @@ struct RaceConfig {
     double jumpStartChance = 0.01;
     double gridPositionErrorChance = 0.005;
     double poorStartChance = 0.06;
+    // Formation lap before the standing start (B5.6, M11.3). Off: the cars wait on the grid for the lights.
+    bool formationLap = true;
+    // Chance per car and standing start that it is immobilised on the grid (B5.7).
+    double stallChance = 0.01;
     // Scales follow-up accidents and punctures at accident sites (M6.4); 0 isolates scenarios.
     double followUpChanceScale = 1.0;
     // Rain over the race (M9.2, data/weather); empty = dry, the race is then unchanged.
@@ -56,6 +60,9 @@ struct RaceStats {
     int blueFlagsIgnored = 0;
     int trackLimitOffences = 0; // every time a car left the track (lap deleted)
     int aquaplanes = 0;         // accidents in standing water (M9.4)
+    int stalls = 0;             // cars immobilised on the grid (M11.3)
+    int stallCrashes = 0;       // of those, hit by a car starting behind
+    int startRepeats = 0;       // aborted starts and extra formation laps
     double heavyRainUnneutralised = 0.0; // seconds of standing water under green (M9.4)
 };
 
@@ -74,7 +81,9 @@ struct Command {
         LappedCarsMayOvertake, // under the SC: lapped cars pass and rejoin the back (B5.13.4 c, M8.2)
         ClosePitEntry,   // B1.6.4: planned stops wait, penalties are not served (M8.3)
         OpenPitEntry,
-        SafetyCarStart   // before the start: formation lap(s) behind the SC, `wetTyres` mandates wets (B5.10, M9.4)
+        SafetyCarStart,  // before the start: formation lap(s) behind the SC, `wetTyres` mandates wets (B5.10, M9.4)
+        AbortStart,      // before the start signal: the procedure begins again after a wait (B5.8, M11.3)
+        ExtraFormationLap // before the start signal: one more formation lap straight away (B5.9, M11.3)
     };
     Type type = Type::SetSectorFlag;
     int sector = 0;          // SetSectorFlag only
@@ -214,7 +223,10 @@ private:
         double speed = 0.0;
         double lateral = 0.0;
         double startDelay = 0.0; // race time at which the car pulls away at a standing start
-        double gridTarget = -1.0; // standing (re)start: drive to this distance and wait, -1 = none (M10.3)
+        bool onGrid = false;      // standing (re)start: drives to gridTarget and waits there (M10.3)
+        double gridTarget = 0.0;  // distance of its grid slot while onGrid
+        bool stalled = false;     // immobilised on the grid (B5.7, M11.3)
+        bool backOfGrid = false;  // caused an aborted start or extra formation lap: starts behind the field (B5.8, B5.9)
         double jumpEarly = 0.0;  // seconds moved before the start signal (B5.11)
         double gridError = 0.0;  // metres outside the grid box (B5.11)
         int gridPosition = 0;
@@ -301,6 +313,9 @@ private:
     void beginStartLights(bool newReactions);
     void updateStandingStart();
     void cancelStandingStart();
+    void startFormationLap();
+    void finishFormationLap();
+    void repeatStart(double wait);
     void moveSafetyCar();
     bool overtakingAllowed(int car) const;
     void recordViolation(int car, int passedCar);
@@ -361,6 +376,11 @@ private:
     bool formation_ = false;       // formation laps behind the SC before the start (B5.10)
     double lightsBegin_ = 0.0;
     double startSignalTime_ = 0.0;
+    // Formation lap (M11.3): driven before the first start; the race has not started until the signal.
+    bool formationLap_ = false;
+    bool raceStarted_ = false;
+    bool freshReactions_ = false;   // the next lights draw new reactions (after a repeated start)
+    double formationGoTime_ = 0.0;  // the cars leave the grid for the formation lap at this time
     RaceState state_ = RaceState::Green;
     SafetyCar safetyCar_;
     std::vector<Flag> sectorFlags_;
