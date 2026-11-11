@@ -1,6 +1,7 @@
 #include "uisim/Season.h"
 
 #include "uisim/DataLoader.h"
+#include "uisim/Rng.h"
 
 #include <algorithm>
 #include <cmath>
@@ -117,6 +118,57 @@ std::uint64_t seasonRaceSeed(std::uint64_t seasonSeed, int index) {
     return seasonSeed * 1000u + static_cast<std::uint64_t>(index) + 1u;
 }
 
+namespace {
+
+// Form of the day (M11.2), as shares of the pace. The grid spans about 2 % in car pace and
+// 2 % in driver skill, so these move a team or driver by a few places, not through the field.
+constexpr double kTeamFormSpread = 0.012;   // car on the day
+constexpr double kDriverFormSpread = 0.008; // driver on the day
+constexpr double kTrackTypeSpread = 0.005;  // car on fast against slow circuits, fixed for the season
+constexpr double kRainSpread = 0.004;       // driver in the rain, fixed for the season
+constexpr double kFastSpeed = 250.0 / 3.6;  // m/s: a segment at least this fast counts as fast
+constexpr double kMiddleFastShare = 0.70;   // share of fast track on a circuit that is neither fast nor slow
+constexpr double kFastShareRange = 0.12;    // this much more or less: fully fast or slow
+
+// -1..1 from a name and a seed: stable whoever else is in the field (FNV-1a, then the usual generator).
+double nameValue(const std::string& name, std::uint64_t seed, std::uint64_t stream) {
+    std::uint64_t hash = 1469598103934665603ull;
+    for (unsigned char c : name) {
+        hash = (hash ^ c) * 1099511628211ull;
+    }
+    Pcg32 rng(seed ^ hash, stream);
+    return rng.uniform(-1.0, 1.0);
+}
+
+// -1 = slow circuit, +1 = fast circuit, by the share of fast track.
+double trackCharacter(const Track& track) {
+    double fast = 0.0;
+    for (const TrackSegment& segment : track.segments()) {
+        if (segment.speed >= kFastSpeed) {
+            fast += segment.length;
+        }
+    }
+    return std::clamp((fast / track.length() - kMiddleFastShare) / kFastShareRange, -1.0, 1.0);
+}
+
+} // namespace
+
+std::vector<Entry> seasonRaceEntries(const std::vector<Entry>& entries, std::uint64_t seasonSeed, int index, const Track& track,
+                                     bool rain) {
+    const std::uint64_t raceSeed = seasonRaceSeed(seasonSeed, index);
+    const double character = trackCharacter(track);
+    std::vector<Entry> result = entries;
+    for (Entry& entry : result) {
+        const double teamForm = nameValue(entry.team, raceSeed, 131u);
+        const double driverForm = nameValue(entry.name, raceSeed, 132u);
+        const double trackLiking = nameValue(entry.team, seasonSeed, 133u);
+        const double rainLiking = nameValue(entry.name, seasonSeed, 134u);
+        entry.teamPace *= (1.0 + kTeamFormSpread * teamForm) * (1.0 + kTrackTypeSpread * trackLiking * character);
+        entry.skill *= (1.0 + kDriverFormSpread * driverForm) * (rain ? 1.0 + kRainSpread * rainLiking : 1.0);
+    }
+    return result;
+}
+
 Sim makeSeasonRace(const SeasonCalendar& calendar, int index, std::uint64_t seasonSeed, const std::filesystem::path& dataDir,
                    const std::vector<Entry>& entries, const RaceRules& rules) {
     if (index < 0 || index >= static_cast<int>(calendar.races.size())) {
@@ -131,7 +183,8 @@ Sim makeSeasonRace(const SeasonCalendar& calendar, int index, std::uint64_t seas
     if (!race.weather.empty()) {
         config.weather = loadWeather(dataDir / "weather" / race.weather);
     }
-    return Sim(std::move(track), entries, config);
+    std::vector<Entry> racing = seasonRaceEntries(entries, seasonSeed, index, track, !race.weather.empty());
+    return Sim(std::move(track), std::move(racing), config);
 }
 
 } // namespace uisim

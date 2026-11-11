@@ -71,7 +71,15 @@ std::vector<int> standings(const std::vector<ChampionshipLine>& lines);
 // Seed of race `index` (0-based) in a season: every race differs, the season is reproducible.
 std::uint64_t seasonRaceSeed(std::uint64_t seasonSeed, int index);
 
-// Builds race `index` of the calendar: track and weather from `dataDir`, laps from the race distance.
+// Form of the day (M11.2): the entries as they turn up for race `index`. Every team and driver
+// has a form per race, every team a liking for fast or slow circuits and every driver one for
+// rain, all from the season seed and the names, so a smaller field keeps the same values.
+// Single races outside a season do not use this.
+std::vector<Entry> seasonRaceEntries(const std::vector<Entry>& entries, std::uint64_t seasonSeed, int index, const Track& track,
+                                     bool rain);
+
+// Builds race `index` of the calendar: track and weather from `dataDir`, laps from the race distance,
+// the entries with their form of the day.
 Sim makeSeasonRace(const SeasonCalendar& calendar, int index, std::uint64_t seasonSeed, const std::filesystem::path& dataDir,
                    const std::vector<Entry>& entries, const RaceRules& rules);
 

@@ -7,6 +7,7 @@
 
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <filesystem>
 #include <numeric>
 #include <vector>
@@ -247,4 +248,73 @@ TEST_CASE("The example calendar loads; its races get their laps from the race di
     CHECK(sawWeather);
     CHECK_THROWS(makeSeasonRace(calendar, static_cast<int>(calendar.races.size()), 1, kData, entries, rules));
     CHECK_THROWS(loadSeason(kData / "seasons" / "missing.json"));
+}
+
+TEST_CASE("Form of the day: per race, per name, the same for both cars of a team (M11.2)") {
+    const std::vector<Entry> entries = loadEntries(kData / "entries" / "fictional-grid.json");
+    const Track track = loadTrack(kData / "tracks" / "testring.json");
+    const std::vector<Entry> a = seasonRaceEntries(entries, 5, 0, track, false);
+    const std::vector<Entry> again = seasonRaceEntries(entries, 5, 0, track, false);
+    const std::vector<Entry> nextRace = seasonRaceEntries(entries, 5, 1, track, false);
+    const std::vector<Entry> wet = seasonRaceEntries(entries, 5, 0, track, true);
+    REQUIRE(a.size() == entries.size());
+    bool raceDiffers = false;
+    bool rainDiffers = false;
+    for (std::size_t k = 0; k < entries.size(); ++k) {
+        CHECK(a[k].name == entries[k].name);
+        CHECK(a[k].teamPace == again[k].teamPace); // reproducible
+        CHECK(a[k].skill == again[k].skill);
+        // A few places, not through the field: within 2 % of the entry list.
+        CHECK(a[k].teamPace / entries[k].teamPace == doctest::Approx(1.0).epsilon(0.02));
+        CHECK(a[k].skill / entries[k].skill == doctest::Approx(1.0).epsilon(0.02));
+        raceDiffers = raceDiffers || a[k].teamPace != nextRace[k].teamPace;
+        CHECK(wet[k].teamPace == a[k].teamPace); // rain is the driver's matter
+        rainDiffers = rainDiffers || wet[k].skill != a[k].skill;
+        for (std::size_t other = 0; other < k; ++other) {
+            if (entries[other].team == entries[k].team) { // one car, one form
+                CHECK(a[k].teamPace / entries[k].teamPace == doctest::Approx(a[other].teamPace / entries[other].teamPace));
+            }
+        }
+    }
+    CHECK(raceDiffers);
+    CHECK(rainDiffers);
+    // A smaller field (a suspended driver) leaves everyone else as they were.
+    std::vector<Entry> fewer = entries;
+    fewer.erase(fewer.begin() + 3);
+    const std::vector<Entry> b = seasonRaceEntries(fewer, 5, 0, track, false);
+    for (std::size_t k = 0; k < b.size(); ++k) {
+        const std::size_t from = k < 3 ? k : k + 1;
+        CHECK(b[k].teamPace == a[from].teamPace);
+        CHECK(b[k].skill == a[from].skill);
+    }
+}
+
+TEST_CASE("Private season (only if present): several winners, nobody wins more than half, most drivers score (M11.2)") {
+    const std::filesystem::path file = kData / "seasons" / "private" / "season-2026.json";
+    if (!std::filesystem::exists(file)) {
+        MESSAGE("no private season in data/seasons/private: skipped");
+        return;
+    }
+    const SeasonCalendar calendar = loadSeason(file);
+    const int races = static_cast<int>(calendar.races.size());
+    int winnersTotal = 0;
+    constexpr int kSeeds = 3;
+    for (std::uint64_t seed = 1; seed <= kSeeds; ++seed) {
+        std::vector<int> winners;
+        const Championship championship = runSeason(calendar, seed, &winners);
+        std::vector<int> wins(championship.drivers.size(), 0);
+        for (int winner : winners) {
+            ++wins[winner];
+        }
+        const int different = static_cast<int>(std::count_if(wins.begin(), wins.end(), [](int w) { return w > 0; }));
+        const int most = *std::max_element(wins.begin(), wins.end());
+        const int scorers = static_cast<int>(std::count_if(championship.drivers.begin(), championship.drivers.end(),
+            [](const ChampionshipLine& driver) { return driver.points > 0; }));
+        INFO("seed ", seed, ": ", different, " winners, most wins ", most, ", ", scorers, " drivers with points");
+        CHECK(different >= 5);
+        CHECK(most * 2 <= races);
+        CHECK(scorers >= 14);
+        winnersTotal += different;
+    }
+    CHECK(winnersTotal >= 6 * kSeeds); // six winners a season on average
 }
