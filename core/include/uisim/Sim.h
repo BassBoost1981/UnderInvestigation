@@ -83,12 +83,13 @@ struct Command {
         OpenPitEntry,
         SafetyCarStart,  // before the start: formation lap(s) behind the SC, `wetTyres` mandates wets (B5.10, M9.4)
         AbortStart,      // before the start signal: the procedure begins again after a wait (B5.8, M11.3)
-        ExtraFormationLap // before the start signal: one more formation lap straight away (B5.9, M11.3)
+        ExtraFormationLap, // before the start signal: one more formation lap straight away (B5.9, M11.3)
+        HoldHearing      // `incidentId`: hear the drivers; during the race the verdict has to wait for it (M11.5)
     };
     Type type = Type::SetSectorFlag;
     int sector = 0;          // SetSectorFlag only
     Flag flag = Flag::Green; // SetSectorFlag only
-    int incidentId = 0;      // IssueVerdict only
+    int incidentId = 0;      // IssueVerdict, HoldHearing
     int car = -1;            // IssueVerdict: entry index penalised, -1 = no one; InjectAccident: car
     Penalty penalty = Penalty::None; // IssueVerdict only
     AccidentType accident = AccidentType::Spin; // InjectAccident only
@@ -147,6 +148,8 @@ struct Incident {
     double distance = 0.0; // total distance of `car` at the incident
     double blame = 0.0;  // ground truth: share of fault of `car`, 0..1 (rest: otherCar)
     double measure = 0.0; // ground truth detail: speeding km/h over the limit, unsafe release gap in metres
+    bool heard = false;        // the stewards held a hearing (HoldHearing): no right of review afterwards (M11.5)
+    double hearingUntil = 0.0; // race time until which the hearing keeps the verdict waiting
     // Collision only, what the blame came from (evidence for a hearing, M11.4):
     double turnInGap = 0.0;    // metres the attacker was behind at turn-in
     double attackerPush = 0.0; // 0..1, how hard the attacker went for it

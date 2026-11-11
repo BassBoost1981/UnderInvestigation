@@ -136,17 +136,23 @@ void finishCareerRace(Career& career, const SeasonCalendar& calendar, const Sim&
     race.safety = rating.safety;
     race.incidents = static_cast<int>(rating.incidents.size());
     race.decided = rating.decided;
+    race.overturned = rating.overturned;
 
     // A3.3.1 b: penalty points go with a penalty other than a reprimand; here per kind of incident.
-    for (const Verdict& verdict : sim.verdicts()) {
-        if (verdict.penalty == Penalty::None || verdict.penalty == Penalty::Warning || verdict.car < 0 ||
-            verdict.car >= static_cast<int>(racing.size()) || verdict.incidentId < 1 ||
-            verdict.incidentId > static_cast<int>(sim.incidents().size())) {
+    // A verdict set aside on review counts as the stewards should have decided.
+    for (std::size_t k = 0; k < rating.incidents.size(); ++k) {
+        const IncidentRating& decision = rating.incidents[k];
+        if (!decision.decided) {
             continue;
         }
-        const int points = penaltyPointsFor(sim.incidents()[verdict.incidentId - 1].type, rules);
+        const int car = decision.overturned ? decision.expected.car : decision.givenCar;
+        const Penalty penalty = decision.overturned ? decision.expected.penalty : decision.givenPenalty;
+        if (penalty == Penalty::None || penalty == Penalty::Warning || car < 0 || car >= static_cast<int>(racing.size())) {
+            continue;
+        }
+        const int points = penaltyPointsFor(sim.incidents()[k].type, rules);
         if (points > 0) {
-            const int entry = racing[verdict.car];
+            const int entry = racing[car];
             career.penaltyPoints[entry] += points;
             race.penaltyPoints.push_back({entry, points});
         }
@@ -199,7 +205,8 @@ void saveCareer(const std::filesystem::path& path, const Career& career) {
                          {"race_quality", race.raceQuality},
                          {"safety", race.safety},
                          {"incidents", race.incidents},
-                         {"decided", race.decided}});
+                         {"decided", race.decided},
+                         {"overturned", race.overturned}});
     }
     root["races"] = races;
     std::ofstream file(path);
@@ -263,6 +270,7 @@ Career loadCareer(const std::filesystem::path& path, const SeasonCalendar& calen
             race.safety = r.at("safety").get<double>();
             race.incidents = r.at("incidents").get<int>();
             race.decided = r.at("decided").get<int>();
+            race.overturned = r.value("overturned", 0);
             career.races.push_back(race);
         }
         if (career.nextRace < 0 || career.nextRace > static_cast<int>(calendar.races.size()) ||

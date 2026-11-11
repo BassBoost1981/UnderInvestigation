@@ -114,7 +114,8 @@ int runSeason(const std::filesystem::path& seasonPath, const std::filesystem::pa
         for (std::size_t p = 0; p < race.podium.size(); ++p) {
             std::printf("  %zu. %-18s %s\n", p + 1, entries[race.podium[p]].name.c_str(), entries[race.podium[p]].team.c_str());
         }
-        std::printf("  Rating %.1f (incidents %d, decided %d)\n", race.overall, race.incidents, race.decided);
+        std::printf("  Rating %.1f (incidents %d, decided %d, set aside on review %d)\n", race.overall, race.incidents,
+                    race.decided, race.overturned);
         printNames("  Sat out", race.suspended, entries);
         printNames("  Suspended for the next race", career.suspended, entries);
         printStandings("  Drivers", career.championship.drivers, 5);

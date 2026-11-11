@@ -14,6 +14,8 @@ constexpr double kFullReactionTime = 20.0; // seconds after the accident: radio 
 constexpr double kZeroReactionTime = 120.0;
 constexpr double kFollowUpCost = 0.15;
 constexpr double kHeavyRainCostPer10Min = 0.5; // safety lost per 10 minutes of racing in standing water
+constexpr double kReviewScore = 0.5;    // a verdict scoring less than this is clearly wrong (right of review)
+constexpr double kOverturnedCost = 5.0; // points of the overall rating per verdict set aside
 
 int severity(Penalty penalty) { return static_cast<int>(penalty); }
 
@@ -116,6 +118,9 @@ RaceRating rateRace(const Sim& sim) {
             ++rating.decided;
         }
         r.score = score(r.expected, r.givenCar, r.givenPenalty);
+        r.heard = incident.heard;
+        r.overturned = r.decided && !r.heard && r.score < kReviewScore;
+        rating.overturned += r.overturned ? 1 : 0;
         // An accident without contact only counts when the stewards decided on it.
         if (incident.type != Incident::Type::Accident || r.decided) {
             total += r.score;
@@ -190,6 +195,7 @@ RaceRating rateRace(const Sim& sim) {
 
     rating.overall = 100.0 * (0.35 * rating.fairness + 0.15 * rating.consistency + 0.3 * rating.safety +
                               0.2 * rating.raceQuality);
+    rating.overall = std::max(0.0, rating.overall - kOverturnedCost * rating.overturned);
     return rating;
 }
 

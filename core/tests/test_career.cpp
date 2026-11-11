@@ -55,6 +55,7 @@ void strict(Sim& sim, const Incident& incident) {
 }
 
 // Drives the next race of the career to the flag and books it. Returns the finished race.
+// The judge decides after the flag and after a hearing on every incident, so no verdict is open to review.
 Sim runCareerRace(Career& career, const SeasonCalendar& calendar, const std::vector<Entry>& entries, const RaceRules& rules,
                   const Judge& judge = {}) {
     Sim sim = makeCareerRace(career, calendar, kData, entries, rules);
@@ -62,13 +63,16 @@ Sim runCareerRace(Career& career, const SeasonCalendar& calendar, const std::vec
     auto look = [&] {
         for (; seen < sim.incidents().size(); ++seen) {
             if (judge) {
+                Command hearing;
+                hearing.type = Command::Type::HoldHearing;
+                hearing.incidentId = sim.incidents()[seen].id;
+                sim.command(hearing);
                 judge(sim, sim.incidents()[seen]);
             }
         }
     };
     for (long steps = 0; !sim.finished() && steps < 2'000'000; ++steps) {
         sim.step();
-        look();
     }
     REQUIRE(sim.finished());
     look();

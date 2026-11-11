@@ -36,6 +36,7 @@ struct CareerRace {
     double safety = 0.0;
     int incidents = 0;
     int decided = 0;
+    int overturned = 0; // verdicts set aside on review before the next race (M11.5)
 };
 
 struct Career {

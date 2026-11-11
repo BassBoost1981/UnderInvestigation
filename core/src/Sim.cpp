@@ -25,6 +25,7 @@ constexpr double kJumpStartMin = 0.05; // seconds before the signal
 constexpr double kJumpStartMax = 0.4;
 constexpr double kGridErrorMin = 0.5; // metres past the grid box
 constexpr double kGridErrorMax = 1.5;
+constexpr double kHearingSeconds = 180.0; // a hearing during the race takes this long before the verdict (M11.5)
 // Formation lap and a car immobilised on the grid (M11.3).
 constexpr double kFormationPaceFraction = 0.6; // everyone at this share of the reference speed: the order holds
 constexpr double kStallDecisionSeconds = 12.0; // the lights wait this long for race control when a car is immobilised
@@ -330,6 +331,18 @@ void Sim::applyCommands() {
                 config_.laps += config_.rules.safetyCarStartLapsDeductedOffset;
             }
             break;
+        case Type::HoldHearing:
+            if (c.incidentId >= 1 && c.incidentId <= static_cast<int>(incidents_.size())) {
+                Incident& incident = incidents_[c.incidentId - 1];
+                const bool decided = std::any_of(verdicts_.begin(), verdicts_.end(),
+                    [&](const Verdict& v) { return v.incidentId == c.incidentId; });
+                if (!incident.heard && !decided) {
+                    incident.heard = true;
+                    // After the flag there is time; during the race the drivers are heard later.
+                    incident.hearingUntil = snapshot_.finished ? time_ : time_ + kHearingSeconds;
+                }
+            }
+            break;
         case Type::AbortStart:
             if (gridStart_ && !raceStarted_) {
                 repeatStart(kAbortWaitSeconds); // B5.8
@@ -371,6 +384,9 @@ void Sim::applyVerdict(const Command& c) {
         [&](const Verdict& v) { return v.incidentId == c.incidentId; });
     if (!known || decided || c.car < -1 || c.car >= static_cast<int>(cars_.size())) {
         return; // one decision per incident
+    }
+    if (incidents_[c.incidentId - 1].heard && !snapshot_.finished && time_ < incidents_[c.incidentId - 1].hearingUntil) {
+        return; // the hearing is still going on
     }
     const bool raceOver = snapshot_.finished;
     verdicts_.push_back({c.incidentId, c.car, c.penalty, time_, raceOver});

@@ -21,6 +21,10 @@ struct IncidentRating {
     int givenCar = -1;
     Penalty givenPenalty = Penalty::None;
     double score = 0.0; // 0..1
+    bool heard = false; // decided after a hearing
+    // Right of review (ISC 14, M11.5): decided without a hearing and clearly wrong. The evidence the
+    // stewards did not look at is the new element; the verdict is replaced by `expected`.
+    bool overturned = false;
 };
 
 // Race director rating (DESIGN.md 7).
@@ -34,6 +38,7 @@ struct RaceRating {
     int followUpAccidents = 0;
     double heavyRainSeconds = 0.0; // racing on in standing water, not neutralised (M9.4)
     int decided = 0;
+    int overturned = 0; // verdicts set aside on review, each costs points of the overall rating
     std::vector<IncidentRating> incidents;
 };
 RaceRating rateRace(const Sim& sim);
