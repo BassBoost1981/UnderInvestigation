@@ -124,6 +124,12 @@ TEST_CASE("Rules file loads with the documented defaults") {
     CHECK(rules.penaltyPointsYellowFlag == 3);
     CHECK(rules.penaltyPointsOvertakingNeutralised == 2);
     CHECK(rules.penaltyPointsRedFlag == 4);
+    // M11.1
+    CHECK(rules.investigationNoticeMinutes == 60); // B1.9.2
+    CHECK_FALSE(rules.racePenaltiesAppealable);    // B1.10
+    CHECK(rules.rightOfReviewHours == 96);         // ISC 14.4.1
+    CHECK(rules.maxDriversPerTeam == 4);           // B1, Changes of Driver
+    CHECK(rules.formationLapBeforeStart);          // B5.6
 }
 
 TEST_CASE("Invalid marshal sector is rejected") {

@@ -1,6 +1,6 @@
 {
   "name": "FIA F1 Sporting Regulations 2026 (simplified for the sim)",
-  "comment": "Parameters of the rule mechanics, not regulation text. Checked against '2026 F1 Regulations - Section B [Sporting] - Iss 09' (2026-10-01), ISC Appendix H 2026 (published 2026-06-23), '2026 F1 Regulations - Section A [General Provisions] - Iss 03' (2026-06-25, for points and penalty points), the 2026 F1 Penalty Guidelines v01 (FIA: no regulatory value) and the Race Director's Competition Notes Sao Paulo GP 2026 V2; Section B and Appendix H were the newest 2026 issues listed by the FIA on 2026-11-08. verified = the cited article exists in that issue and describes this mechanic; values from the Penalty Guidelines are marked verified false because they are guidance, not regulation; 'note' says where a value is a sim simplification.",
+  "comment": "Parameters of the rule mechanics, not regulation text. Checked against '2026 F1 Regulations - Section B [Sporting] - Iss 09' (2026-10-01), ISC Appendix H 2026 (published 2026-06-23), '2026 F1 Regulations - Section A [General Provisions] - Iss 03' (2026-06-25, for points and penalty points), the International Sporting Code 2026 (application from 2026-06-26, for the right of review), the 2026 F1 Penalty Guidelines v01 (FIA: no regulatory value) and the Race Director's Competition Notes Sao Paulo GP 2026 V2; Section B and Appendix H were the newest 2026 issues listed by the FIA on 2026-11-08. verified = the cited article exists in that issue and describes this mechanic; values from the Penalty Guidelines are marked verified false because they are guidance, not regulation; 'note' says where a value is a sim simplification.",
   "rules": {
     "yellow_speed_factor": {
       "value": 0.95,
@@ -310,6 +310,36 @@
       "source": "2026 F1 Penalty Guidelines v01 (failing to slow for red flags, ISC Appendix H 2.5.4.1 b)",
       "verified": false,
       "note": "Guideline maximum. Sim: goes with a penalty for overtaking under the red flag. Overtaking before the line after the Safety Car counts like overtaking behind it."
+    },
+    "investigation_notice_minutes": {
+      "value": 60,
+      "source": "F1 SR 2026 Section B, B1.9.2 (investigation of incidents)",
+      "verified": true,
+      "note": "The stewards decide whether to investigate; a message names the drivers involved. If it is shown within 60 minutes after the end of the race, the drivers may not leave the circuit without the consent of the stewards. Sim: an incident can be heard during the race or after the flag; no time limit is modelled."
+    },
+    "race_penalties_appealable": {
+      "value": false,
+      "source": "F1 SR 2026 Section B, B1.10 (appeal of a penalty); Section A A7.5",
+      "verified": true,
+      "note": "No appeal against time penalties, drive-through and stop-and-go imposed for incidents in a race (B1.9.5 a to h), also not when imposed in the last three laps or after the end. Sim: a team cannot appeal a verdict; the only way to have it changed is the right of review."
+    },
+    "right_of_review_hours": {
+      "value": 96,
+      "source": "ISC 2026 (application from 26 June 2026) Art. 14.1.1, 14.1.2, 14.3, 14.4.1; Section A A7.7",
+      "verified": true,
+      "note": "A decision can be reviewed when a significant and relevant new element is discovered that was unavailable at the time of the decision; the stewards alone decide whether such an element exists, and they may also re-examine a decision on their own initiative. A petition must be brought within 96 hours after the end of the Competition. Sim: evidence the player did not look at, because no hearing was held, is the new element; a review happens before the next race."
+    },
+    "max_drivers_per_team": {
+      "value": 4,
+      "source": "F1 SR 2026 Section B, B1, Changes of Driver",
+      "verified": true,
+      "note": "A competitor may use at most four drivers in the races of a Championship; a new driver may score points. Sim: a reserve driver replaces a suspended driver and scores for the team."
+    },
+    "formation_lap_before_start": {
+      "value": true,
+      "source": "F1 SR 2026 Section B, B5.6 (formation lap), B5.7 (start procedure, car immobilised on the grid)",
+      "verified": true,
+      "note": "Before a standing start the cars do a formation lap in grid order; overtaking only to re-establish the order. A car immobilised on the grid is shown with yellow flags, pushed to the pit lane and may join from there after the start. Aborted start and extra formation lap: see start_repeat_laps_deducted."
     }
   }
 }

@@ -65,6 +65,12 @@ struct RaceRules {
     int penaltyPointsYellowFlag = 3;            // Penalty Guidelines (maximum)
     int penaltyPointsOvertakingNeutralised = 2; // Penalty Guidelines: behind the SC or under VSC
     int penaltyPointsRedFlag = 4;               // Penalty Guidelines (maximum): overtaking under the red flag
+    // M11 (from package 11.1)
+    int investigationNoticeMinutes = 60;    // B1.9.2: a message within this time after the race keeps the drivers at the circuit
+    bool racePenaltiesAppealable = false;   // B1.10: no appeal against in-race penalties
+    int rightOfReviewHours = 96;            // ISC 14.4.1: petition for review; needs a new element (ISC 14.1.1)
+    int maxDriversPerTeam = 4;              // B1, Changes of Driver: reserve drivers may score
+    bool formationLapBeforeStart = true;    // B5.6
 };
 
 } // namespace uisim

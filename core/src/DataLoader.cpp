@@ -166,6 +166,11 @@ RaceRules loadRules(const std::filesystem::path& path) {
         rules.penaltyPointsYellowFlag = integer("penalty_points_yellow_flag");
         rules.penaltyPointsOvertakingNeutralised = integer("penalty_points_overtaking_neutralised");
         rules.penaltyPointsRedFlag = integer("penalty_points_red_flag");
+        rules.investigationNoticeMinutes = integer("investigation_notice_minutes");
+        rules.racePenaltiesAppealable = flag("race_penalties_appealable");
+        rules.rightOfReviewHours = integer("right_of_review_hours");
+        rules.maxDriversPerTeam = integer("max_drivers_per_team");
+        rules.formationLapBeforeStart = flag("formation_lap_before_start");
         return rules;
     } catch (const json::exception& e) {
         throw std::runtime_error("Bad rules data in " + displayName(path) + ": " + e.what());
