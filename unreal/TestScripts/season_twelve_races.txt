@@ -1,0 +1,42 @@
+# M10.8 check: twelve races of a season in a row, each one back to the season screen (saved after every race).
+# Run twice for a season of 24 races: first with -UISimNewCareer, then without it, so the second run
+# continues from the save file:
+#   -UISimSeason=<file in data/seasons> -UISimSeed=1 -UISimCareer=check_season [-UISimNewCareer] -UISimTimeScale=500
+#   -UISimScript=TestScripts/season_twelve_races.txt -UISimQuitWhenDone
+# The last log lines "SEASON Drivers/Teams" match "uisim_runner --season <file> --seed 1".
+-1 season_start
+99001 season_back
+---
+-1 season_start
+99001 season_back
+---
+-1 season_start
+99001 season_back
+---
+-1 season_start
+99001 season_back
+---
+-1 season_start
+99001 season_back
+---
+-1 season_start
+99001 season_back
+---
+-1 season_start
+99001 season_back
+---
+-1 season_start
+99001 season_back
+---
+-1 season_start
+99001 season_back
+---
+-1 season_start
+99001 season_back
+---
+-1 season_start
+99001 season_back
+---
+-1 season_start
+99001 season_back
+---
