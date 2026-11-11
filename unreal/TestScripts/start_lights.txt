@@ -1,0 +1,7 @@
+# M10.7 check (testring, seed 1, 1600x900): start lights and grid, then spray on a wet track.
+# Run with -UISimSeed=1 -UISimWeather=wet-start.json -UISimTimeScale=1 -UISimScript=TestScripts/start_lights.txt -UISimQuitWhenDone
+0 camera 6
+3.5 screenshot start_lights
+20 camera 1
+30 screenshot spray
+31 timescale 500

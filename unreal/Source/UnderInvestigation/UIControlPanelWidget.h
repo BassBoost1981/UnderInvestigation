@@ -26,7 +26,7 @@ protected:
 	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 
 private:
-	enum class EKind : uint8 { Command, AskRedFlag, ConfirmYes, ConfirmNo, ToggleWet };
+	enum class EKind : uint8 { Command, AskRedFlag, ConfirmYes, ConfirmNo, ToggleWet, ToggleStanding };
 
 	struct FButton
 	{
@@ -49,6 +49,7 @@ private:
 	TObjectPtr<UBorder> ButtonArea;
 
 	bool bWetMandate = false; // SC start and restart with wet tyres compulsory (B6.3.7)
+	bool bStanding = false;   // standing start when the SC comes in after formation laps or a red flag (B5.10.8, B5.15.4)
 	double ConfirmUntil = 0.0; // real time (FPlatformTime::Seconds) until the red flag question expires
 	mutable bool bTargetsLogged = false;
 };

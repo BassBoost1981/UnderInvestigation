@@ -209,7 +209,7 @@ FUISimRating FUISimSession::Rating() const
 	return Out;
 }
 
-void FUISimSession::Send(int32 Type, int32 Sector, EUISimFlag Flag, bool bWetTyres)
+void FUISimSession::Send(int32 Type, int32 Sector, EUISimFlag Flag, bool bWetTyres, bool bStanding)
 {
 	if (!Sim)
 	{
@@ -220,6 +220,7 @@ void FUISimSession::Send(int32 Type, int32 Sector, EUISimFlag Flag, bool bWetTyr
 	Command.sector = Sector;
 	Command.flag = static_cast<uisim::Flag>(Flag);
 	Command.wetTyres = bWetTyres;
+	Command.standing = bStanding;
 	try
 	{
 		Sim->command(Command);
@@ -235,9 +236,15 @@ void FUISimSession::SetSectorFlag(int32 Sector, EUISimFlag Flag) { Send(static_c
 void FUISimSession::DeployVirtualSafetyCar() { Send(static_cast<int32>(ECommand::DeployVirtualSafetyCar)); }
 void FUISimSession::EndVirtualSafetyCar() { Send(static_cast<int32>(ECommand::EndVirtualSafetyCar)); }
 void FUISimSession::DeploySafetyCar() { Send(static_cast<int32>(ECommand::DeploySafetyCar)); }
-void FUISimSession::RecallSafetyCar() { Send(static_cast<int32>(ECommand::RecallSafetyCar)); }
+void FUISimSession::RecallSafetyCar(bool bStanding)
+{
+	Send(static_cast<int32>(ECommand::RecallSafetyCar), 0, EUISimFlag::Green, false, bStanding);
+}
 void FUISimSession::RedFlag() { Send(static_cast<int32>(ECommand::RedFlag)); }
-void FUISimSession::Restart(bool bWetTyres) { Send(static_cast<int32>(ECommand::Restart), 0, EUISimFlag::Green, bWetTyres); }
+void FUISimSession::Restart(bool bWetTyres, bool bStanding)
+{
+	Send(static_cast<int32>(ECommand::Restart), 0, EUISimFlag::Green, bWetTyres, bStanding);
+}
 void FUISimSession::SafetyCarStart(bool bWetTyres) { Send(static_cast<int32>(ECommand::SafetyCarStart), 0, EUISimFlag::Green, bWetTyres); }
 double FUISimSession::ForecastRain(double Time) const { return Sim ? Sim->forecastRain(Time) : 0.0; }
 FString FUISimSession::WeatherName() const { return Sim ? FromUtf8(Sim->weatherName()) : FString(); }
@@ -319,6 +326,8 @@ void FUISimSession::CopySnapshot()
 	CurrentSnapshot.LineWetness = In.lineWetness;
 	CurrentSnapshot.StandingWater = In.standingWater;
 	CurrentSnapshot.bWetTyresMandated = In.wetTyresMandated;
+	CurrentSnapshot.bGridStart = In.gridStart;
+	CurrentSnapshot.StartLights = In.startLights;
 	CurrentSnapshot.SafetyCarDistance = In.safetyCarDistance;
 	CurrentSnapshot.Cars.SetNum(static_cast<int32>(In.cars.size()));
 	for (int32 Index = 0; Index < CurrentSnapshot.Cars.Num(); ++Index)

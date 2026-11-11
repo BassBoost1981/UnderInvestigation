@@ -1,0 +1,8 @@
+# M10.7 check (testring, seed 1): standing start after formation laps behind the Safety Car (B5.10.8)
+# and after a red flag (B5.15.4).
+# Run with -UISimSeed=1 -UISimTimeScale=20 -UISimScript=TestScripts/standing_start.txt -UISimQuitWhenDone
+0 sc_start
+150 sc_in standing
+2000 red
+2400 restart standing
+3000 timescale 500

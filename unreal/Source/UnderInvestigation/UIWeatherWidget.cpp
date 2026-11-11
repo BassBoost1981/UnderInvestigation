@@ -99,5 +99,23 @@ int32 UUIWeatherWidget::NativePaint(const FPaintArgs& Args, const FGeometry& All
 		}
 		++Layer;
 	}
+	if (Race && Race->Session().IsStarted() && Race->Session().Snapshot().bGridStart)
+	{
+		// Start gantry (M10.7): five lights, red one after the other, all out = go (B5.7.1).
+		const int32 Lit = Race->Session().Snapshot().StartLights;
+		const FSlateBrush* White = FCoreStyle::Get().GetBrush("WhiteBrush");
+		const FVector2D LightSize(34.0, 34.0);
+		const double Step = LightSize.X + 12.0;
+		const FVector2D Origin(AllottedGeometry.GetLocalSize().X / 2.0 - (5.0 * Step - 12.0) / 2.0, 170.0);
+		FSlateDrawElement::MakeBox(OutDrawElements, Layer, AllottedGeometry.ToPaintGeometry(FVector2D(5.0 * Step + 12.0, LightSize.Y + 24.0),
+			FSlateLayoutTransform(1.0f, Origin - FVector2D(12.0, 12.0))), White, ESlateDrawEffect::None, FLinearColor(0.0f, 0.0f, 0.0f, 0.85f));
+		for (int32 Index = 0; Index < 5; ++Index)
+		{
+			FSlateDrawElement::MakeBox(OutDrawElements, Layer + 1, AllottedGeometry.ToPaintGeometry(LightSize,
+				FSlateLayoutTransform(1.0f, Origin + FVector2D(Index * Step, 0.0))), White, ESlateDrawEffect::None,
+				Index < Lit ? FLinearColor(1.0f, 0.05f, 0.03f) : FLinearColor(0.12f, 0.02f, 0.02f));
+		}
+		Layer += 2;
+	}
 	return Super::NativePaint(Args, AllottedGeometry, MyCullingRect, OutDrawElements, Layer, InWidgetStyle, bParentEnabled);
 }

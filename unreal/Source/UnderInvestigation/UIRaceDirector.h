@@ -31,9 +31,9 @@ enum class EUICommand : uint8
 	DeployVsc,
 	EndVsc,
 	DeploySafetyCar,
-	RecallSafetyCar,       // "Safety Car in this lap"
+	RecallSafetyCar,       // "Safety Car in this lap"; Index 2 = standing start after formation laps (B5.10.8)
 	RedFlag,
-	Restart,               // after a red flag; Index 1 = wet tyres compulsory (B5.15.2 a)
+	Restart,               // after a red flag; Index bit 1 = wet tyres compulsory (B5.15.2 a), bit 2 = standing start (B5.15.4)
 	LappedCarsMayOvertake, // under the SC (B5.13.4 c)
 	ClosePitEntry,         // B1.6.4
 	OpenPitEntry,
@@ -186,6 +186,8 @@ private:
 	TObjectPtr<UMaterialInterface> BaseMaterial;
 	UPROPERTY()
 	TArray<TObjectPtr<UStaticMeshComponent>> CarMeshes; // by entry index
+	UPROPERTY()
+	TArray<TObjectPtr<UStaticMeshComponent>> SprayMeshes; // by entry index: spray behind a car on a wet track (M10.7)
 
 	UPROPERTY()
 	TObjectPtr<UStaticMeshComponent> SafetyCarMesh;
@@ -238,6 +240,8 @@ private:
 	TObjectPtr<UMaterialInstanceDynamic> RoadMaterial; // darker when wet
 	int32 FollowedEntry = -1; // TV camera target, -1 = the leader
 	FString LoggedUnlapping;  // lapped cars passing under the SC, last logged
+	bool bLoggedGridStart = false; // standing start state last logged (checks, M10.7)
+	int32 IncidentsLogged = 0;      // incidents named in the log so far (checks, M10.7)
 	double CrashAtSeconds = 0.0; // -UISimCrashAt: scripted crash of the car in P9 (checks only)
 	bool bCrashReact = false;     // -UISimCrashReact: double yellow 10 s after the scripted crash
 	double CrashReactAt = 0.0;

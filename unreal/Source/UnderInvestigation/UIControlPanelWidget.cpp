@@ -124,6 +124,14 @@ TArray<UUIControlPanelWidget::FButton> UUIControlPanelWidget::Buttons() const
 		Wet.bActive = bWetMandate;
 		Wet.ActiveColor = FLinearColor(0.3f, 0.6f, 1.0f);
 		List.Add(Wet);
+		// Standing start from the grid when the SC comes in after formation laps or a red flag (M10.7).
+		FButton Standing;
+		Standing.Rect = Cell(PitLeft - 116.0 - 106.0, 0, 100.0);
+		Standing.Label = TEXT("STEHEND");
+		Standing.Kind = EKind::ToggleStanding;
+		Standing.bActive = bStanding;
+		Standing.ActiveColor = FLinearColor(0.9f, 0.1f, 0.1f);
+		List.Add(Standing);
 	}
 
 	// Row 1: race control. Toggle buttons stand for the command that fits the state, like the keys.
@@ -132,12 +140,12 @@ TArray<UUIControlPanelWidget::FButton> UUIControlPanelWidget::Buttons() const
 		MakeCommand(bVsc ? EUICommand::EndVsc : EUICommand::DeployVsc), bVsc);
 	const bool bSc = State == EUISimRaceState::SafetyCar;
 	Add(Cell(ScLeft, 1, ScWidth), bSc ? TEXT("SC REIN [S]") : TEXT("SC [S]"),
-		MakeCommand(bSc ? EUICommand::RecallSafetyCar : EUICommand::DeploySafetyCar), bSc,
+		MakeCommand(bSc ? EUICommand::RecallSafetyCar : EUICommand::DeploySafetyCar, bSc && bStanding ? 2 : 0), bSc,
 		EKind::Command, FLinearColor(1.0f, 0.55f, 0.1f));
 	const bool bRed = State == EUISimRaceState::RedFlag;
 	if (bRed)
 	{
-		Add(Cell(RedLeft, 1, RedWidth), TEXT("NEUSTART [R]"), MakeCommand(EUICommand::Restart, bWetMandate ? 1 : 0), true, EKind::Command,
+		Add(Cell(RedLeft, 1, RedWidth), TEXT("NEUSTART [R]"), MakeCommand(EUICommand::Restart, (bWetMandate ? 1 : 0) | (bStanding ? 2 : 0)), true, EKind::Command,
 			FLinearColor(0.9f, 0.1f, 0.1f));
 	}
 	else
@@ -269,6 +277,10 @@ FReply UUIControlPanelWidget::NativeOnMouseButtonDown(const FGeometry& InGeometr
 			break;
 		case EKind::Command:
 			Race->Execute(Button.Command); // logs and refuses what is not allowed now
+			break;
+		case EKind::ToggleStanding:
+			bStanding = !bStanding;
+			UE_LOG(LogUISim, Display, TEXT("Control panel: standing start %s"), bStanding ? TEXT("on") : TEXT("off"));
 			break;
 		case EKind::ToggleWet:
 			bWetMandate = !bWetMandate;

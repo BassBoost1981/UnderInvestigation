@@ -70,6 +70,8 @@ struct FUISimSnapshot
 	double LineWetness = 0.0;   // on the racing line
 	double StandingWater = 0.0; // aquaplaning risk (M9.4)
 	bool bWetTyresMandated = false; // B6.3.7
+	bool bGridStart = false; // standing start: cars forming on the grid or waiting for the signal (M10.3)
+	int32 StartLights = 0;   // red lights lit on the gantry, all out = start signal (B5.7.1)
 	double SafetyCarDistance = 0.0;
 	TArray<FUISimCar> Cars; // sorted by position
 };
@@ -210,9 +212,9 @@ public:
 	void DeployVirtualSafetyCar();
 	void EndVirtualSafetyCar();
 	void DeploySafetyCar();
-	void RecallSafetyCar();
+	void RecallSafetyCar(bool bStanding = false); // after formation laps: standing start from the grid (B5.10.8)
 	void RedFlag();
-	void Restart(bool bWetTyres = false);  // B5.15.2 a: optionally wet tyres compulsory
+	void Restart(bool bWetTyres = false, bool bStanding = false); // B5.15.2 a: wet tyres compulsory; B5.15.4: standing start
 	void SafetyCarStart(bool bWetTyres);  // before the start, B5.10
 	// Checks only (M9.8): chance per team to overlook the two-compound rule; set before Start, < 0 = default.
 	void SetCompoundRuleMissChance(double Chance) { CompoundRuleMissChance = Chance; }
@@ -234,7 +236,7 @@ private:
 	friend class FUISimCareer;
 	void Adopt(TUniquePtr<uisim::Sim> NewSim); // takes over a race built elsewhere (career, M10.6)
 	void CopySnapshot();
-	void Send(int32 Type, int32 Sector = 0, EUISimFlag Flag = EUISimFlag::Green, bool bWetTyres = false);
+	void Send(int32 Type, int32 Sector = 0, EUISimFlag Flag = EUISimFlag::Green, bool bWetTyres = false, bool bStanding = false);
 
 	TUniquePtr<uisim::Sim> Sim;
 	double CompoundRuleMissChance = -1.0;

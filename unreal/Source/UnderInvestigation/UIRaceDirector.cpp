@@ -352,6 +352,9 @@ void AUIRaceDirector::SpawnCars()
 		UStaticMeshComponent* Car = AddMesh(CubeMesh, TeamColor(Teams.IndexOfByKey(Entry.Team), Teams.Num()));
 		Car->SetWorldScale3D(CarScale);
 		CarMeshes.Add(Car);
+		UStaticMeshComponent* Spray = AddMesh(CubeMesh, FLinearColor(0.72f, 0.77f, 0.82f)); // blockout spray: a pale wedge
+		Spray->SetVisibility(false);
+		SprayMeshes.Add(Spray);
 	}
 	UpdateCars(1.0);
 
@@ -589,6 +592,20 @@ void AUIRaceDirector::Tick(float DeltaSeconds)
 				Passing.IsEmpty() ? TEXT("none") : *Passing);
 		}
 	}
+	for (; IncidentsLogged < SimSession.Incidents().Num(); ++IncidentsLogged)
+	{
+		// Every incident by number, time, type (EUISimIncidentType) and cars, so check scripts can be written against a race.
+		const FUISimIncident& Incident = SimSession.Incidents()[IncidentsLogged];
+		UE_LOG(LogUISim, Display, TEXT("Incident #%d at %s: type %d, %s/%s"), Incident.Id, *FormatRaceTime(Incident.Time),
+			static_cast<int32>(Incident.Type), *SimSession.Entries()[Incident.Car].Code, *SimSession.Entries()[Incident.OtherCar].Code);
+	}
+	if (SimSession.Snapshot().bGridStart != bLoggedGridStart)
+	{
+		// Standing start (checks, M10.7): cars taking up the grid, then the start signal.
+		bLoggedGridStart = SimSession.Snapshot().bGridStart;
+		UE_LOG(LogUISim, Display, TEXT("Standing start at %s: %s"), *FormatRaceTime(SimSession.Snapshot().Time),
+			bLoggedGridStart ? TEXT("cars on the grid") : TEXT("over (start signal, or called off)"));
+	}
 	if (RoadMaterial)
 	{
 		// Wet asphalt looks darker (M9.7).
@@ -743,6 +760,19 @@ void AUIRaceDirector::UpdateCars(double Alpha)
 			Rotation = Rotation * FQuat(FVector::UpVector, FMath::DegreesToRadians(Site->bOnTrack ? 70.0 : 30.0));
 		}
 		Mesh->SetWorldLocationAndRotation(Transform.GetLocation() + FVector(0, 0, RoadHeight + CarScale.Z * 50.0), Rotation);
+		// Spray (M10.7): grows with the wetness of the racing line and the speed of the car.
+		UStaticMeshComponent* Spray = SprayMeshes[Car.EntryIndex];
+		const double Amount = SimSession.Snapshot().LineWetness * FMath::Clamp(Car.Speed / 60.0, 0.0, 1.0);
+		const bool bSpray = Mesh->IsVisible() && !Site && !Car.bInPitLane && !bReviewing && Amount > 0.05;
+		Spray->SetVisibility(bSpray);
+		if (bSpray)
+		{
+			const double Length = 2.0 + 5.0 * Amount; // metres
+			const double Height = 0.2 + 0.6 * Amount;
+			const FTransform Behind = SimSession.CarTransform(Distance - CarScale.X / 2.0 - Length / 2.0, Lateral);
+			Spray->SetWorldTransform(FTransform(Behind.GetRotation(),
+				Behind.GetLocation() + FVector(0, 0, RoadHeight + Height * 50.0), FVector(Length, CarScale.Y * 1.3, Height)));
+		}
 	}
 }
 

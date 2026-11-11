@@ -1,6 +1,6 @@
 # M8.7 check: the commands behind incident_review_clicks.txt, without clicks.
-300 incident 2
-300 review 2
+300 incident 3
+300 review 3
 301 pause
 302 seek 1
 303 review_at -2.5
