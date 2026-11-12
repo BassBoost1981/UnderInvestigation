@@ -13,7 +13,8 @@ namespace {
 
 using nlohmann::json;
 
-constexpr int kSaveFormat = 1;
+constexpr int kSaveFormat = 2; // 2 (M11.6): age of every penalty point, races driven; older files are refused
+constexpr double kReserveSkill = 0.994; // a reserve driver against the regular one
 
 // path.string() throws on Windows for non-ASCII paths; go through UTF-8.
 std::string displayName(const std::filesystem::path& path) {
@@ -63,6 +64,7 @@ Career newCareer(const SeasonCalendar& calendar, const std::vector<Entry>& entri
     career.seed = seed;
     career.championship = newChampionship(entries);
     career.penaltyPoints.assign(entries.size(), 0);
+    career.pointRaces.assign(entries.size(), {});
     return career;
 }
 
@@ -84,11 +86,28 @@ double careerRating(const Career& career) {
 std::vector<int> careerRaceEntries(const Career& career) {
     std::vector<int> entries;
     for (int entry = 0; entry < static_cast<int>(career.penaltyPoints.size()); ++entry) {
-        if (!contains(career.suspended, entry)) {
-            entries.push_back(entry);
-        }
+        entries.push_back(entry);
     }
     return entries;
+}
+
+Entry reserveDriver(const Entry& regular) {
+    Entry reserve = regular; // same car, same number
+    reserve.name = "Reserve " + regular.team;
+    reserve.code = "R" + regular.code.substr(0, std::min<std::size_t>(2, regular.code.size()));
+    reserve.skill = regular.skill * kReserveSkill;
+    reserve.aggression = 0.5;
+    reserve.honesty = 0.7;
+    return reserve;
+}
+
+Career nextSeason(const Career& career, const SeasonCalendar& calendar, const std::vector<Entry>& entries) {
+    Career next = newCareer(calendar, entries, career.seed + 1);
+    next.penaltyPoints = career.penaltyPoints;
+    next.pointRaces = career.pointRaces;
+    next.racesDriven = career.racesDriven;
+    next.suspended = career.suspended;
+    return next;
 }
 
 Sim makeCareerRace(const Career& career, const SeasonCalendar& calendar, const std::filesystem::path& dataDir,
@@ -98,7 +117,7 @@ Sim makeCareerRace(const Career& career, const SeasonCalendar& calendar, const s
     }
     std::vector<Entry> racing;
     for (int entry : careerRaceEntries(career)) {
-        racing.push_back(entries.at(entry));
+        racing.push_back(contains(career.suspended, entry) ? reserveDriver(entries.at(entry)) : entries.at(entry));
     }
     return makeSeasonRace(calendar, career.nextRace, career.seed, dataDir, racing, rules);
 }
@@ -126,7 +145,15 @@ void finishCareerRace(Career& career, const SeasonCalendar& calendar, const Sim&
             race.podium.push_back(line.entry);
         }
     }
-    addResult(career.championship, entries, result);
+    addResult(career.championship, entries, result, career.suspended); // a reserve scores for the team only
+
+    // Every point has an age. Counts set from outside (a loaded or prepared career) get this race as theirs.
+    const int raceNumber = career.racesDriven;
+    career.pointRaces.resize(career.penaltyPoints.size());
+    for (std::size_t entry = 0; entry < career.penaltyPoints.size(); ++entry) {
+        std::vector<int>& ages = career.pointRaces[entry];
+        ages.resize(static_cast<std::size_t>(std::max(0, career.penaltyPoints[entry])), raceNumber);
+    }
 
     const RaceRating rating = rateRace(sim);
     race.overall = rating.overall;
@@ -153,17 +180,26 @@ void finishCareerRace(Career& career, const SeasonCalendar& calendar, const Sim&
         const int points = penaltyPointsFor(sim.incidents()[k].type, rules);
         if (points > 0) {
             const int entry = racing[car];
-            career.penaltyPoints[entry] += points;
+            if (contains(race.suspended, entry)) {
+                continue; // the reserve drove: the regular driver's licence is not touched
+            }
+            career.pointRaces[entry].insert(career.pointRaces[entry].end(), static_cast<std::size_t>(points), raceNumber);
             race.penaltyPoints.push_back({entry, points});
         }
     }
-    // At the limit: suspended for the next race, the limit is then taken off the licence.
+    // Expiry, then the limit: suspended for the next race, the oldest points up to the limit come off.
+    ++career.racesDriven;
+    const int window = std::max(1, static_cast<int>(calendar.races.size())); // a season stands for the twelve months
     career.suspended.clear();
     for (int entry = 0; entry < static_cast<int>(career.penaltyPoints.size()); ++entry) {
-        if (career.penaltyPoints[entry] >= rules.penaltyPointsSuspensionAt) {
+        std::vector<int>& ages = career.pointRaces[entry]; // oldest first
+        ages.erase(std::remove_if(ages.begin(), ages.end(), [&](int from) { return career.racesDriven - from > window; }),
+                   ages.end());
+        if (static_cast<int>(ages.size()) >= rules.penaltyPointsSuspensionAt) {
             career.suspended.push_back(entry);
-            career.penaltyPoints[entry] -= rules.penaltyPointsSuspensionAt;
+            ages.erase(ages.begin(), ages.begin() + rules.penaltyPointsSuspensionAt);
         }
+        career.penaltyPoints[entry] = static_cast<int>(ages.size());
     }
     career.races.push_back(race);
     ++career.nextRace;
@@ -176,10 +212,12 @@ void saveCareer(const std::filesystem::path& path, const Career& career) {
     root["seed"] = career.seed;
     root["next_race"] = career.nextRace;
     root["races_run"] = career.championship.racesRun;
+    root["races_driven"] = career.racesDriven;
     json drivers = json::array();
     for (int entry = 0; entry < static_cast<int>(career.championship.drivers.size()); ++entry) {
         json driver = lineToJson(career.championship.drivers[entry]);
         driver["penalty_points"] = career.penaltyPoints.at(entry);
+        driver["point_races"] = entry < static_cast<int>(career.pointRaces.size()) ? career.pointRaces[entry] : std::vector<int>();
         driver["suspended"] = contains(career.suspended, entry);
         drivers.push_back(driver);
     }
@@ -236,6 +274,7 @@ Career loadCareer(const std::filesystem::path& path, const SeasonCalendar& calen
         career.seed = root.at("seed").get<std::uint64_t>();
         career.nextRace = root.at("next_race").get<int>();
         career.championship.racesRun = root.at("races_run").get<int>();
+        career.racesDriven = root.at("races_driven").get<int>();
         const json& drivers = root.at("drivers");
         if (drivers.size() != entries.size()) {
             throw std::runtime_error(where + "the entry list has changed");
@@ -248,6 +287,7 @@ Career loadCareer(const std::filesystem::path& path, const SeasonCalendar& calen
             }
             career.championship.drivers.push_back(line);
             career.penaltyPoints.push_back(driver.at("penalty_points").get<int>());
+            career.pointRaces.push_back(driver.at("point_races").get<std::vector<int>>());
             if (driver.at("suspended").get<bool>()) {
                 career.suspended.push_back(entry);
             }

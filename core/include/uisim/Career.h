@@ -45,6 +45,10 @@ struct Career {
     int nextRace = 0;       // index into the calendar
     Championship championship;
     std::vector<int> penaltyPoints; // per entry: on the licence now
+    // Per entry and penalty point the number of the race it came from: points expire after as many
+    // races as the calendar has, the sim's twelve months (A3.3.1 b, M11.6).
+    std::vector<std::vector<int>> pointRaces;
+    int racesDriven = 0; // over all seasons of this career
     std::vector<int> suspended;     // entries that sit out the next race
     std::vector<CareerRace> races;  // finished races
 };
@@ -58,12 +62,20 @@ bool careerFinished(const Career& career, const SeasonCalendar& calendar);
 // The player's rating over the season: mean of the race ratings (0..100), 0 before the first race.
 double careerRating(const Career& career);
 
-// Season entry index of every car in the next race, in the order of the race's entry list:
-// all entries except the suspended ones.
+// Season entry index of every car in the next race, in the order of the race's entry list. Since
+// M11.6 that is every entry: a reserve drives the car of a suspended driver.
 std::vector<int> careerRaceEntries(const Career& career);
 
+// The reserve driver of a team, for the car of the suspended `regular` (B1, Changes of Driver):
+// a little slower, and what he scores counts for the team only.
+Entry reserveDriver(const Entry& regular);
+
+// The career after its last race, ready for the next season on the same calendar: fresh
+// championships and the next seed; penalty points and a pending suspension carry over.
+Career nextSeason(const Career& career, const SeasonCalendar& calendar, const std::vector<Entry>& entries);
+
 // Builds the next race of the career (track, weather, laps and seed as in makeSeasonRace),
-// without the suspended drivers.
+// with reserve drivers in the cars of the suspended drivers.
 Sim makeCareerRace(const Career& career, const SeasonCalendar& calendar, const std::filesystem::path& dataDir,
                    const std::vector<Entry>& entries, const RaceRules& rules);
 

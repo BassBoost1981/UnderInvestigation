@@ -62,7 +62,9 @@ struct Championship {
 };
 
 Championship newChampionship(const std::vector<Entry>& entries);
-void addResult(Championship& championship, const std::vector<Entry>& entries, const RaceResult& result);
+// `teamOnly`: entries whose car was driven by a reserve; their result counts for the team alone (M11.6).
+void addResult(Championship& championship, const std::vector<Entry>& entries, const RaceResult& result,
+               const std::vector<int>& teamOnly = {});
 
 // Indices into `lines`, best first: points, then the number of first places, second places
 // and so on (A2.1); still equal: the earlier line.

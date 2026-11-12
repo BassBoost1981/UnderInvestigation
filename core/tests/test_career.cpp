@@ -98,6 +98,8 @@ void checkSame(const Career& a, const Career& b) {
     checkSame(a.championship.drivers, b.championship.drivers);
     checkSame(a.championship.teams, b.championship.teams);
     CHECK(a.penaltyPoints == b.penaltyPoints);
+    CHECK(a.pointRaces == b.pointRaces);
+    CHECK(a.racesDriven == b.racesDriven);
     CHECK(a.suspended == b.suspended);
     REQUIRE(a.races.size() == b.races.size());
     for (std::size_t k = 0; k < a.races.size(); ++k) {
@@ -218,36 +220,36 @@ TEST_CASE("At twelve penalty points a driver sits out the next race") {
     CHECK(career.penaltyPoints[3] == 0); // twelve are taken off the licence
     CHECK(career.penaltyPoints[7] == 1);
     CHECK(career.penaltyPoints[5] == 11);
-    const std::vector<int> racing = careerRaceEntries(career);
-    CHECK(static_cast<int>(racing.size()) == n - 2);
-    CHECK(std::find(racing.begin(), racing.end(), 3) == racing.end());
-    CHECK(std::find(racing.begin(), racing.end(), 7) == racing.end());
+    CHECK(static_cast<int>(careerRaceEntries(career).size()) == n); // reserve drivers fill the grid
     const int pointsOf3 = career.championship.drivers[3].points;
     const int pointsOf7 = career.championship.drivers[7].points;
 
     const Sim second = runCareerRace(career, calendar, entries, rules);
-    CHECK(static_cast<int>(second.entries().size()) == n - 2);
-    for (const Entry& entry : second.entries()) {
-        CHECK(entry.name != entries[3].name);
-        CHECK(entry.name != entries[7].name);
-    }
+    REQUIRE(static_cast<int>(second.entries().size()) == n);
+    CHECK(second.entries()[3].name == reserveDriver(entries[3]).name); // the reserve in the suspended driver's car
+    CHECK(second.entries()[3].team == entries[3].team);
+    CHECK(second.entries()[3].skill < entries[3].skill);
+    CHECK(second.entries()[7].name == reserveDriver(entries[7]).name);
+    CHECK(second.entries()[4].name == entries[4].name);
     CHECK(career.championship.drivers[3].points == pointsOf3); // no race, no points
     CHECK(career.championship.drivers[7].points == pointsOf7);
     REQUIRE(career.races.size() == 2);
     CHECK(career.races[1].suspended == std::vector<int>{3, 7});
     CHECK(career.suspended.empty()); // one race only
-    // The results of the smaller field are booked under the season's entry indices.
-    const int winner = second.snapshot().cars.front().entryIndex;
-    REQUIRE_FALSE(career.races[1].podium.empty());
-    CHECK(entries[career.races[1].podium[0]].name == second.entries()[winner].name);
-    int total = 0;
+    int drivers = 0;
+    int teams = 0;
     for (const ChampionshipLine& driver : career.championship.drivers) {
-        total += driver.points;
+        drivers += driver.points;
     }
-    CHECK(total == 202); // two races, 101 points each
+    for (const ChampionshipLine& team : career.championship.teams) {
+        teams += team.points;
+    }
+    CHECK(teams == 202);     // two races, 101 points each: what a reserve scores counts for the team
+    CHECK(drivers <= teams); // but for no driver
 
     const Sim third = runCareerRace(career, calendar, entries, rules);
-    CHECK(static_cast<int>(third.entries().size()) == n); // back on the grid
+    CHECK(static_cast<int>(third.entries().size()) == n);
+    CHECK(third.entries()[3].name == entries[3].name); // back in his car
     CHECK(careerFinished(career, calendar));
     CHECK_THROWS(makeCareerRace(career, calendar, kData, entries, rules));
 }
@@ -327,4 +329,56 @@ TEST_CASE("A save file that does not fit the season is refused") {
     // A race that is still running cannot be booked.
     Sim running = makeCareerRace(career, calendar, kData, entries, rules);
     CHECK_THROWS(finishCareerRace(career, calendar, running, entries, rules));
+}
+
+TEST_CASE("Penalty points expire after a season's worth of races and carry over into the next season (M11.6)") {
+    const std::vector<Entry> entries = grid();
+    const RaceRules rules = loadedRules();
+    const SeasonCalendar calendar = calendarOf(3, 4); // three races: the sim's twelve months
+    Career career = newCareer(calendar, entries, 4);
+    career.penaltyPoints[2] = 5; // on the licence before the first race
+    for (int k = 0; k < 3; ++k) {
+        runCareerRace(career, calendar, entries, rules);
+        CHECK(career.penaltyPoints[2] == 5); // still within three races
+    }
+    REQUIRE(careerFinished(career, calendar));
+    CHECK(career.racesDriven == 3);
+
+    Career second = nextSeason(career, calendar, entries);
+    CHECK(second.seed == 5);
+    CHECK(second.nextRace == 0);
+    CHECK(second.races.empty());
+    CHECK(second.championship.racesRun == 0);
+    CHECK(second.penaltyPoints[2] == 5); // the licence comes along
+    CHECK(second.racesDriven == 3);
+    for (const ChampionshipLine& driver : second.championship.drivers) {
+        CHECK(driver.points == 0);
+    }
+    runCareerRace(second, calendar, entries, rules);
+    CHECK(second.penaltyPoints[2] == 0); // the fourth race after: expired
+    CHECK(second.racesDriven == 4);
+}
+
+TEST_CASE("A save file of the old format is refused (M11.6)") {
+    const std::vector<Entry> entries = grid();
+    const SeasonCalendar calendar = calendarOf(2, 5);
+    const std::filesystem::path file = saveFile("uisim_career_old_format.json");
+    Career career = newCareer(calendar, entries, 2);
+    career.penaltyPoints[1] = 3;
+    saveCareer(file, career);
+    const Career loaded = loadCareer(file, calendar, entries);
+    CHECK(loaded.penaltyPoints[1] == 3);
+    // The same file with the format of M10.5.
+    std::ifstream in(file);
+    std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    in.close();
+    const std::size_t at = content.find("\"format\": 2");
+    REQUIRE(at != std::string::npos);
+    content.replace(at, 11, "\"format\": 1");
+    {
+        std::ofstream out(file);
+        out << content;
+    }
+    CHECK_THROWS(loadCareer(file, calendar, entries));
+    std::filesystem::remove(file);
 }

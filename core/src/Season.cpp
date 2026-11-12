@@ -80,7 +80,8 @@ Championship newChampionship(const std::vector<Entry>& entries) {
     return championship;
 }
 
-void addResult(Championship& championship, const std::vector<Entry>& entries, const RaceResult& result) {
+void addResult(Championship& championship, const std::vector<Entry>& entries, const RaceResult& result,
+               const std::vector<int>& teamOnly) {
     for (const RaceResultLine& line : result.lines) {
         if (line.entry < 0 || line.entry >= static_cast<int>(championship.drivers.size())) {
             throw std::out_of_range("Race result names an unknown entry");
@@ -88,12 +89,17 @@ void addResult(Championship& championship, const std::vector<Entry>& entries, co
         ChampionshipLine& driver = championship.drivers[line.entry];
         const auto team = std::find_if(championship.teams.begin(), championship.teams.end(),
             [&](const ChampionshipLine& t) { return t.name == entries[line.entry].team; });
-        driver.points += line.points;
+        const bool reserve = std::find(teamOnly.begin(), teamOnly.end(), line.entry) != teamOnly.end();
+        if (!reserve) {
+            driver.points += line.points;
+        }
         if (team != championship.teams.end()) {
             team->points += line.points; // both cars of a team score (A2.1 b)
         }
         if (line.classified && line.position >= 1 && line.position <= static_cast<int>(driver.places.size())) {
-            ++driver.places[line.position - 1];
+            if (!reserve) {
+                ++driver.places[line.position - 1];
+            }
             if (team != championship.teams.end()) {
                 ++team->places[line.position - 1];
             }

@@ -13,6 +13,7 @@ THIRD_PARTY_INCLUDES_END
 #include <exception>
 #include <filesystem>
 #include <string>
+#include <system_error>
 #include <vector>
 
 namespace
@@ -62,11 +63,27 @@ bool FUISimCareer::Open(const FString& DataDir, const FString& SeasonFile, const
 			New->Laps.push_back(Race.laps > 0 ? Race.laps : uisim::raceLaps(Track.length(), New->Rules, Race.shortDistance));
 			New->Circuits.push_back(Track.name());
 		}
+		bool bLoaded = false;
 		if (!bNew && std::filesystem::exists(New->SavePath))
 		{
-			New->Career = uisim::loadCareer(New->SavePath, New->Calendar, New->Entries);
+			try
+			{
+				New->Career = uisim::loadCareer(New->SavePath, New->Calendar, New->Entries);
+				bLoaded = true;
+			}
+			catch (const std::exception& Error)
+			{
+				// A save file that does not fit (older format, another season or entry list) is put aside,
+				// not overwritten: the game starts a new career next to it.
+				std::filesystem::path Aside = New->SavePath;
+				Aside += ".old";
+				std::error_code Ignored;
+				std::filesystem::rename(New->SavePath, Aside, Ignored);
+				UE_LOG(LogTemp, Warning, TEXT("UISim career: %s; the file was put aside as .old, a new career starts"),
+					*CareerText(Error.what()));
+			}
 		}
-		else
+		if (!bLoaded)
 		{
 			New->Career = uisim::newCareer(New->Calendar, New->Entries, static_cast<std::uint64_t>(Seed));
 		}
@@ -246,7 +263,7 @@ bool FUISimCareer::StartNewSeason(FString& OutError)
 	}
 	try
 	{
-		State->Career = uisim::newCareer(State->Calendar, State->Entries, State->Career.seed + 1);
+		State->Career = uisim::nextSeason(State->Career, State->Calendar, State->Entries);
 		std::filesystem::create_directories(State->SavePath.parent_path());
 		uisim::saveCareer(State->SavePath, State->Career);
 		return true;
