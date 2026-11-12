@@ -1,6 +1,7 @@
 #include "UITimingTowerWidget.h"
 
 #include "UIRaceDirector.h"
+#include "UIStyle.h"
 
 #include "Blueprint/WidgetTree.h"
 #include "Brushes/SlateRoundedBoxBrush.h"
@@ -10,6 +11,7 @@
 #include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
+#include "Components/VerticalBoxSlot.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
 #include "Fonts/FontMeasure.h"
@@ -198,7 +200,7 @@ TSharedRef<SWidget> UUITimingTowerWidget::RebuildWidget()
 		UVerticalBox* Column = WidgetTree->ConstructWidget<UVerticalBox>();
 		UCanvasPanelSlot* ColumnSlot = Canvas->AddChildToCanvas(Column);
 		ColumnSlot->SetAutoSize(true);
-		ColumnSlot->SetPosition(FVector2D(24.0, 24.0));
+		ColumnSlot->SetPosition(UIStyle::TimingCard.Min + FVector2D(24.0, 14.0));
 
 		USizeBox* Box = WidgetTree->ConstructWidget<USizeBox>();
 		Box->SetWidthOverride(TowerWidth);
@@ -206,7 +208,7 @@ TSharedRef<SWidget> UUITimingTowerWidget::RebuildWidget()
 		TowerArea = WidgetTree->ConstructWidget<UBorder>();
 		TowerArea->SetBrushColor(FLinearColor(0.02f, 0.02f, 0.05f, 0.88f)); // visible, so it takes the clicks
 		Box->SetContent(TowerArea);
-		Column->AddChildToVerticalBox(Box);
+		Column->AddChildToVerticalBox(Box)->SetHorizontalAlignment(HAlign_Left); // not as wide as the footer
 
 		Footer = WidgetTree->ConstructWidget<UTextBlock>();
 		Footer->SetFont(FCoreStyle::GetDefaultFontStyle("Mono", 10));
@@ -232,10 +234,11 @@ void UUITimingTowerWidget::NativeTick(const FGeometry& MyGeometry, float InDelta
 	const TCHAR* FlagName = Snapshot.SectorFlags.IsValidIndex(Sector)
 		? FlagNames[static_cast<uint8>(Snapshot.SectorFlags[Sector])] : TEXT("-");
 	Footer->SetText(FText::FromString(FString::Printf(
-		TEXT("Rennzeit %s   Sektor %d/%d: %s [Q/E, Y]\n")
-		TEXT("Verstoesse: %d   Kamera: %s [1-6]   Zeit x%g"),
-		*AUIRaceDirector::FormatRaceTime(Snapshot.Time), Sector + 1, Snapshot.SectorFlags.Num(), FlagName,
-		Race->Session().FlagViolations(), *Race->ActiveCameraName(), Race->TimeScale())));
+		TEXT("Rennzeit %s   Zeit x%g\n")
+		TEXT("Sektor %d/%d: %s [Q/E, Y]\n")
+		TEXT("Verstoesse: %d   Kamera: %s [1-6]"),
+		*AUIRaceDirector::FormatRaceTime(Snapshot.Time), Race->TimeScale(), Sector + 1, Snapshot.SectorFlags.Num(), FlagName,
+		Race->Session().FlagViolations(), *Race->ActiveCameraName())));
 }
 
 int32 UUITimingTowerWidget::NativePaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry, const FSlateRect& MyCullingRect,
@@ -252,9 +255,9 @@ int32 UUITimingTowerWidget::NativePaint(const FPaintArgs& Args, const FGeometry&
 	const TArray<FUISimEntry>& Entries = Race->Session().Entries();
 	const FSlateBrush* White = FCoreStyle::Get().GetBrush("WhiteBrush");
 	const TSharedRef<FSlateFontMeasure> Measure = FSlateApplication::Get().GetRenderer()->GetFontMeasureService();
-	const FSlateFontInfo LapFont = FCoreStyle::GetDefaultFontStyle("Bold", 20);
-	const FSlateFontInfo SmallFont = FCoreStyle::GetDefaultFontStyle("Regular", 9);
-	const FSlateFontInfo CodeFont = FCoreStyle::GetDefaultFontStyle("Bold", 13);
+	const FSlateFontInfo LapFont = UIStyle::Font(TEXT("Bold"), 20);
+	const FSlateFontInfo SmallFont = UIStyle::Font(TEXT("Regular"), 8);
+	const FSlateFontInfo CodeFont = UIStyle::Font(TEXT("Bold"), 13);
 	const FSlateFontInfo GapFont = FCoreStyle::GetDefaultFontStyle("Mono", 11);
 	const FSlateFontInfo TagFont = FCoreStyle::GetDefaultFontStyle("Mono", 9);
 	++Layer;
@@ -293,7 +296,7 @@ int32 UUITimingTowerWidget::NativePaint(const FPaintArgs& Args, const FGeometry&
 	const FLinearColor Dark(0.03f, 0.03f, 0.06f);
 
 	// Lap counter, centred as one line.
-	const FSlateFontInfo LabelFont = FCoreStyle::GetDefaultFontStyle("Regular", 12);
+	const FSlateFontInfo LabelFont = UIStyle::Font(TEXT("Regular"), 12);
 	const FString Lap = FString::FromInt(Snapshot.LeaderLap);
 	const FString Total = FString::Printf(TEXT("/ %d"), Snapshot.TotalLaps);
 	const double LapLabelWidth = Measure->Measure(TEXT("LAP"), LabelFont).X;
@@ -337,7 +340,7 @@ int32 UUITimingTowerWidget::NativePaint(const FPaintArgs& Args, const FGeometry&
 	TextCentred(ModeLabel.Min.X + Half.X * 1.5, ModeLabel.Min.Y + 2.0, TEXT("ABSTAND"), SmallFont, bInterval ? Dim : Dark);
 	Text(FVector2D(TyreLeft, ModeLabel.Min.Y + 2.0), TEXT("REIFEN"), SmallFont, Dim);
 
-	const FSlateFontInfo TyreFont = FCoreStyle::GetDefaultFontStyle("Bold", 9);
+	const FSlateFontInfo TyreFont = UIStyle::Font(TEXT("Bold"), 9);
 	for (int32 Index = 0; Index < Snapshot.Cars.Num() && Index < MaxRows; ++Index)
 	{
 		const FUISimCar& Car = Snapshot.Cars[Index];

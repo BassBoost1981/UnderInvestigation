@@ -1,6 +1,7 @@
 #include "UIWeatherWidget.h"
 
 #include "UIRaceDirector.h"
+#include "UIStyle.h"
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
@@ -24,13 +25,12 @@ TSharedRef<SWidget> UUIWeatherWidget::RebuildWidget()
 		Canvas->SetVisibility(ESlateVisibility::HitTestInvisible); // the rain overlay must not catch clicks
 		WidgetTree->RootWidget = Canvas;
 		UBorder* Panel = WidgetTree->ConstructWidget<UBorder>();
-		Panel->SetBrushColor(FLinearColor(0.0f, 0.0f, 0.0f, 0.65f));
-		Panel->SetPadding(FMargin(10.0f));
+		Panel->SetBrushColor(FLinearColor::Transparent); // the top bar of the desk is the background
+		Panel->SetPadding(FMargin(8.0f));
 		UCanvasPanelSlot* PanelSlot = Canvas->AddChildToCanvas(Panel);
 		PanelSlot->SetAutoSize(true);
-		PanelSlot->SetAnchors(FAnchors(0.5f, 0.0f)); // top centre, between tower and incident list
-		PanelSlot->SetAlignment(FVector2D(0.5, 0.0));
-		PanelSlot->SetPosition(FVector2D(120.0, 24.0));
+		PanelSlot->SetAlignment(FVector2D(0.5, 0.0)); // centred in the top bar
+		PanelSlot->SetPosition(FVector2D(UIStyle::TopBar.GetCenter().X, UIStyle::TopBar.Min.Y));
 		Text = WidgetTree->ConstructWidget<UTextBlock>();
 		Text->SetFont(FCoreStyle::GetDefaultFontStyle("Mono", 11));
 		Text->SetColorAndOpacity(FSlateColor(FLinearColor(0.75f, 0.85f, 1.0f)));
@@ -81,9 +81,10 @@ int32 UUIWeatherWidget::NativePaint(const FPaintArgs& Args, const FGeometry& All
 	int32 Layer = LayerId;
 	if (Rain > 0.0)
 	{
-		// Rain overlay: a darker tint and falling streaks, drawn below the weather panel.
-		const FVector2D Size = AllottedGeometry.GetLocalSize();
-		FSlateDrawElement::MakeBox(OutDrawElements, Layer, AllottedGeometry.ToPaintGeometry(), FCoreStyle::Get().GetBrush("WhiteBrush"),
+		// Rain overlay on the camera picture: a darker tint and falling streaks.
+		const FVector2D Size = UIStyle::Feed.GetSize();
+		const FPaintGeometry Picture = AllottedGeometry.ToPaintGeometry(Size, FSlateLayoutTransform(1.0f, UIStyle::Feed.Min));
+		FSlateDrawElement::MakeBox(OutDrawElements, Layer, Picture, FCoreStyle::Get().GetBrush("WhiteBrush"),
 			ESlateDrawEffect::None, FLinearColor(0.05f, 0.07f, 0.12f, static_cast<float>(0.35 * Rain)));
 		++Layer;
 		const double Now = Race->Session().Snapshot().Time;
@@ -92,9 +93,9 @@ int32 UUIWeatherWidget::NativePaint(const FPaintArgs& Args, const FGeometry& All
 		{
 			// Fixed pseudo-random columns, falling with the race clock.
 			const double X = FMath::Frac(FMath::Sin(Index * 12.9898) * 43758.5453) * Size.X;
-			const double Y = FMath::Frac(FMath::Frac(FMath::Sin(Index * 78.233) * 12543.123) + Now * 0.9) * Size.Y;
-			FSlateDrawElement::MakeLines(OutDrawElements, Layer, AllottedGeometry.ToPaintGeometry(),
-				{FVector2D(X, Y), FVector2D(X - 4.0, Y + 22.0)}, ESlateDrawEffect::None,
+			const double Y = FMath::Frac(FMath::Frac(FMath::Sin(Index * 78.233) * 12543.123) + Now * 0.9) * (Size.Y - 22.0);
+			FSlateDrawElement::MakeLines(OutDrawElements, Layer, Picture,
+				{FVector2D(FMath::Max(X, 4.0), Y), FVector2D(FMath::Max(X, 4.0) - 4.0, Y + 22.0)}, ESlateDrawEffect::None,
 				FLinearColor(0.75f, 0.8f, 0.9f, static_cast<float>(0.25 + 0.35 * Rain)), true, 1.0f);
 		}
 		++Layer;
@@ -106,7 +107,7 @@ int32 UUIWeatherWidget::NativePaint(const FPaintArgs& Args, const FGeometry& All
 		const FSlateBrush* White = FCoreStyle::Get().GetBrush("WhiteBrush");
 		const FVector2D LightSize(34.0, 34.0);
 		const double Step = LightSize.X + 12.0;
-		const FVector2D Origin(AllottedGeometry.GetLocalSize().X / 2.0 - (5.0 * Step - 12.0) / 2.0, 170.0);
+		const FVector2D Origin(UIStyle::Feed.GetCenter().X - (5.0 * Step - 12.0) / 2.0, UIStyle::Feed.Min.Y + 60.0);
 		FSlateDrawElement::MakeBox(OutDrawElements, Layer, AllottedGeometry.ToPaintGeometry(FVector2D(5.0 * Step + 12.0, LightSize.Y + 24.0),
 			FSlateLayoutTransform(1.0f, Origin - FVector2D(12.0, 12.0))), White, ESlateDrawEffect::None, FLinearColor(0.0f, 0.0f, 0.0f, 0.85f));
 		for (int32 Index = 0; Index < 5; ++Index)

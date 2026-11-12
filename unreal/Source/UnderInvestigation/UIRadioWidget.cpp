@@ -1,6 +1,7 @@
 #include "UIRadioWidget.h"
 
 #include "UIRaceDirector.h"
+#include "UIStyle.h"
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
@@ -47,13 +48,11 @@ TSharedRef<SWidget> UUIRadioWidget::RebuildWidget()
 		WidgetTree->RootWidget = Canvas;
 
 		UBorder* Panel = WidgetTree->ConstructWidget<UBorder>();
-		Panel->SetBrushColor(FLinearColor(0.0f, 0.0f, 0.0f, 0.65f));
+		Panel->SetBrushColor(FLinearColor::Transparent); // the card of the desk is the background
 		Panel->SetPadding(FMargin(12.0f));
 		UCanvasPanelSlot* PanelSlot = Canvas->AddChildToCanvas(Panel);
 		PanelSlot->SetAutoSize(true);
-		PanelSlot->SetAnchors(FAnchors(0.0f, 1.0f)); // bottom left
-		PanelSlot->SetAlignment(FVector2D(0.0, 1.0));
-		PanelSlot->SetPosition(FVector2D(24.0, -24.0));
+		PanelSlot->SetPosition(UIStyle::ControlCard.Min + FVector2D(0.0, 124.0)); // below the control panel
 
 		UVerticalBox* Column = WidgetTree->ConstructWidget<UVerticalBox>();
 		Panel->SetContent(Column);

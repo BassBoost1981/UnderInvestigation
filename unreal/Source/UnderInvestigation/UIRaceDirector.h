@@ -11,6 +11,7 @@ class UMaterialInstanceDynamic;
 class UMaterialInterface;
 class UStaticMesh;
 class UStaticMeshComponent;
+class UUIDeskWidget;
 class UUITimingTowerWidget;
 class UUIIncidentWidget;
 class UUIRatingWidget;
@@ -212,6 +213,8 @@ private:
 	TArray<FString> CameraNames;
 	int32 ActiveCamera = 0;
 
+	UPROPERTY()
+	TObjectPtr<UUIDeskWidget> Desk; // background, cards and top bar behind the panels (M12.1)
 	UPROPERTY()
 	TObjectPtr<UUITimingTowerWidget> TimingTower;
 	UPROPERTY()

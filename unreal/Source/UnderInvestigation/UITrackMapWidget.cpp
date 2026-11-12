@@ -1,6 +1,7 @@
 #include "UITrackMapWidget.h"
 
 #include "UIRaceDirector.h"
+#include "UIStyle.h"
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
@@ -19,8 +20,8 @@ DEFINE_LOG_CATEGORY_STATIC(LogUISim, Log, All); // same category name as UIRaceD
 
 namespace
 {
-	constexpr double MapWidth = 400.0;
-	constexpr double MapHeight = 300.0;
+	constexpr double MapWidth = 320.0;
+	constexpr double MapHeight = 240.0;
 	constexpr double MapMargin = 12.0;
 	constexpr double CarHitRadius = 8.0;    // map units
 	constexpr double TrackHitRadius = 12.0;
@@ -48,20 +49,18 @@ TSharedRef<SWidget> UUITrackMapWidget::RebuildWidget()
 		WidgetTree->RootWidget = Canvas;
 
 		UBorder* Panel = WidgetTree->ConstructWidget<UBorder>();
-		Panel->SetBrushColor(FLinearColor(0.0f, 0.0f, 0.0f, 0.65f));
+		Panel->SetBrushColor(FLinearColor::Transparent); // the card of the desk is the background
 		Panel->SetPadding(FMargin(8.0f));
 		UCanvasPanelSlot* PanelSlot = Canvas->AddChildToCanvas(Panel);
 		PanelSlot->SetAutoSize(true);
-		PanelSlot->SetAnchors(FAnchors(1.0f, 1.0f)); // bottom right
-		PanelSlot->SetAlignment(FVector2D(1.0, 1.0));
-		PanelSlot->SetPosition(FVector2D(-24.0, -24.0));
+		PanelSlot->SetPosition(UIStyle::MapCard.Min + FVector2D(20.0, 4.0));
 
 		UVerticalBox* Column = WidgetTree->ConstructWidget<UVerticalBox>();
 		Panel->SetContent(Column);
 		UTextBlock* Title = WidgetTree->ConstructWidget<UTextBlock>();
 		Title->SetFont(FCoreStyle::GetDefaultFontStyle("Mono", 11));
 		Title->SetColorAndOpacity(FSlateColor(FLinearColor(1.0f, 0.85f, 0.2f)));
-		Title->SetText(FText::FromString(TEXT("STRECKE  Klick: Sektor-Flagge, Auto verfolgen")));
+		Title->SetText(FText::FromString(TEXT("STRECKE  Klick: Flagge, Auto")));
 		Title->SetVisibility(ESlateVisibility::HitTestInvisible);
 		Column->AddChildToVerticalBox(Title);
 

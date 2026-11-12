@@ -1,16 +1,16 @@
 # M8.6 check (testring, 1600x900): every control panel button by synthetic click.
 # Same commands at the same times as control_panel_commands.txt; both races must end identically.
-30 click 596 836     # VSC
-50 click 596 836     # VSC ENDE
-60 click 882 836     # UEBERRUNDETE without SC: not allowed
-100 click 684 836    # SC
-250 click 882 836    # UEBERRUNDETE
-260 click 684 836    # SC REIN
-600 click 997 836    # BOX ZU
-700 click 997 836    # BOX AUF
-900 click 773 836    # ROT: asks first
-901 click 808 809    # JA, ROT
-1000 click 773 836   # NEUSTART (same button)
-1100 click 668 863   # KAM 3
-1110 click 877 863   # ZEIT -
-1111 click 1008 863  # ZEIT +
+30 click 385 609     # VSC
+50 click 385 609     # VSC ENDE
+60 click 671 609     # UEBERRUNDETE without SC: not allowed
+100 click 473 609    # SC
+250 click 671 609    # UEBERRUNDETE
+260 click 473 609    # SC REIN
+600 click 786 609    # BOX ZU
+700 click 786 609    # BOX AUF
+900 click 561 609    # ROT: asks first
+901 click 597 582    # JA, ROT
+1000 click 561 609   # NEUSTART (same button)
+1100 click 457 636   # KAM 3
+1110 click 666 636   # ZEIT -
+1111 click 797 636   # ZEIT +

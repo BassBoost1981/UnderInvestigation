@@ -49,7 +49,7 @@ private:
 	TArray<FControl> Controls() const; // review buttons and penalty dialog, in ControlArea coordinates
 	FBox2D TimelineRect() const;
 	bool SeekTimeline(const FVector2D& Local);
-	UTextBlock* MakeText(const FLinearColor& Color, int32 Size = 13);
+	UTextBlock* MakeText(const FLinearColor& Color, int32 Size = 12);
 
 	TWeakObjectPtr<AUIRaceDirector> Director;
 

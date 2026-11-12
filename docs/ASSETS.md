@@ -6,3 +6,4 @@ Jedes fremde Asset, das das Projekt nutzt, steht hier mit Quelle, Lizenz und Ver
 |---|---|---|---|
 | Streckenformen echter Rennstrecken (GeoJSON) | [bacinger/f1-circuits](https://github.com/bacinger/f1-circuits), © 2019–2025 Tomislav Bacinger | MIT | Nur privat: Rohdaten in `data/tracks/private/source/` (gitignored), daraus erzeugt `core/tools/trackgen/convert_circuits.py` die privaten Strecken in `data/tracks/private/`. Nicht im öffentlichen Repository, nicht in veröffentlichten Builds (Streckenlayouts und Namen können geschützt sein). |
 | Würfel, Ebene, Grundmaterial | Unreal Engine 5.9 (`/Engine/BasicShapes`) | Unreal Engine EULA | Blockout-Darstellung in Unreal. |
+| Schrift Lexend (Regular, Bold) | github.com/googlefonts/lexend, `fonts/lexend/ttf` | SIL Open Font License 1.1 (Text in `unreal/Content/Fonts/OFL.txt`) | Schrift der Oberfläche (`UIStyle.h`), liegt in `unreal/Content/Fonts`. |

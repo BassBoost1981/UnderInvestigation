@@ -1,5 +1,7 @@
 #include "UIRaceDirector.h"
 
+#include "UIDeskWidget.h"
+#include "UIStyle.h"
 #include "UITimingTowerWidget.h"
 
 #include "Camera/CameraActor.h"
@@ -23,6 +25,7 @@
 #include "UIWeatherWidget.h"
 #include "UISeasonWidget.h"
 #include "UISimCareer.h"
+#include "Engine/LocalPlayer.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "Engine/TextureRenderTarget2D.h"
 
@@ -249,7 +252,13 @@ void AUIRaceDirector::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	if (EndPlayReason == EEndPlayReason::Destroyed)
 	{
 		// Leaving a race for the season screen: its panels and cameras go with it.
-		UUserWidget* Panels[] = {TimingTower, IncidentPanel, RatingPanel, RadioPanel, TrackMap, ControlPanel, WeatherPanel, SeasonPanel};
+		UUserWidget* Panels[] = {Desk, TimingTower, IncidentPanel, RatingPanel, RadioPanel, TrackMap, ControlPanel, WeatherPanel, SeasonPanel};
+		const APlayerController* Player = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+		if (ULocalPlayer* Local = Player ? Player->GetLocalPlayer() : nullptr)
+		{
+			Local->Origin = FVector2D(0.0, 0.0); // whole screen again for the season screen
+			Local->Size = FVector2D(1.0, 1.0);
+		}
 		for (UUserWidget* Panel : Panels)
 		{
 			if (Panel)
@@ -540,6 +549,15 @@ void AUIRaceDirector::Tick(float DeltaSeconds)
 	APlayerController* Player = GetWorld()->GetFirstPlayerController();
 	if (Player && !TimingTower)
 	{
+		// The desk (M12.1): the 3D picture fills only its card, the rest of the screen belongs to the panels.
+		Desk = CreateWidget<UUIDeskWidget>(Player, UUIDeskWidget::StaticClass());
+		Desk->SetRaceDirector(this);
+		Desk->AddToViewport(-10);
+		if (ULocalPlayer* Local = Player->GetLocalPlayer())
+		{
+			Local->Origin = UIStyle::Feed.Min / UIStyle::Screen;
+			Local->Size = UIStyle::Feed.GetSize() / UIStyle::Screen;
+		}
 		TimingTower = CreateWidget<UUITimingTowerWidget>(Player, UUITimingTowerWidget::StaticClass());
 		TimingTower->SetRaceDirector(this);
 		TimingTower->AddToViewport();
@@ -611,11 +629,6 @@ void AUIRaceDirector::Tick(float DeltaSeconds)
 		// Wet asphalt looks darker (M9.7).
 		const float Wet = static_cast<float>(SimSession.Snapshot().LineWetness);
 		RoadMaterial->SetVectorParameterValue(TEXT("Color"), FMath::Lerp(FLinearColor(0.05f, 0.05f, 0.055f), FLinearColor(0.012f, 0.014f, 0.022f), Wet));
-	}
-	if (TrackMap)
-	{
-		// The review panel needs the right side of the screen; the live map returns afterwards.
-		TrackMap->SetVisibility(bReviewing ? ESlateVisibility::Collapsed : ESlateVisibility::SelfHitTestInvisible);
 	}
 
 	if (ReviewAtSeconds > 0.0 && SimSession.Snapshot().Time >= ReviewAtSeconds)

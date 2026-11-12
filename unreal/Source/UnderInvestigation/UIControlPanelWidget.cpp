@@ -1,5 +1,7 @@
 #include "UIControlPanelWidget.h"
 
+#include "UIStyle.h"
+
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/CanvasPanel.h"
@@ -57,13 +59,11 @@ TSharedRef<SWidget> UUIControlPanelWidget::RebuildWidget()
 		WidgetTree->RootWidget = Canvas;
 
 		UBorder* Panel = WidgetTree->ConstructWidget<UBorder>();
-		Panel->SetBrushColor(FLinearColor(0.0f, 0.0f, 0.0f, 0.65f));
+		Panel->SetBrushColor(FLinearColor::Transparent); // the card of the desk is the background
 		Panel->SetPadding(FMargin(8.0f));
 		UCanvasPanelSlot* PanelSlot = Canvas->AddChildToCanvas(Panel);
 		PanelSlot->SetAutoSize(true);
-		PanelSlot->SetAnchors(FAnchors(0.5f, 1.0f)); // bottom centre
-		PanelSlot->SetAlignment(FVector2D(0.5, 1.0));
-		PanelSlot->SetPosition(FVector2D(0.0, -24.0));
+		PanelSlot->SetPosition(UIStyle::ControlCard.Min + FVector2D(0.0, 6.0));
 
 		USizeBox* Box = WidgetTree->ConstructWidget<USizeBox>();
 		Box->SetWidthOverride(AreaWidth);
@@ -221,10 +221,6 @@ int32 UUIControlPanelWidget::NativePaint(const FPaintArgs& Args, const FGeometry
 	if (IsConfirming())
 	{
 		Text(FVector2D(0.0, 6.0), TEXT("Rote Flagge zeigen?"), FLinearColor(1.0f, 0.3f, 0.3f));
-	}
-	else
-	{
-		Text(FVector2D(0.0, 6.0), TEXT("RACE CONTROL"), FLinearColor(1.0f, 0.85f, 0.2f));
 	}
 	Text(FVector2D(TimeLabelLeft + 8.0, RowTop(2) + 6.0), FString::Printf(TEXT("x%g"), Race->TimeScale()), FLinearColor::White);
 	for (const FButton& Button : Buttons())

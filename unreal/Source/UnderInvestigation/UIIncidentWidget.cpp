@@ -1,6 +1,7 @@
 #include "UIIncidentWidget.h"
 
 #include "UIRaceDirector.h"
+#include "UIStyle.h"
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
@@ -10,6 +11,7 @@
 #include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
+#include "Components/VerticalBoxSlot.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Rendering/DrawElements.h"
 #include "Styling/CoreStyle.h"
@@ -73,6 +75,7 @@ UTextBlock* UUIIncidentWidget::MakeText(const FLinearColor& Color, int32 Size)
 	UTextBlock* Text = WidgetTree->ConstructWidget<UTextBlock>();
 	Text->SetFont(FCoreStyle::GetDefaultFontStyle("Mono", Size));
 	Text->SetColorAndOpacity(FSlateColor(Color));
+	Text->SetAutoWrapText(true); // long lines stay inside the card
 	return Text;
 }
 
@@ -84,18 +87,19 @@ TSharedRef<SWidget> UUIIncidentWidget::RebuildWidget()
 		WidgetTree->RootWidget = Canvas;
 
 		UBorder* Panel = WidgetTree->ConstructWidget<UBorder>();
-		Panel->SetBrushColor(FLinearColor(0.0f, 0.0f, 0.0f, 0.65f));
+		Panel->SetBrushColor(FLinearColor::Transparent); // the card of the desk is the background
 		Panel->SetPadding(FMargin(12.0f));
 		UCanvasPanelSlot* PanelSlot = Canvas->AddChildToCanvas(Panel);
 		PanelSlot->SetAutoSize(true);
-		PanelSlot->SetAnchors(FAnchors(1.0f, 0.0f));   // top right
-		PanelSlot->SetAlignment(FVector2D(1.0, 0.0));
-		PanelSlot->SetPosition(FVector2D(-24.0, 24.0));
+		PanelSlot->SetPosition(UIStyle::IncidentCard.Min + FVector2D(12.0, 4.0));
 
 		UVerticalBox* Column = WidgetTree->ConstructWidget<UVerticalBox>();
-		Panel->SetContent(Column);
+		USizeBox* CardWidth = WidgetTree->ConstructWidget<USizeBox>();
+		CardWidth->SetWidthOverride(UIStyle::IncidentCard.GetSize().X - 36.0);
+		CardWidth->SetContent(Column);
+		Panel->SetContent(CardWidth);
 
-		Title = MakeText(FLinearColor(1.0f, 0.85f, 0.2f), 14);
+		Title = MakeText(FLinearColor(1.0f, 0.85f, 0.2f), 13);
 		Column->AddChildToVerticalBox(Title);
 		for (int32 Index = 0; Index < MaxRows; ++Index)
 		{
@@ -117,7 +121,7 @@ TSharedRef<SWidget> UUIIncidentWidget::RebuildWidget()
 		PipBox->SetHeightOverride(PlotWidth * 9.0 / 16.0);
 		PipImage = WidgetTree->ConstructWidget<UImage>();
 		PipBox->SetContent(PipImage);
-		ReviewSection->AddChildToVerticalBox(PipBox);
+		ReviewSection->AddChildToVerticalBox(PipBox)->SetHorizontalAlignment(HAlign_Left);
 
 		PlotArea = WidgetTree->ConstructWidget<USizeBox>();
 		PlotArea->SetWidthOverride(PlotWidth);
@@ -125,7 +129,7 @@ TSharedRef<SWidget> UUIIncidentWidget::RebuildWidget()
 		UBorder* PlotBackground = WidgetTree->ConstructWidget<UBorder>();
 		PlotBackground->SetBrushColor(FLinearColor(0.05f, 0.05f, 0.05f, 0.9f));
 		PlotArea->SetContent(PlotBackground);
-		ReviewSection->AddChildToVerticalBox(PlotArea);
+		ReviewSection->AddChildToVerticalBox(PlotArea)->SetHorizontalAlignment(HAlign_Left);
 
 		PlotLegend = MakeText(FLinearColor(0.75f, 0.75f, 0.75f), 12);
 		ReviewSection->AddChildToVerticalBox(PlotLegend);
@@ -135,7 +139,7 @@ TSharedRef<SWidget> UUIIncidentWidget::RebuildWidget()
 		ControlArea = WidgetTree->ConstructWidget<UBorder>();
 		ControlArea->SetBrushColor(FLinearColor(0.0f, 0.0f, 0.0f, 0.01f)); // visible, so it takes the clicks
 		ControlBox->SetContent(ControlArea);
-		ReviewSection->AddChildToVerticalBox(ControlBox);
+		ReviewSection->AddChildToVerticalBox(ControlBox)->SetHorizontalAlignment(HAlign_Left);
 		ReviewControls = MakeText(FLinearColor(0.6f, 0.6f, 0.6f), 12);
 		ReviewControls->SetText(FText::FromString(
 			TEXT("Space Pause  Links/Rechts 1 s  C Kamera\nBackspace Replay beenden")));

@@ -1,0 +1,11 @@
+# M12.1 check (testring, seed 1, 1600x900): the desk with all cards during the race, and with the
+# review dialog and a hearing open after the flag.
+# Run with -UISimSeed=1 -UISimTimeScale=500 -UISimScript=TestScripts/desk.txt -UISimQuitWhenDone
+1790 timescale 20
+1802 screenshot desk_race
+1808 timescale 500
+99000 review 1
+99001 hearing
+99002 incident latest
+99003 screenshot desk_review
+99004 review_end

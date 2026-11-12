@@ -2,8 +2,8 @@
 # Run with -UISimSeed=1 -UISimTimeScale=500 -UISimScript=TestScripts/timing_tower.txt -UISimQuitWhenDone
 # The log names the click targets ("Tower: mode label at ...").
 1790 timescale 20
-1800 click 75 160       # row 4: the TV camera follows that car
+1800 click 85 234       # row 4: the TV camera follows that car
 1802 screenshot tower_interval
-1804 click 128 76       # mode label: gap to the leader
+1804 click 140 147      # mode label: gap to the leader
 1806 screenshot tower_gap
 1808 timescale 500
