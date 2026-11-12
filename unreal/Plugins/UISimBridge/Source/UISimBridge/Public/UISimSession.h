@@ -15,6 +15,7 @@ struct FUISimCar
 	bool bRetired = false;
 	bool bDisqualified = false;
 	bool bUnlapping = false; // lapped car passing the queue and the SC (B5.13.4 c)
+	bool bStalled = false;   // immobilised on the grid before the start (B5.7)
 	bool bBlueFlag = false;
 	bool bOvertakeActive = false; // Overtake mode (B7.2) usable this lap
 	int32 Compound = 1;      // 0 soft, 1 medium, 2 hard, 3 intermediate, 4 wet
@@ -73,6 +74,7 @@ struct FUISimSnapshot
 	bool bGridStart = false; // standing start: cars forming on the grid or waiting for the signal (M10.3)
 	int32 StartLights = 0;   // red lights lit on the gantry, all out = start signal (B5.7.1)
 	bool bFormationLap = false; // the formation lap before the start is being driven (B5.6, M11.3)
+	bool bRaceStarted = false;  // the first start signal has been given
 	double SafetyCarDistance = 0.0;
 	TArray<FUISimCar> Cars; // sorted by position
 };
@@ -119,6 +121,8 @@ struct FUISimIncidentRating
 	int32 GivenCar = -1;
 	EUISimPenalty GivenPenalty = EUISimPenalty::None;
 	double Score = 0.0;
+	bool bHeard = false;      // decided after a hearing
+	bool bOverturned = false; // set aside on review (M11.5)
 };
 
 struct FUISimRating
@@ -129,6 +133,7 @@ struct FUISimRating
 	double Safety = 1.0;
 	int32 FollowUpAccidents = 0;
 	double Overall = 100.0;
+	int32 Overturned = 0; // verdicts set aside on review
 	TArray<FUISimIncidentRating> Incidents;
 };
 
@@ -158,6 +163,21 @@ struct FUISimEntry
 	FString Name;
 	FString Code;
 	FString Team;
+};
+
+// One quantity of a hearing (core Hearing.h): what the recording shows and what the drivers claim.
+struct FUISimHearingItem
+{
+	int32 Kind = 0; // 0 gap at turn-in (m), 1 late braking (m), 2 defender moved across (m), 3 measured value, 4 breach (1 = yes)
+	double Evidence = 0.0;
+	double ClaimCar = 0.0;
+	double ClaimOther = 0.0; // only with two cars
+};
+
+struct FUISimHearing
+{
+	bool bTwoCars = false;
+	TArray<FUISimHearingItem> Items; // empty: nobody to hear (an accident without contact)
 };
 
 // Owns one race of the core simulation and converts its state to Unreal types.
@@ -200,6 +220,14 @@ public:
 
 	// Steward decisions (one per incident) and the rating against the ground truth.
 	void IssueVerdict(int32 IncidentId, int32 Car, EUISimPenalty Penalty);
+	// Hearing (M11.5): during the race the verdict then waits until HearingUntil(); no right of review afterwards.
+	void HoldHearing(int32 IncidentId);
+	bool IsHeard(int32 IncidentId) const;
+	double HearingUntil(int32 IncidentId) const;
+	FUISimHearing Hearing(int32 IncidentId) const;
+	// Before the start signal (M11.3): B5.8 and B5.9, each costs a lap.
+	void AbortStart();
+	void ExtraFormationLap();
 	const FUISimVerdict* VerdictFor(int32 IncidentId) const;
 	FUISimRating Rating() const;
 

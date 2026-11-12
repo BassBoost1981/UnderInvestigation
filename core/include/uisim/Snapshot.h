@@ -85,6 +85,7 @@ struct SimSnapshot {
     bool pitEntryClosed = false; // B1.6.4 (M8.3)
     bool gridStart = false; // standing start: cars forming on the grid or waiting for the signal (M10.3)
     bool formationLap = false; // the formation lap before the start is being driven (B5.6, M11.3)
+    bool raceStarted = false;  // the first start signal has been given, or the race began behind the Safety Car
     int startLights = 0;    // red lights lit on the gantry, all out = start signal (B5.7.1)
     bool safetyCarInThisLap = false;
     double safetyCarDistance = 0.0; // metres, same scale as CarState::distance

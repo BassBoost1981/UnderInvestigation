@@ -1,0 +1,5 @@
+# M11.7 check (testring, seed 1): an extra formation lap during the lights phase of the first start (B5.9).
+# Run with -UISimSeed=1 -UISimTimeScale=500 -UISimScript=TestScripts/extra_formation_lap.txt -UISimQuitWhenDone
+# The field stands on the grid from about 2:31, the lights go out at 2:37. Afterwards: 49 laps instead of 50.
+153 extra_lap
+154 abort_start   # not allowed: the cars are on the formation lap again

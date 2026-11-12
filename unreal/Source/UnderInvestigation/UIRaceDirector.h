@@ -52,7 +52,10 @@ enum class EUICommand : uint8
 	Verdict,               // Penalty, against the accused car of the incident under review
 	StartSeasonRace,       // season screen: start the next race of the calendar (M10.6)
 	BackToSeason,          // after the flag: book the race and return to the season screen
-	NewSeason              // season screen after the last race: a fresh season
+	NewSeason,             // season screen after the last race: a fresh season
+	HoldHearing,           // hear the drivers on the incident under review (M11.7)
+	AbortStart,            // before the start signal: begin the procedure again (B5.8)
+	ExtraFormationLap      // before the start signal: one more formation lap (B5.9)
 };
 
 struct FUICommand

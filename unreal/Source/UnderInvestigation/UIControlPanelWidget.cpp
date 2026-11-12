@@ -132,6 +132,9 @@ TArray<UUIControlPanelWidget::FButton> UUIControlPanelWidget::Buttons() const
 		Standing.bActive = bStanding;
 		Standing.ActiveColor = FLinearColor(0.9f, 0.1f, 0.1f);
 		List.Add(Standing);
+		// Before the start signal (M11.7): call the start off (B5.8) or send the field round again (B5.9).
+		Add(Cell(0.0, 0, 120.0), TEXT("STARTABBRUCH"), MakeCommand(EUICommand::AbortStart), false);
+		Add(Cell(126.0, 0, 120.0), TEXT("EXTRA-RUNDE"), MakeCommand(EUICommand::ExtraFormationLap), false);
 	}
 
 	// Row 1: race control. Toggle buttons stand for the command that fits the state, like the keys.

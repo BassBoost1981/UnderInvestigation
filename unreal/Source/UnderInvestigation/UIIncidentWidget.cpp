@@ -214,8 +214,30 @@ void UUIIncidentWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTim
 	PlotLegend->SetText(FText::FromString(FString::Printf(TEXT("Tempo km/h, -%.0f..+%.0f s:  %s"),
 		AUIRaceDirector::ReviewWindow, AUIRaceDirector::ReviewWindow, *Legend)));
 
-	ReviewControls->SetText(FText::FromString(
-		TEXT("Tasten: Space Pause, Links/Rechts 1 s, C Kamera,\nTab Beschuldigter, 0-6 Urteil, Backspace Ende")));
+	// Hearing (M11.7): what the recording shows next to what each driver claims. Comparing them is the player's job.
+	const FUISimSession& Session = Race->Session();
+	FString Help = TEXT("Tasten: Space Pause, Links/Rechts 1 s, C Kamera,\nTab Beschuldigter, 0-6 Urteil, Backspace Ende");
+	if (Session.IsHeard(Incident.Id))
+	{
+		const FUISimHearing Hearing = Session.Hearing(Incident.Id);
+		static const TCHAR* Labels[] = {TEXT("Abstand m"), TEXT("Spaeter gebremst m"), TEXT("Rueberziehen m"), TEXT("Messwert"), TEXT("Verstoss (1=ja)")};
+		Help = FString::Printf(TEXT("ANHOERUNG          Beweis %7s %7s\n"), *Entries[Incident.Car].Code,
+			Hearing.bTwoCars ? *Entries[Incident.OtherCar].Code : TEXT(""));
+		for (const FUISimHearingItem& Item : Hearing.Items)
+		{
+			Help += FString::Printf(TEXT("%-18s %6.1f %7.1f"), Labels[FMath::Clamp(Item.Kind, 0, 4)], Item.Evidence, Item.ClaimCar);
+			Help += Hearing.bTwoCars ? FString::Printf(TEXT(" %7.1f\n"), Item.ClaimOther) : FString(TEXT("\n"));
+		}
+		const double Wait = Session.HearingUntil(Incident.Id) - Session.Snapshot().Time;
+		Help += !Session.Snapshot().bFinished && Wait > 0.0
+			? FString::Printf(TEXT("Anhoerung laeuft: Urteil in %.0f s moeglich"), Wait)
+			: FString(TEXT("Weicht eine Aussage deutlich vom Beweis ab, stimmt sie nicht."));
+	}
+	else if (!Session.VerdictFor(Incident.Id))
+	{
+		Help += TEXT("\nANHOERUNG: beide Seiten hoeren (im Rennen 3 min Wartezeit)");
+	}
+	ReviewControls->SetText(FText::FromString(Help));
 }
 
 int32 UUIIncidentWidget::NativePaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry,
@@ -395,6 +417,7 @@ TArray<UUIIncidentWidget::FControl> UUIIncidentWidget::Controls() const
 	{
 		return List;
 	}
+	Add(0.0, 136.0, 130.0, TEXT("ANHOERUNG"), EAction::Command, EUICommand::HoldHearing);
 	const TArray<FUISimEntry>& Entries = Race->Session().Entries();
 	Add(110.0, 52.0, 70.0, Entries[Incident.Car].Code, EAction::Command, EUICommand::SetAccused, 0.0, 0, Race->AccusedSide() == 0);
 	if (Incident.OtherCar != Incident.Car)

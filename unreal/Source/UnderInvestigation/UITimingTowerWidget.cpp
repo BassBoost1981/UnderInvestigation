@@ -90,6 +90,10 @@ void UUITimingTowerWidget::NativeTick(const FGeometry& MyGeometry, float InDelta
 	{
 		State += TEXT("  BOXENGASSE ZU");
 	}
+	if (Snapshot.bFormationLap)
+	{
+		State = TEXT("EINFUEHRUNGSRUNDE"); // not a Safety Car period
+	}
 	Header->SetText(FText::FromString(FString::Printf(TEXT("LAP %2d/%d  %s  %s"),
 		Snapshot.LeaderLap, Snapshot.TotalLaps, *AUIRaceDirector::FormatRaceTime(Snapshot.Time), *State)));
 
@@ -128,6 +132,10 @@ void UUITimingTowerWidget::NativeTick(const FGeometry& MyGeometry, float InDelta
 		if (Car.bInPitLane)
 		{
 			Penalty = TEXT("PIT");
+		}
+		else if (Car.bStalled)
+		{
+			Penalty = TEXT("STEHT"); // immobilised on the grid
 		}
 		else if (Car.bUnlapping)
 		{

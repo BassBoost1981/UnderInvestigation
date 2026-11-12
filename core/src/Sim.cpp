@@ -1858,6 +1858,7 @@ void Sim::buildSnapshot() {
     snapshot_.pitEntryClosed = pitEntryClosed_;
     snapshot_.gridStart = gridStart_ || gridForming_;
     snapshot_.formationLap = formationLap_;
+    snapshot_.raceStarted = raceStarted_;
     snapshot_.startLights = gridStart_ ? std::clamp(static_cast<int>((time_ - lightsBegin_) / config_.rules.startLightIntervalSeconds), 0,
                                                     config_.rules.startLights)
                                        : 0;

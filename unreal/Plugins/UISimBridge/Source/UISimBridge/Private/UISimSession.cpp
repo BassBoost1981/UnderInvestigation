@@ -4,6 +4,7 @@
 
 THIRD_PARTY_INCLUDES_START
 #include "uisim/DataLoader.h"
+#include "uisim/Hearing.h"
 #include "uisim/Rating.h"
 #include "uisim/Sim.h"
 THIRD_PARTY_INCLUDES_END
@@ -201,10 +202,11 @@ FUISimRating FUISimSession::Rating() const
 	Out.Safety = In.safety;
 	Out.FollowUpAccidents = In.followUpAccidents;
 	Out.Overall = In.overall;
+	Out.Overturned = In.overturned;
 	for (const uisim::IncidentRating& R : In.incidents)
 	{
 		Out.Incidents.Add({R.incidentId, R.expected.car, static_cast<EUISimPenalty>(R.expected.penalty), R.decided,
-			R.givenCar, static_cast<EUISimPenalty>(R.givenPenalty), R.score});
+			R.givenCar, static_cast<EUISimPenalty>(R.givenPenalty), R.score, R.heard, R.overturned});
 	}
 	return Out;
 }
@@ -329,6 +331,7 @@ void FUISimSession::CopySnapshot()
 	CurrentSnapshot.bGridStart = In.gridStart;
 	CurrentSnapshot.StartLights = In.startLights;
 	CurrentSnapshot.bFormationLap = In.formationLap;
+	CurrentSnapshot.bRaceStarted = In.raceStarted;
 	CurrentSnapshot.SafetyCarDistance = In.safetyCarDistance;
 	CurrentSnapshot.Cars.SetNum(static_cast<int32>(In.cars.size()));
 	for (int32 Index = 0; Index < CurrentSnapshot.Cars.Num(); ++Index)
@@ -355,6 +358,7 @@ void FUISimSession::CopySnapshot()
 		Out.bRetired = Car.retired;
 		Out.bDisqualified = Car.disqualified;
 		Out.bUnlapping = Car.unlapping;
+		Out.bStalled = Car.stalled;
 		Out.bBlueFlag = Car.blueFlag;
 		Out.bOvertakeActive = Car.overtakeActive;
 		Out.Compound = static_cast<int32>(Car.compound);
@@ -369,3 +373,54 @@ double FUISimSession::BoxOffset(int32 EntryIndex) const
 {
 	return Sim ? Sim->boxOffset(EntryIndex) : 0.0;
 }
+
+void FUISimSession::HoldHearing(int32 IncidentId)
+{
+	if (!Sim)
+	{
+		return;
+	}
+	uisim::Command Command;
+	Command.type = uisim::Command::Type::HoldHearing;
+	Command.incidentId = IncidentId;
+	Sim->command(Command);
+	if (Sim->finished())
+	{
+		Sim->step(); // after the flag the sim no longer ticks on its own: apply now
+		CopySnapshot();
+	}
+}
+
+bool FUISimSession::IsHeard(int32 IncidentId) const
+{
+	return Sim && IncidentId >= 1 && IncidentId <= static_cast<int32>(Sim->incidents().size()) &&
+		Sim->incidents()[IncidentId - 1].heard;
+}
+
+double FUISimSession::HearingUntil(int32 IncidentId) const
+{
+	return IsHeard(IncidentId) ? Sim->incidents()[IncidentId - 1].hearingUntil : 0.0;
+}
+
+FUISimHearing FUISimSession::Hearing(int32 IncidentId) const
+{
+	FUISimHearing Out;
+	if (!Sim || IncidentId < 1 || IncidentId > static_cast<int32>(Sim->incidents().size()))
+	{
+		return Out;
+	}
+	const uisim::Hearing In = uisim::makeHearing(*Sim, Sim->incidents()[IncidentId - 1]);
+	Out.bTwoCars = In.statements.size() > 1;
+	for (std::size_t Index = 0; Index < In.evidence.size(); ++Index)
+	{
+		FUISimHearingItem& Item = Out.Items.AddDefaulted_GetRef();
+		Item.Kind = static_cast<int32>(In.evidence[Index].kind);
+		Item.Evidence = In.evidence[Index].value;
+		Item.ClaimCar = In.statements.empty() ? 0.0 : In.statements[0].claims[Index].value;
+		Item.ClaimOther = Out.bTwoCars ? In.statements[1].claims[Index].value : 0.0;
+	}
+	return Out;
+}
+
+void FUISimSession::AbortStart() { Send(static_cast<int32>(ECommand::AbortStart)); }
+void FUISimSession::ExtraFormationLap() { Send(static_cast<int32>(ECommand::ExtraFormationLap)); }

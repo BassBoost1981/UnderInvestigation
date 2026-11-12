@@ -113,9 +113,14 @@ void UUIRatingWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 		const FString Given = R.bDecided ? Decision(Entries, R.GivenCar, R.GivenPenalty) : FString(TEXT("(nicht entschieden)"));
 		const FString Truth = Decision(Entries, R.ExpectedCar, R.ExpectedPenalty);
 		const int32 Blame = FMath::RoundToInt(Incidents[Index].GroundTruthBlame * 100.0);
-		Text += FString::Printf(TEXT("#%-6d %-24s %-18s %3d%%  %3.0f %%\n"), R.IncidentId, *Given, *Truth, Blame, R.Score * 100.0);
+		Text += FString::Printf(TEXT("#%-6d %-24s %-18s %3d%%  %3.0f %%%s\n"), R.IncidentId, *Given, *Truth, Blame, R.Score * 100.0,
+			R.bOverturned ? TEXT("  KASSIERT") : TEXT(""));
 	}
 	Text += FString::Printf(TEXT("Seite %d/%d\n"), Page + 1, PageCount);
+	if (Rating.Overturned > 0)
+	{
+		Text += FString::Printf(TEXT("Im Right of Review kassiert: %d Urteil(e) ohne Anhoerung, je 5 Punkte Abzug\n"), Rating.Overturned);
+	}
 	Text += TEXT("\n(Prozentwert hinter dem richtigen Urteil: Schuldanteil des Angreifers)");
 	Body->SetText(FText::FromString(Text));
 }

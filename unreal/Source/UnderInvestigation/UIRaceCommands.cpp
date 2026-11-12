@@ -68,7 +68,27 @@ bool AUIRaceDirector::CanExecute(const FUICommand& Command) const
 		return bReviewing;
 	case EUICommand::SetAccused: return bReviewing && (Command.Index == 0 || Command.Index == 1);
 	case EUICommand::Verdict:
-		return bReviewing && !SimSession.VerdictFor(SimSession.Incidents()[ReviewIncidentIndex].Id);
+	{
+		if (!bReviewing)
+		{
+			return false;
+		}
+		const int32 Id = SimSession.Incidents()[ReviewIncidentIndex].Id;
+		const bool bHearingRuns = SimSession.IsHeard(Id) && !Snapshot.bFinished && Snapshot.Time < SimSession.HearingUntil(Id);
+		return !SimSession.VerdictFor(Id) && !bHearingRuns; // the verdict waits for the hearing
+	}
+	case EUICommand::HoldHearing:
+	{
+		if (!bReviewing)
+		{
+			return false;
+		}
+		const int32 Id = SimSession.Incidents()[ReviewIncidentIndex].Id;
+		return !SimSession.VerdictFor(Id) && !SimSession.IsHeard(Id);
+	}
+	case EUICommand::AbortStart:
+	case EUICommand::ExtraFormationLap:
+		return Snapshot.bGridStart && !Snapshot.bFormationLap && !Snapshot.bRaceStarted; // the lights phase of the first start
 	case EUICommand::StartSeasonRace: return bSeasonScreen && !FUISimCareer::Get().IsFinished();
 	case EUICommand::NewSeason: return bSeasonScreen && FUISimCareer::Get().IsFinished();
 	case EUICommand::BackToSeason:
@@ -110,6 +130,9 @@ FString AUIRaceDirector::CommandName(const FUICommand& Command) const
 	case EUICommand::NextReviewCamera: return TEXT("review_camera");
 	case EUICommand::SetAccused: return Command.Index == 0 ? TEXT("accused car") : TEXT("accused other");
 	case EUICommand::Verdict: return FString::Printf(TEXT("verdict %s"), PenaltyWords[static_cast<uint8>(Command.Penalty)]);
+	case EUICommand::HoldHearing: return TEXT("hearing");
+	case EUICommand::AbortStart: return TEXT("abort_start");
+	case EUICommand::ExtraFormationLap: return TEXT("extra_lap");
 	case EUICommand::StartSeasonRace: return TEXT("season_start");
 	case EUICommand::BackToSeason: return TEXT("season_back");
 	case EUICommand::NewSeason: return TEXT("season_new");
@@ -173,6 +196,9 @@ bool AUIRaceDirector::Execute(const FUICommand& Command)
 			Car >= 0 ? *SimSession.Entries()[Car].Code : TEXT(""));
 		break;
 	}
+	case EUICommand::HoldHearing: SimSession.HoldHearing(SimSession.Incidents()[ReviewIncidentIndex].Id); break;
+	case EUICommand::AbortStart: SimSession.AbortStart(); break;
+	case EUICommand::ExtraFormationLap: SimSession.ExtraFormationLap(); break;
 	case EUICommand::StartSeasonRace: StartSeasonRace(); break;
 	case EUICommand::BackToSeason: BackToSeason(); break;
 	case EUICommand::NewSeason:
@@ -306,6 +332,9 @@ bool AUIRaceDirector::LoadScript(const FString& File)
 				}
 			}
 		}
+		else if (Name == TEXT("hearing")) { C.Type = EUICommand::HoldHearing; }
+		else if (Name == TEXT("abort_start")) { C.Type = EUICommand::AbortStart; }
+		else if (Name == TEXT("extra_lap")) { C.Type = EUICommand::ExtraFormationLap; }
 		else if (Name == TEXT("season_start")) { C.Type = EUICommand::StartSeasonRace; }
 		else if (Name == TEXT("season_back")) { C.Type = EUICommand::BackToSeason; }
 		else if (Name == TEXT("season_new")) { C.Type = EUICommand::NewSeason; }
