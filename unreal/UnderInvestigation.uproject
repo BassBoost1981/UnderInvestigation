@@ -1,6 +1,6 @@
 {
 	"FileVersion": 3,
-	"EngineAssociation": "5.8",
+	"EngineAssociation": "{9898703F-48A1-7FF7-1E9C-9983EF7E9157}",
 	"Category": "",
 	"Description": "Under Investigation - A Race Director Simulator (presentation layer, see docs/DESIGN.md)",
 	"Modules": [
