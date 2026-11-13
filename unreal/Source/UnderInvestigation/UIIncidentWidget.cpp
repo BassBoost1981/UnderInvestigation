@@ -99,7 +99,7 @@ TSharedRef<SWidget> UUIIncidentWidget::RebuildWidget()
 		CardWidth->SetContent(Column);
 		Panel->SetContent(CardWidth);
 
-		Title = MakeText(FLinearColor(1.0f, 0.85f, 0.2f), 13);
+		Title = MakeText(FLinearColor(1.0f, 0.85f, 0.2f), 12);
 		Column->AddChildToVerticalBox(Title);
 		for (int32 Index = 0; Index < MaxRows; ++Index)
 		{

@@ -57,7 +57,7 @@ bool AUIRaceDirector::CanExecute(const FUICommand& Command) const
 	case EUICommand::OpenPitEntry: return Snapshot.bPitEntryClosed;
 	case EUICommand::SetCamera: return !bReviewing && Cameras.IsValidIndex(Command.Index);
 	case EUICommand::FollowCar: return Command.Index == -1 || SimSession.Entries().IsValidIndex(Command.Index);
-	case EUICommand::SetTimeScale: return Command.Value > 0.0;
+	case EUICommand::SetTimeScale: return Command.Value >= 0.0; // 0 = pause
 	case EUICommand::SelectIncident: return IncidentCount > 0 && Command.Index >= -1 && Command.Index < IncidentCount;
 	case EUICommand::StartReview: return SimSession.Incidents().IsValidIndex(Command.Index < 0 ? SelectedIncident() : Command.Index);
 	case EUICommand::StopReview:

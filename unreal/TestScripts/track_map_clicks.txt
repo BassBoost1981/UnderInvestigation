@@ -1,5 +1,5 @@
 # M8.5 check (testring, 1600x900): synthetic clicks on the track map.
 # Coordinates come from the 'Track map:' lines in the log.
-3 click 230 772      # a car on the grid: the TV camera follows it
-40 click 146 754     # sector 8: opens the flag menu
-41 click 92 719      # menu row 'Gelb': yellow in sector 8
+3 click 997 719      # a car on the grid: the TV camera follows it
+40 click 874 693     # sector 8: opens the flag menu
+41 click 714 623     # menu row 'Gelb': yellow in sector 8

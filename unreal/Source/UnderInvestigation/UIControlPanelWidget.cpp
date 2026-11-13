@@ -63,7 +63,7 @@ TSharedRef<SWidget> UUIControlPanelWidget::RebuildWidget()
 		Panel->SetPadding(FMargin(8.0f));
 		UCanvasPanelSlot* PanelSlot = Canvas->AddChildToCanvas(Panel);
 		PanelSlot->SetAutoSize(true);
-		PanelSlot->SetPosition(UIStyle::ControlCard.Min + FVector2D(0.0, 6.0));
+		PanelSlot->SetPosition(UIStyle::Tiles.Min + FVector2D(-6.0, 2.0));
 
 		USizeBox* Box = WidgetTree->ConstructWidget<USizeBox>();
 		Box->SetWidthOverride(AreaWidth);

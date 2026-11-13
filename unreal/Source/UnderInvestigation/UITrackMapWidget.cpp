@@ -20,8 +20,8 @@ DEFINE_LOG_CATEGORY_STATIC(LogUISim, Log, All); // same category name as UIRaceD
 
 namespace
 {
-	constexpr double MapWidth = 320.0;
-	constexpr double MapHeight = 240.0;
+	constexpr double MapWidth = 600.0;
+	constexpr double MapHeight = 340.0;
 	constexpr double MapMargin = 12.0;
 	constexpr double CarHitRadius = 8.0;    // map units
 	constexpr double TrackHitRadius = 12.0;
@@ -53,7 +53,7 @@ TSharedRef<SWidget> UUITrackMapWidget::RebuildWidget()
 		Panel->SetPadding(FMargin(8.0f));
 		UCanvasPanelSlot* PanelSlot = Canvas->AddChildToCanvas(Panel);
 		PanelSlot->SetAutoSize(true);
-		PanelSlot->SetPosition(UIStyle::MapCard.Min + FVector2D(20.0, 4.0));
+		PanelSlot->SetPosition(UIStyle::MapCard.Min + FVector2D(10.0, 8.0));
 
 		UVerticalBox* Column = WidgetTree->ConstructWidget<UVerticalBox>();
 		Panel->SetContent(Column);

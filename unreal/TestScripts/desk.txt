@@ -1,8 +1,9 @@
 # M12.1 check (testring, seed 1, 1600x900): the desk with all cards during the race, and with the
-# review dialog and a hearing open after the flag.
+# review dialog and a hearing open after the flag. One click on a sim speed button of the top bar.
 # Run with -UISimSeed=1 -UISimTimeScale=500 -UISimScript=TestScripts/desk.txt -UISimQuitWhenDone
 1790 timescale 20
 1802 screenshot desk_race
+1803 click 1166 48      # top bar: sim speed 4x
 1808 timescale 500
 99000 review 1
 99001 hearing

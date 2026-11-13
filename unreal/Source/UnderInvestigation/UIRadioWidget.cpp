@@ -52,7 +52,7 @@ TSharedRef<SWidget> UUIRadioWidget::RebuildWidget()
 		Panel->SetPadding(FMargin(12.0f));
 		UCanvasPanelSlot* PanelSlot = Canvas->AddChildToCanvas(Panel);
 		PanelSlot->SetAutoSize(true);
-		PanelSlot->SetPosition(UIStyle::ControlCard.Min + FVector2D(0.0, 124.0)); // below the control panel
+		PanelSlot->SetPosition(UIStyle::LowerLeftCard.Min + FVector2D(4.0, 4.0));
 
 		UVerticalBox* Column = WidgetTree->ConstructWidget<UVerticalBox>();
 		Panel->SetContent(Column);

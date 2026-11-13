@@ -4,17 +4,13 @@
 #include "UIStyle.h"
 
 #include "Blueprint/WidgetTree.h"
-#include "Components/Border.h"
 #include "Components/CanvasPanel.h"
-#include "Components/CanvasPanelSlot.h"
-#include "Components/TextBlock.h"
 #include "Rendering/DrawElements.h"
 #include "Styling/CoreStyle.h"
 
 namespace
 {
-	constexpr double RainHazardLookAhead = 3600.0; // seconds of forecast checked for the Rain Hazard
-	constexpr int32 MaxStreaks = 220;              // rain streaks at full rain
+	constexpr int32 MaxStreaks = 220; // rain streaks at full rain
 }
 
 TSharedRef<SWidget> UUIWeatherWidget::RebuildWidget()
@@ -24,53 +20,8 @@ TSharedRef<SWidget> UUIWeatherWidget::RebuildWidget()
 		UCanvasPanel* Canvas = WidgetTree->ConstructWidget<UCanvasPanel>();
 		Canvas->SetVisibility(ESlateVisibility::HitTestInvisible); // the rain overlay must not catch clicks
 		WidgetTree->RootWidget = Canvas;
-		UBorder* Panel = WidgetTree->ConstructWidget<UBorder>();
-		Panel->SetBrushColor(FLinearColor::Transparent); // the top bar of the desk is the background
-		Panel->SetPadding(FMargin(8.0f));
-		UCanvasPanelSlot* PanelSlot = Canvas->AddChildToCanvas(Panel);
-		PanelSlot->SetAutoSize(true);
-		PanelSlot->SetAlignment(FVector2D(0.5, 0.0)); // centred in the top bar
-		PanelSlot->SetPosition(FVector2D(UIStyle::TopBar.GetCenter().X, UIStyle::TopBar.Min.Y));
-		Text = WidgetTree->ConstructWidget<UTextBlock>();
-		Text->SetFont(FCoreStyle::GetDefaultFontStyle("Mono", 11));
-		Text->SetColorAndOpacity(FSlateColor(FLinearColor(0.75f, 0.85f, 1.0f)));
-		Panel->SetContent(Text);
 	}
 	return Super::RebuildWidget();
-}
-
-void UUIWeatherWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
-{
-	Super::NativeTick(MyGeometry, InDeltaTime);
-	const AUIRaceDirector* Race = Director.Get();
-	if (!Race || !Race->Session().IsStarted() || !Text)
-	{
-		return;
-	}
-	const FUISimSession& Session = Race->Session();
-	const FUISimSnapshot& S = Session.Snapshot();
-	double Hazard = 0.0;
-	for (double T = S.Time; T <= S.Time + RainHazardLookAhead; T += 60.0)
-	{
-		Hazard = FMath::Max(Hazard, Session.ForecastRain(T));
-	}
-	FString Line = FString::Printf(TEXT("WETTER: %s   Regen %3.0f %%"), *Session.WeatherName(), S.Rain * 100.0);
-	Line += FString::Printf(TEXT("\nNaesse Linie %3.0f %%, daneben %3.0f %%"), S.LineWetness * 100.0, S.TrackWetness * 100.0);
-	if (S.StandingWater > 0.0)
-	{
-		Line += FString::Printf(TEXT("\nSTEHENDES WASSER %3.0f %% (Aquaplaning)"), S.StandingWater * 100.0);
-	}
-	Line += FString::Printf(TEXT("\nVorhersage +5/+10/+15 min: %3.0f / %3.0f / %3.0f %%"), Session.ForecastRain(S.Time + 300.0) * 100.0,
-		Session.ForecastRain(S.Time + 600.0) * 100.0, Session.ForecastRain(S.Time + 900.0) * 100.0);
-	if (Hazard > 0.4) // B1.5.11: more than 40 % rain expected (sim: forecast intensity as the stand-in)
-	{
-		Line += TEXT("\nRAIN HAZARD");
-	}
-	if (S.bWetTyresMandated)
-	{
-		Line += TEXT("\nREGENREIFEN-PFLICHT (bis das SC hereinkommt)");
-	}
-	Text->SetText(FText::FromString(Line));
 }
 
 int32 UUIWeatherWidget::NativePaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry, const FSlateRect& MyCullingRect,
