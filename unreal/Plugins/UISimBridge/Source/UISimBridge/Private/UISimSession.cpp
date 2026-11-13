@@ -347,6 +347,12 @@ void FUISimSession::CopySnapshot()
 		Out.Lateral = Car.lateral;
 		Out.LastLapTime = Car.lastLapTime;
 		Out.BestLapTime = Car.bestLapTime;
+		Out.SectorsDone = Car.sectorsDone;
+		for (int32 Sector = 0; Sector < 3; ++Sector)
+		{
+			Out.SectorTimes[Sector] = Car.sectorTimes[Sector];
+			Out.BestSectorTimes[Sector] = Car.bestSectorTimes[Sector];
+		}
 		Out.LastLineTime = Car.lastLineTime;
 		Out.GapToLeader = Car.gapToLeader;
 		Out.Interval = Car.interval;

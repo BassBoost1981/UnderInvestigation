@@ -44,6 +44,9 @@ struct CarState {
     double lastLapTime = 0.0;   // seconds, 0 = none yet
     double bestLapTime = 0.0;   // seconds, 0 = none yet
     std::array<double, 3> lastSectorTimes{};
+    std::array<double, 3> sectorTimes{};     // latest time of each sector, 0 = none yet (M12.3)
+    std::array<double, 3> bestSectorTimes{}; // fastest time of each sector, 0 = none yet
+    int sectorsDone = 0;                     // sectors completed in the current lap, 0..2
     double lastLineTime = 0.0; // race time at the last timing line crossed (finish time once finished)
     double gapToLeader = 0.0; // seconds at the last timing line both crossed
     int lapsDown = 0;         // > 0: lapped, gapToLeader is then not meaningful

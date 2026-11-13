@@ -1041,6 +1041,7 @@ void Sim::finishFormationLap() {
         car.gridTarget -= lapLength;
         car.boundaryIndex = 0;
         car.sectorTimes = {};
+        car.bestSectorTimes = {};
         car.lastBoundaryTime = time_;
         car.boundaryTimes.clear();
     }
@@ -1761,6 +1762,10 @@ void Sim::processTimingLines(int i, double previousDistance) {
         const double fraction = (boundary - previousDistance) / (car.distance - previousDistance);
         const double t = time_ - kDt + fraction * kDt;
         car.sectorTimes[car.boundaryIndex] = t - car.lastBoundaryTime;
+        double& bestSector = car.bestSectorTimes[car.boundaryIndex];
+        if (bestSector == 0.0 || car.sectorTimes[car.boundaryIndex] < bestSector) {
+            bestSector = car.sectorTimes[car.boundaryIndex];
+        }
         car.lastBoundaryTime = t;
         car.boundaryTimes.push_back(t);
 
@@ -1881,6 +1886,9 @@ void Sim::buildSnapshot() {
         cs.lastLapTime = car.lastLapTime;
         cs.bestLapTime = car.bestLapTime;
         cs.lastSectorTimes = car.lastSectorTimes;
+        cs.sectorTimes = car.sectorTimes;
+        cs.bestSectorTimes = car.bestSectorTimes;
+        cs.sectorsDone = car.boundaryIndex;
         cs.lastLineTime = car.lastBoundaryTime;
         cs.finished = car.finished;
         cs.timePenalty = car.timePenalty;

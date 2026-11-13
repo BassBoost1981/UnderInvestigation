@@ -32,6 +32,9 @@ struct FUISimCar
 	double Lateral = 0.0;  // -1..1, 0 = racing line
 	double LastLapTime = 0.0;
 	double BestLapTime = 0.0;
+	double SectorTimes[3] = {0.0, 0.0, 0.0};     // latest time of each sector, 0 = none yet (M12.3)
+	double BestSectorTimes[3] = {0.0, 0.0, 0.0}; // fastest time of each sector so far
+	int32 SectorsDone = 0;                       // sectors completed in the current lap, 0..2
 	double LastLineTime = 0.0;
 	double GapToLeader = 0.0;
 	double Interval = 0.0;

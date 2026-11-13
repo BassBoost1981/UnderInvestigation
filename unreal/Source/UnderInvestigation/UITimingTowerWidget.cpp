@@ -8,59 +8,39 @@
 #include "Components/Border.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
-#include "Components/SizeBox.h"
-#include "Components/TextBlock.h"
-#include "Components/VerticalBox.h"
-#include "Components/VerticalBoxSlot.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
 #include "Fonts/FontMeasure.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Rendering/DrawElements.h"
-#include "Styling/CoreStyle.h"
 #include "Widgets/SViewport.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogUISim, Log, All); // same category name as UIRaceDirector.cpp
 
 namespace
 {
-	constexpr int32 MaxRows = 26;
-	constexpr double TowerWidth = 330.0;
-	constexpr double HeaderHeight = 80.0; // lap counter, state band and the mode switch
-	constexpr double RowHeight = 26.0;
-	// Columns of a row (left edges).
-	constexpr double PositionWidth = 30.0;
-	constexpr double BarLeft = 30.0;
-	constexpr double CodeLeft = 44.0;
-	constexpr double GapRight = 200.0; // gaps are right-aligned to this edge
-	constexpr double TyreLeft = 210.0;
-	constexpr double TyreSize = 18.0;
-	constexpr double TagLeft = 254.0;
-	const FBox2D ModeLabel(FVector2D(GapRight - 140.0, 58.0), FVector2D(GapRight, 76.0)); // switch with two halves
+	// Measures of the design, relative to the card (744 x 680).
+	constexpr int32 MaxRows = 20;
+	constexpr double HeaderTop = 46.0; // column labels
+	constexpr double RowsTop = 71.0;
+	constexpr double RowHeight = 29.0;
+	// Columns: left edges, or right edges for the right-aligned ones.
+	constexpr double PositionLeft = 11.0, PositionWidth = 26.0;
+	constexpr double BarLeft = 43.0;
+	constexpr double CodeLeft = 54.0;
+	constexpr double GapRight = 206.0;
+	constexpr double IntervalRight = 314.0;
+	constexpr double LastRight = 433.0;
+	constexpr double BestRight = 551.0;
+	constexpr double SectorLeft = 557.0;
+	constexpr double TyreLeft = 615.0;
+	constexpr double PitLeft = 669.0;
+	constexpr double TokenLeft = 699.0;
 
-	// Colour of the status tag: what kind of note it is.
-	FLinearColor TagColor(const FUISimCar& Car)
-	{
-		if (Car.bStalled)
-		{
-			return FLinearColor(0.8f, 0.1f, 0.1f);
-		}
-		if (Car.bUnlapping)
-		{
-			return FLinearColor(0.35f, 0.35f, 0.42f);
-		}
-		if (Car.bBlueFlag)
-		{
-			return FLinearColor(0.1f, 0.35f, 0.9f);
-		}
-		if (Car.bOvertakeActive && !Car.bRetired)
-		{
-			return FLinearColor(0.1f, 0.6f, 0.3f);
-		}
-		const bool bPenalty = Car.PendingPenalty == EUISimPenalty::DriveThrough || Car.PendingPenalty == EUISimPenalty::StopAndGo
-			|| Car.TimePenalty > 0.0 || Car.bBlackWhiteFlag;
-		return bPenalty ? FLinearColor(0.85f, 0.4f, 0.05f) : FLinearColor(0.35f, 0.35f, 0.42f);
-	}
+	const FLinearColor Purple = UIStyle::Rgb(199, 125, 255);     // session best, text
+	const FLinearColor PurpleBar = UIStyle::Rgb(185, 110, 245);  // session best, sector bar
+	const FLinearColor PurpleChip = UIStyle::Rgb(123, 47, 190);  // fastest lap chip
+	const FLinearColor SectorEmpty = UIStyle::Rgb(44, 45, 50);
 
 	// Same colours as the cars (UIRaceDirector.cpp): one hue per team.
 	FLinearColor TeamColor(const TArray<FUISimEntry>& Entries, int32 EntryIndex)
@@ -74,44 +54,20 @@ namespace
 		return FLinearColor::MakeFromHSV8(static_cast<uint8>(Hue / 360.0f * 255.0f), 200, 230);
 	}
 
-	FString StateText(const FUISimSnapshot& Snapshot)
+	FString LapText(double Seconds)
 	{
-		FString State;
-		switch (Snapshot.State)
+		if (Seconds <= 0.0)
 		{
-		case EUISimRaceState::VirtualSafetyCar: State = TEXT("VSC"); break;
-		case EUISimRaceState::SafetyCar: State = Snapshot.bSafetyCarInThisLap ? TEXT("SC IN THIS LAP") : TEXT("SAFETY CAR"); break;
-		case EUISimRaceState::RedFlag: State = TEXT("RED FLAG"); break;
-		case EUISimRaceState::Green: break;
+			return TEXT("—");
 		}
-		if (Snapshot.bFinished)
-		{
-			State = TEXT("FINISHED");
-		}
-		else if (Snapshot.bChequered)
-		{
-			State = TEXT("CHEQUERED FLAG");
-		}
-		if (Snapshot.bLappedCarsReleased && Snapshot.State == EUISimRaceState::SafetyCar)
-		{
-			State += TEXT("  UEBERRUNDETE VORBEI");
-		}
-		if (Snapshot.bPitEntryClosed)
-		{
-			State += TEXT("  BOXENGASSE ZU");
-		}
-		if (Snapshot.bFormationLap)
-		{
-			State = TEXT("EINFUEHRUNGSRUNDE"); // not a Safety Car period
-		}
-		return State;
+		const int32 Minutes = FMath::FloorToInt32(Seconds / 60.0);
+		return FString::Printf(TEXT("%d:%06.3f"), Minutes, Seconds - Minutes * 60.0);
 	}
 
-	// What stands in the gap column for the car in row Index.
-	FString GapText(const FUISimSnapshot& Snapshot, int32 Index, bool bInterval, bool& bOutInPit)
+	// Gap column: to the leader. "IN PIT" only while the car is in the pit lane.
+	FString GapText(const FUISimSnapshot& Snapshot, int32 Index)
 	{
 		const FUISimCar& Car = Snapshot.Cars[Index];
-		bOutInPit = false;
 		if (Car.bDisqualified)
 		{
 			return TEXT("DSQ");
@@ -122,71 +78,76 @@ namespace
 		}
 		if (Car.bInPitLane)
 		{
-			bOutInPit = true; // only while the car is in the pit lane
 			return TEXT("IN PIT");
 		}
 		if (Index == 0)
 		{
-			return bInterval ? TEXT("Interval") : TEXT("Leader");
+			return TEXT("LEADER");
 		}
-		if (!bInterval)
+		return Car.LapsDown > 0 ? FString::Printf(TEXT("+%d LAP"), Car.LapsDown) : FString::Printf(TEXT("+%.3f"), Car.GapToLeader);
+	}
+
+	// Interval column: to the car ahead in the classification; empty where the design leaves it empty.
+	FString IntervalText(const FUISimSnapshot& Snapshot, int32 Index)
+	{
+		const FUISimCar& Car = Snapshot.Cars[Index];
+		if (Index == 0 || Car.bRetired || Car.bDisqualified || Car.bInPitLane)
 		{
-			return Car.LapsDown > 0 ? FString::Printf(TEXT("+%d L"), Car.LapsDown) : FString::Printf(TEXT("+%.3f"), Car.GapToLeader);
+			return FString();
 		}
-		// Interval to the car ahead in the classification.
 		const FUISimCar& Ahead = Snapshot.Cars[Index - 1];
 		if (Ahead.bRetired || Ahead.bDisqualified)
 		{
-			return TEXT("-");
+			return FString();
 		}
 		if (Car.LapsDown != Ahead.LapsDown)
 		{
-			return FString::Printf(TEXT("+%d L"), Car.LapsDown - Ahead.LapsDown);
+			return FString::Printf(TEXT("+%d LAP"), Car.LapsDown - Ahead.LapsDown);
 		}
 		return FString::Printf(TEXT("+%.3f"), FMath::Max(0.0, Car.GapToLeader - Ahead.GapToLeader));
 	}
 
-	// Status tag behind the tyre: what race control needs to see about this car.
-	FString TagText(const FUISimCar& Car)
+	// Last column of the design (PEN): the penalty, or what race control must see about this car.
+	FString TokenText(const FUISimCar& Car, FLinearColor& OutColor)
 	{
-		FString Tag;
+		OutColor = UIStyle::Red;
 		if (Car.bStalled)
 		{
-			Tag = TEXT("STEHT"); // immobilised on the grid
+			return TEXT("STALL"); // immobilised on the grid
 		}
-		else if (Car.bUnlapping)
+		if (Car.PendingPenalty == EUISimPenalty::DriveThrough)
 		{
-			Tag = TEXT("UNLAP"); // lapped car passing the queue under the SC
+			return TEXT("DT");
 		}
-		else if (Car.bBlueFlag)
+		if (Car.PendingPenalty == EUISimPenalty::StopAndGo)
 		{
-			Tag = TEXT("BLUE");
-		}
-		else if (Car.bOvertakeActive && !Car.bRetired)
-		{
-			Tag = TEXT("OVT");
-		}
-		else if (Car.PendingPenalty == EUISimPenalty::DriveThrough)
-		{
-			Tag = TEXT("DT");
-		}
-		else if (Car.PendingPenalty == EUISimPenalty::StopAndGo)
-		{
-			Tag = TEXT("SG");
+			return TEXT("S&G");
 		}
 		if (Car.TimePenalty > 0.0)
 		{
-			Tag += FString::Printf(TEXT("+%.0fs"), Car.TimePenalty);
+			return FString::Printf(TEXT("%.0fs"), Car.TimePenalty);
+		}
+		if (Car.bUnlapping)
+		{
+			OutColor = UIStyle::Mute;
+			return TEXT("UNLAP"); // lapped car passing the queue under the SC
+		}
+		if (Car.bBlueFlag)
+		{
+			OutColor = UIStyle::Rgb(80, 150, 255);
+			return TEXT("BLUE");
 		}
 		if (Car.bBlackWhiteFlag)
 		{
-			Tag += FString::Printf(TEXT(" SW%d"), Car.TrackLimitStrikes); // black-and-white flag, track limits
+			OutColor = UIStyle::Text;
+			return FString::Printf(TEXT("B/W%d"), Car.TrackLimitStrikes); // black-and-white flag, track limits
 		}
-		if (Car.bFinished)
+		if (Car.bOvertakeActive && !Car.bRetired)
 		{
-			Tag += TEXT(" F");
+			OutColor = UIStyle::Green;
+			return TEXT("OVT"); // Overtake mode usable this lap (B7.2)
 		}
-		return Tag.TrimStart();
+		return FString();
 	}
 }
 
@@ -197,48 +158,13 @@ TSharedRef<SWidget> UUITimingTowerWidget::RebuildWidget()
 		UCanvasPanel* Canvas = WidgetTree->ConstructWidget<UCanvasPanel>();
 		WidgetTree->RootWidget = Canvas;
 
-		UVerticalBox* Column = WidgetTree->ConstructWidget<UVerticalBox>();
-		UCanvasPanelSlot* ColumnSlot = Canvas->AddChildToCanvas(Column);
-		ColumnSlot->SetAutoSize(true);
-		ColumnSlot->SetPosition(UIStyle::TimingCard.Min + FVector2D(24.0, 14.0));
-
-		USizeBox* Box = WidgetTree->ConstructWidget<USizeBox>();
-		Box->SetWidthOverride(TowerWidth);
-		Box->SetHeightOverride(HeaderHeight + RowHeight * 20);
-		TowerArea = WidgetTree->ConstructWidget<UBorder>();
-		TowerArea->SetBrushColor(FLinearColor(0.02f, 0.02f, 0.05f, 0.88f)); // visible, so it takes the clicks
-		Box->SetContent(TowerArea);
-		Column->AddChildToVerticalBox(Box)->SetHorizontalAlignment(HAlign_Left); // not as wide as the footer
-
-		Footer = WidgetTree->ConstructWidget<UTextBlock>();
-		Footer->SetFont(FCoreStyle::GetDefaultFontStyle("Mono", 10));
-		Footer->SetColorAndOpacity(FSlateColor(FLinearColor(0.7f, 0.7f, 0.7f)));
-		Footer->SetShadowOffset(FVector2D(1.0, 1.0));
-		Footer->SetVisibility(ESlateVisibility::HitTestInvisible);
-		Column->AddChildToVerticalBox(Footer);
+		TableArea = WidgetTree->ConstructWidget<UBorder>();
+		TableArea->SetBrushColor(FLinearColor(0.0f, 0.0f, 0.0f, 0.01f)); // visible, so it takes the clicks; the desk draws the card
+		UCanvasPanelSlot* AreaSlot = Canvas->AddChildToCanvas(TableArea);
+		AreaSlot->SetPosition(UIStyle::TimingCard.Min);
+		AreaSlot->SetSize(UIStyle::TimingCard.GetSize());
 	}
 	return Super::RebuildWidget();
-}
-
-void UUITimingTowerWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
-{
-	Super::NativeTick(MyGeometry, InDeltaTime);
-	const AUIRaceDirector* Race = Director.Get();
-	if (!Race || !Race->Session().IsStarted() || !Footer)
-	{
-		return;
-	}
-	const FUISimSnapshot& Snapshot = Race->Session().Snapshot();
-	const int32 Sector = Race->SelectedSector();
-	const TCHAR* FlagNames[] = {TEXT("gruen"), TEXT("GELB"), TEXT("DOPPELT GELB")};
-	const TCHAR* FlagName = Snapshot.SectorFlags.IsValidIndex(Sector)
-		? FlagNames[static_cast<uint8>(Snapshot.SectorFlags[Sector])] : TEXT("-");
-	Footer->SetText(FText::FromString(FString::Printf(
-		TEXT("Rennzeit %s   Zeit x%g\n")
-		TEXT("Sektor %d/%d: %s [Q/E, Y]\n")
-		TEXT("Verstoesse: %d   Kamera: %s [1-6]"),
-		*AUIRaceDirector::FormatRaceTime(Snapshot.Time), Race->TimeScale(), Sector + 1, Snapshot.SectorFlags.Num(), FlagName,
-		Race->Session().FlagViolations(), *Race->ActiveCameraName())));
 }
 
 int32 UUITimingTowerWidget::NativePaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry, const FSlateRect& MyCullingRect,
@@ -246,154 +172,166 @@ int32 UUITimingTowerWidget::NativePaint(const FPaintArgs& Args, const FGeometry&
 {
 	int32 Layer = Super::NativePaint(Args, AllottedGeometry, MyCullingRect, OutDrawElements, LayerId, InWidgetStyle, bParentEnabled);
 	const AUIRaceDirector* Race = Director.Get();
-	if (!Race || !Race->Session().IsStarted() || !TowerArea || TowerArea->GetCachedGeometry().GetLocalSize().X <= 0.0)
+	if (!Race || !Race->Session().IsStarted() || !TableArea || TableArea->GetCachedGeometry().GetLocalSize().X <= 0.0)
 	{
 		return Layer;
 	}
-	const FGeometry& Area = TowerArea->GetCachedGeometry();
+	static const FSlateRoundedBoxBrush Round6(FLinearColor::White, 6.0f);
+	static const FSlateRoundedBoxBrush Round2(FLinearColor::White, 2.0f);
+	static const FSlateRoundedBoxBrush Circle(FLinearColor::White, 10.0f);
+	const FGeometry& Area = TableArea->GetCachedGeometry();
+	const double CardWidth = UIStyle::TimingCard.GetSize().X;
 	const FUISimSnapshot& Snapshot = Race->Session().Snapshot();
 	const TArray<FUISimEntry>& Entries = Race->Session().Entries();
 	const FSlateBrush* White = FCoreStyle::Get().GetBrush("WhiteBrush");
 	const TSharedRef<FSlateFontMeasure> Measure = FSlateApplication::Get().GetRenderer()->GetFontMeasureService();
-	const FSlateFontInfo LapFont = UIStyle::Font(TEXT("Bold"), 20);
-	const FSlateFontInfo SmallFont = UIStyle::Font(TEXT("Regular"), 8);
-	const FSlateFontInfo CodeFont = UIStyle::Font(TEXT("Bold"), 13);
-	const FSlateFontInfo GapFont = FCoreStyle::GetDefaultFontStyle("Mono", 11);
-	const FSlateFontInfo TagFont = FCoreStyle::GetDefaultFontStyle("Mono", 9);
+	const FSlateFontInfo LabelFont = UIStyle::Font(TEXT("Regular"), 7);
+	const FSlateFontInfo BodyFont = UIStyle::Font(TEXT("Regular"), 9);
+	const FSlateFontInfo BoldFont = UIStyle::Font(TEXT("Bold"), 9);
+	const FSlateFontInfo CodeFont = UIStyle::Font(TEXT("Bold"), 10);
+	const FSlateFontInfo TyreFont = UIStyle::Font(TEXT("Bold"), 7);
 	++Layer;
-	auto Box = [&](const FVector2D& At, const FVector2D& Size, const FLinearColor& Color)
+	auto Box = [&](const FVector2D& At, const FVector2D& Size, const FSlateBrush* Brush, const FLinearColor& Color)
 	{
-		FSlateDrawElement::MakeBox(OutDrawElements, Layer, Area.ToPaintGeometry(Size, FSlateLayoutTransform(1.0f, At)), White,
+		FSlateDrawElement::MakeBox(OutDrawElements, Layer, Area.ToPaintGeometry(Size, FSlateLayoutTransform(1.0f, At)), Brush,
 			ESlateDrawEffect::None, Color);
 	};
 	auto Text = [&](const FVector2D& At, const FString& String, const FSlateFontInfo& Font, const FLinearColor& Color)
 	{
-		FSlateDrawElement::MakeText(OutDrawElements, Layer + 1, Area.ToPaintGeometry(FVector2D(TowerWidth, RowHeight),
+		FSlateDrawElement::MakeText(OutDrawElements, Layer + 1, Area.ToPaintGeometry(FVector2D(CardWidth, RowHeight),
 			FSlateLayoutTransform(1.0f, At)), String, Font, ESlateDrawEffect::None, Color);
 	};
 	auto TextRight = [&](double Right, double Top, const FString& String, const FSlateFontInfo& Font, const FLinearColor& Color)
 	{
 		Text(FVector2D(Right - Measure->Measure(String, Font).X, Top), String, Font, Color);
 	};
-
-	// Header: lap counter, state, and the mode of the gap column.
-	static const FLinearColor CompoundColors[] = {FLinearColor(1.0f, 0.2f, 0.2f), FLinearColor(1.0f, 0.85f, 0.1f),
-		FLinearColor(0.95f, 0.95f, 0.95f), FLinearColor(0.2f, 0.85f, 0.3f), FLinearColor(0.3f, 0.55f, 1.0f)};
-	static const TCHAR* const CompoundLetters[] = {TEXT("S"), TEXT("M"), TEXT("H"), TEXT("I"), TEXT("W")};
-	// Rounded shapes: plate for tags and the switch, disc for the tyre ring.
-	static const FSlateRoundedBoxBrush Plate(FLinearColor::White, 4.0f);
-	static const FSlateRoundedBoxBrush Disc(FLinearColor::White, 9.0f);
-	auto Shape = [&](const FVector2D& At, const FVector2D& Size, const FSlateBrush& Brush, const FLinearColor& Tint)
-	{
-		FSlateDrawElement::MakeBox(OutDrawElements, Layer, Area.ToPaintGeometry(Size, FSlateLayoutTransform(1.0f, At)), &Brush,
-			ESlateDrawEffect::None, Tint);
-	};
 	auto TextCentred = [&](double Centre, double Top, const FString& String, const FSlateFontInfo& Font, const FLinearColor& Color)
 	{
 		Text(FVector2D(Centre - Measure->Measure(String, Font).X / 2.0, Top), String, Font, Color);
 	};
-	const FLinearColor Dim(0.62f, 0.64f, 0.72f);
-	const FLinearColor Dark(0.03f, 0.03f, 0.06f);
 
-	// Lap counter, centred as one line.
-	const FSlateFontInfo LabelFont = UIStyle::Font(TEXT("Regular"), 12);
-	const FString Lap = FString::FromInt(Snapshot.LeaderLap);
-	const FString Total = FString::Printf(TEXT("/ %d"), Snapshot.TotalLaps);
-	const double LapLabelWidth = Measure->Measure(TEXT("LAP"), LabelFont).X;
-	const double LapWidth = Measure->Measure(Lap, LapFont).X;
-	const double LapLeft = (TowerWidth - LapLabelWidth - LapWidth - Measure->Measure(Total, LabelFont).X - 14.0) / 2.0;
-	Box(FVector2D(0.0, 0.0), FVector2D(TowerWidth, 36.0), FLinearColor(0.0f, 0.0f, 0.0f, 0.45f));
-	Text(FVector2D(LapLeft, 12.0), TEXT("LAP"), LabelFont, Dim);
-	Text(FVector2D(LapLeft + LapLabelWidth + 7.0, 3.0), Lap, LapFont, FLinearColor::White);
-	Text(FVector2D(LapLeft + LapLabelWidth + LapWidth + 14.0, 12.0), Total, LabelFont, Dim);
+	// Bests of the race: fastest lap and its holder, fastest time of each sector.
+	double FastestLap = 0.0;
+	int32 FastestEntry = -1;
+	double SessionSector[3] = {0.0, 0.0, 0.0};
+	for (const FUISimCar& Car : Snapshot.Cars)
+	{
+		if (Car.BestLapTime > 0.0 && (FastestLap == 0.0 || Car.BestLapTime < FastestLap))
+		{
+			FastestLap = Car.BestLapTime;
+			FastestEntry = Car.EntryIndex;
+		}
+		for (int32 Sector = 0; Sector < 3; ++Sector)
+		{
+			if (Car.BestSectorTimes[Sector] > 0.0 && (SessionSector[Sector] == 0.0 || Car.BestSectorTimes[Sector] < SessionSector[Sector]))
+			{
+				SessionSector[Sector] = Car.BestSectorTimes[Sector];
+			}
+		}
+	}
 
-	// State band in the colour of the flag.
-	FString State = StateText(Snapshot);
-	FLinearColor Band(0.08f, 0.5f, 0.22f);
-	FLinearColor BandInk = FLinearColor::White;
-	if (Snapshot.State == EUISimRaceState::RedFlag)
-	{
-		Band = FLinearColor(0.8f, 0.06f, 0.08f);
-	}
-	else if (Snapshot.bFinished || Snapshot.bChequered)
-	{
-		Band = FLinearColor(0.9f, 0.9f, 0.92f);
-		BandInk = Dark;
-	}
-	else if (!State.IsEmpty())
-	{
-		Band = FLinearColor(1.0f, 0.8f, 0.1f);
-		BandInk = Dark;
-	}
-	else
-	{
-		State = TEXT("GRUEN");
-	}
-	Box(FVector2D(0.0, 36.0), FVector2D(TowerWidth, 18.0), Band);
-	TextCentred(TowerWidth / 2.0, 38.0, State, SmallFont, BandInk);
+	// Title and the fastest lap chip.
+	Text(FVector2D(17.0, 15.0), TEXT("Live timing"), UIStyle::Font(TEXT("Bold"), 10), UIStyle::Text);
+	const FSlateFontInfo ChipFont = UIStyle::Font(TEXT("Bold"), 8);
+	const FString Fastest = FastestEntry >= 0 ? Entries[FastestEntry].Code + TEXT(" ") + LapText(FastestLap) : FString(TEXT("—"));
+	const double ChipWidth = Measure->Measure(Fastest, ChipFont).X + 18.0;
+	const double ChipLeft = CardWidth - 17.0 - ChipWidth;
+	Box(FVector2D(ChipLeft, 15.0), FVector2D(ChipWidth, 20.0), &Circle, PurpleChip);
+	Text(FVector2D(ChipLeft + 9.0, 18.0), Fastest, ChipFont, FLinearColor::White);
+	TextRight(ChipLeft - 6.0, 19.0, TEXT("FASTEST"), UIStyle::Font(TEXT("Regular"), 8), UIStyle::Mute);
 
-	// Mode switch above the gap column: the active half is bright.
-	const FVector2D Half(ModeLabel.GetSize().X / 2.0, ModeLabel.GetSize().Y);
-	Shape(ModeLabel.Min, ModeLabel.GetSize(), Plate, FLinearColor(1.0f, 1.0f, 1.0f, 0.12f));
-	Shape(ModeLabel.Min + FVector2D(bInterval ? 0.0 : Half.X, 0.0), Half, Plate, FLinearColor(0.92f, 0.92f, 0.95f));
-	TextCentred(ModeLabel.Min.X + Half.X * 0.5, ModeLabel.Min.Y + 2.0, TEXT("INTERVALL"), SmallFont, bInterval ? Dark : Dim);
-	TextCentred(ModeLabel.Min.X + Half.X * 1.5, ModeLabel.Min.Y + 2.0, TEXT("ABSTAND"), SmallFont, bInterval ? Dim : Dark);
-	Text(FVector2D(TyreLeft, ModeLabel.Min.Y + 2.0), TEXT("REIFEN"), SmallFont, Dim);
+	// Column labels with the line below.
+	const double LabelTop = HeaderTop + 6.0;
+	Text(FVector2D(PositionLeft, LabelTop), TEXT("P"), LabelFont, UIStyle::Mute);
+	Text(FVector2D(CodeLeft, LabelTop), TEXT("DRV"), LabelFont, UIStyle::Mute);
+	TextRight(GapRight, LabelTop, TEXT("GAP"), LabelFont, UIStyle::Mute);
+	TextRight(IntervalRight, LabelTop, TEXT("INT"), LabelFont, UIStyle::Mute);
+	TextRight(LastRight, LabelTop, TEXT("LAST"), LabelFont, UIStyle::Mute);
+	TextRight(BestRight, LabelTop, TEXT("BEST"), LabelFont, UIStyle::Mute);
+	Text(FVector2D(SectorLeft, LabelTop), TEXT("SECT"), LabelFont, UIStyle::Mute);
+	Text(FVector2D(TyreLeft, LabelTop), TEXT("TYRE"), LabelFont, UIStyle::Mute);
+	Text(FVector2D(PitLeft, LabelTop), TEXT("PIT"), LabelFont, UIStyle::Mute);
+	Text(FVector2D(TokenLeft, LabelTop), TEXT("PEN"), LabelFont, UIStyle::Mute);
+	Box(FVector2D(1.0, RowsTop - 1.0), FVector2D(CardWidth - 2.0, 1.0), White, FLinearColor(1.0f, 1.0f, 1.0f, 0.07f));
 
-	const FSlateFontInfo TyreFont = UIStyle::Font(TEXT("Bold"), 9);
+	static const TCHAR* const CompoundLetters[] = {TEXT("S"), TEXT("M"), TEXT("H"), TEXT("I"), TEXT("W")};
+	static const FLinearColor CompoundColors[] = {UIStyle::Red, UIStyle::Yellow, UIStyle::Text, UIStyle::Green, UIStyle::Rgb(80, 150, 255)};
 	for (int32 Index = 0; Index < Snapshot.Cars.Num() && Index < MaxRows; ++Index)
 	{
 		const FUISimCar& Car = Snapshot.Cars[Index];
-		const double Top = HeaderHeight + Index * RowHeight;
-		const bool bSelected = Car.EntryIndex == Race->FollowedCar(); // the car the TV camera follows
+		const double Top = RowsTop + Index * RowHeight;
 		const bool bOut = Car.bRetired || Car.bDisqualified;
-		const FLinearColor Ink = bOut ? Dim : FLinearColor::White;
-		if (bSelected)
+		auto Faded = [&](FLinearColor Color) // cars that are out stand back, as in the design
 		{
-			Box(FVector2D(0.0, Top), FVector2D(TowerWidth, RowHeight - 1.0), FLinearColor(0.16f, 0.22f, 0.38f));
-		}
-		else if (Index % 2 == 1)
+			Color.A *= bOut ? 0.45f : 1.0f;
+			return Color;
+		};
+		if (Car.EntryIndex == Race->FollowedCar()) // the car the TV camera follows
 		{
-			Box(FVector2D(0.0, Top), FVector2D(TowerWidth, RowHeight - 1.0), FLinearColor(1.0f, 1.0f, 1.0f, 0.04f));
+			Box(FVector2D(1.0, Top), FVector2D(CardWidth - 2.0, RowHeight - 1.0), White, FLinearColor(1.0f, 1.0f, 1.0f, 0.09f));
 		}
-		Box(FVector2D(0.0, Top), FVector2D(PositionWidth, RowHeight - 1.0),
-			Index == 0 ? FLinearColor(0.85f, 0.05f, 0.08f) : FLinearColor(1.0f, 1.0f, 1.0f, 0.08f));
-		TextCentred(PositionWidth / 2.0, Top + 3.0, FString::FromInt(Car.Position), CodeFont, Ink);
-		Box(FVector2D(BarLeft, Top), FVector2D(5.0, RowHeight - 1.0), TeamColor(Entries, Car.EntryIndex));
-		Text(FVector2D(CodeLeft, Top + 3.0), Entries[Car.EntryIndex].Code, CodeFont, Ink);
-		bool bInPit = false;
-		const FString Gap = GapText(Snapshot, Index, bInterval, bInPit);
-		if (bInPit)
+		Box(FVector2D(1.0, Top + RowHeight - 1.0), FVector2D(CardWidth - 2.0, 1.0), White, FLinearColor(1.0f, 1.0f, 1.0f, 0.05f));
+
+		Box(FVector2D(PositionLeft, Top + 4.0), FVector2D(PositionWidth, 21.0), &Round6, Faded(UIStyle::Text));
+		TextCentred(PositionLeft + PositionWidth / 2.0, Top + 7.0, FString::FromInt(Car.Position), BoldFont, UIStyle::Ink);
+		Box(FVector2D(BarLeft, Top + 5.0), FVector2D(5.0, 19.0), &Round2, Faded(TeamColor(Entries, Car.EntryIndex)));
+		Text(FVector2D(CodeLeft, Top + 6.0), Entries[Car.EntryIndex].Code, CodeFont, Faded(UIStyle::Text));
+
+		const FString Gap = GapText(Snapshot, Index);
+		TextRight(GapRight, Top + 7.0, Gap, Car.bInPitLane && !bOut ? BoldFont : BodyFont,
+			Faded(Car.bInPitLane && !bOut ? UIStyle::Green : UIStyle::Text));
+		// Within a second of the car ahead in the classification and Overtake available: green, as the design marks it.
+		const bool bClose = Index > 0 && Car.bOvertakeActive && !bOut && Car.LapsDown == Snapshot.Cars[Index - 1].LapsDown
+			&& Car.GapToLeader - Snapshot.Cars[Index - 1].GapToLeader < 1.0;
+		TextRight(IntervalRight, Top + 7.0, IntervalText(Snapshot, Index), BodyFont, Faded(bClose ? UIStyle::Green : UIStyle::Text));
+
+		const bool bPersonalBest = Car.LastLapTime > 0.0 && Car.LastLapTime <= Car.BestLapTime;
+		const bool bSessionBest = bPersonalBest && Car.LastLapTime <= FastestLap;
+		TextRight(LastRight, Top + 7.0, LapText(Car.LastLapTime), BodyFont,
+			Faded(bSessionBest ? Purple : bPersonalBest ? UIStyle::Green : UIStyle::Text));
+		TextRight(BestRight, Top + 7.0, LapText(Car.BestLapTime), BodyFont, Faded(Car.EntryIndex == FastestEntry ? Purple : UIStyle::Mute));
+
+		for (int32 Sector = 0; Sector < 3; ++Sector)
 		{
-			const double Width = Measure->Measure(Gap, GapFont).X + 12.0;
-			Shape(FVector2D(GapRight - Width + 4.0, Top + 4.0), FVector2D(Width, RowHeight - 9.0), Plate, FLinearColor(0.1f, 0.65f, 0.3f));
+			// As in the design: the bars of a new lap fill again sector by sector; before the first one the last lap stays.
+			const double Time = Car.SectorsDone > 0 && Sector >= Car.SectorsDone ? 0.0 : Car.SectorTimes[Sector];
+			const FLinearColor Color = Time <= 0.0 ? SectorEmpty : Time <= SessionSector[Sector] ? PurpleBar
+				: Time <= Car.BestSectorTimes[Sector] ? UIStyle::Green : UIStyle::Yellow;
+			Box(FVector2D(SectorLeft + Sector * 17.0, Top + 10.0), FVector2D(15.0, 8.0), &Round2, Faded(Color));
 		}
-		TextRight(GapRight - (bInPit ? 2.0 : 0.0), Top + 5.0, Gap, GapFont, bInPit || !bOut ? FLinearColor::White : Dim);
+
 		const int32 Compound = FMath::Clamp(Car.Compound, 0, 4);
+		Box(FVector2D(TyreLeft, Top + 6.0), FVector2D(16.0, 16.0), &Circle, Faded(CompoundColors[Compound]));
+		Box(FVector2D(TyreLeft + 2.0, Top + 8.0), FVector2D(12.0, 12.0), &Circle, UIStyle::Card);
 		const FVector2D LetterSize = Measure->Measure(CompoundLetters[Compound], TyreFont);
-		Shape(FVector2D(TyreLeft, Top + 3.5), FVector2D(TyreSize, TyreSize), Disc, CompoundColors[Compound]);
-		Shape(FVector2D(TyreLeft + 2.5, Top + 6.0), FVector2D(TyreSize - 5.0, TyreSize - 5.0), Disc, FLinearColor(0.05f, 0.05f, 0.09f));
-		Text(FVector2D(TyreLeft + (TyreSize - LetterSize.X) / 2.0, Top + 3.5 + (TyreSize - LetterSize.Y) / 2.0), CompoundLetters[Compound],
-			TyreFont, FLinearColor::White);
-		Text(FVector2D(TyreLeft + TyreSize + 4.0, Top + 7.0), FString::FromInt(Car.TyreAge), TagFont, Dim);
-		const FString Tag = TagText(Car);
-		if (!Tag.IsEmpty())
+		Text(FVector2D(TyreLeft + (16.0 - LetterSize.X) / 2.0, Top + 6.0 + (16.0 - LetterSize.Y) / 2.0), CompoundLetters[Compound], TyreFont,
+			Faded(UIStyle::Text));
+		Text(FVector2D(TyreLeft + 21.0, Top + 7.0), FString::FromInt(Car.TyreAge), BodyFont, Faded(UIStyle::Mute));
+		Text(FVector2D(PitLeft, Top + 7.0), FString::FromInt(Car.PitStops), BodyFont, Faded(UIStyle::Mute));
+		FLinearColor TokenColor;
+		const FString Token = TokenText(Car, TokenColor);
+		if (!Token.IsEmpty())
 		{
-			const double Width = FMath::Min(Measure->Measure(Tag, TagFont).X + 10.0, TowerWidth - TagLeft - 3.0);
-			Shape(FVector2D(TagLeft, Top + 4.5), FVector2D(Width, RowHeight - 10.0), Plate, TagColor(Car));
-			Text(FVector2D(TagLeft + 5.0, Top + 6.5), Tag, TagFont, FLinearColor::White);
+			Text(FVector2D(TokenLeft, Top + 7.0), Token, BoldFont, Faded(TokenColor));
 		}
-		if (bSelected)
-		{
-			Box(FVector2D(0.0, Top), FVector2D(TowerWidth, 1.5), FLinearColor::White);
-			Box(FVector2D(0.0, Top + RowHeight - 2.5), FVector2D(TowerWidth, 1.5), FLinearColor::White);
-		}
+	}
+
+	// Legend of the lap and sector colours.
+	const double LegendTop = RowsTop + MaxRows * RowHeight + 10.0;
+	double LegendLeft = 13.0;
+	const TPair<const TCHAR*, FLinearColor> Legend[] = {{TEXT("SESSION BEST"), PurpleBar}, {TEXT("PERSONAL BEST"), UIStyle::Green},
+		{TEXT("NO IMPROVEMENT"), UIStyle::Yellow}};
+	for (const TPair<const TCHAR*, FLinearColor>& Entry : Legend)
+	{
+		Box(FVector2D(LegendLeft, LegendTop + 2.0), FVector2D(10.0, 8.0), &Round2, Entry.Value);
+		Text(FVector2D(LegendLeft + 15.0, LegendTop), Entry.Key, LabelFont, UIStyle::Mute);
+		LegendLeft += 15.0 + Measure->Measure(Entry.Key, LabelFont).X + 12.0;
 	}
 	Layer += 2;
 
 	if (FVector2D(Area.GetAbsolutePosition()) != LoggedAt)
 	{
-		// Viewport pixels for -UISimScript checks (click x y): the mode label and the first two rows.
+		// Viewport pixels for -UISimScript checks (click x y): the second row.
 		LoggedAt = FVector2D(Area.GetAbsolutePosition());
 		const UWorld* World = GetWorld();
 		UGameViewportClient* Viewport = World ? World->GetGameViewport() : nullptr;
@@ -401,10 +339,9 @@ int32 UUITimingTowerWidget::NativePaint(const FPaintArgs& Args, const FGeometry&
 		if (ViewportWidget.IsValid())
 		{
 			const FVector2D Origin = FVector2D(ViewportWidget->GetCachedGeometry().GetAbsolutePosition());
-			const FVector2D Mode = FVector2D(Area.LocalToAbsolute(ModeLabel.GetCenter())) - Origin;
-			const FVector2D Row = FVector2D(Area.LocalToAbsolute(FVector2D(CodeLeft + 20.0, HeaderHeight + RowHeight * 1.5))) - Origin;
-			UE_LOG(LogUISim, Display, TEXT("Tower: mode label at %.0f %.0f, row 2 at %.0f %.0f, row height %.0f"), Mode.X, Mode.Y, Row.X, Row.Y,
-				RowHeight);
+			const FVector2D Row = FVector2D(Area.LocalToAbsolute(FVector2D(CodeLeft + 20.0, RowsTop + RowHeight * 1.5))) - Origin;
+			const FVector2D Next = FVector2D(Area.LocalToAbsolute(FVector2D(CodeLeft + 20.0, RowsTop + RowHeight * 2.5))) - Origin;
+			UE_LOG(LogUISim, Display, TEXT("Live timing: row 2 at %.0f %.0f, row 3 at %.0f %.0f"), Row.X, Row.Y, Next.X, Next.Y);
 		}
 	}
 	return Layer;
@@ -413,21 +350,15 @@ int32 UUITimingTowerWidget::NativePaint(const FPaintArgs& Args, const FGeometry&
 FReply UUITimingTowerWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
 	AUIRaceDirector* Race = Director.Get();
-	if (!Race || !TowerArea || InMouseEvent.GetEffectingButton() != EKeys::LeftMouseButton || !Race->Session().IsStarted())
+	if (!Race || !TableArea || InMouseEvent.GetEffectingButton() != EKeys::LeftMouseButton || !Race->Session().IsStarted())
 	{
 		return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
 	}
-	const FVector2D Local = FVector2D(TowerArea->GetCachedGeometry().AbsoluteToLocal(InMouseEvent.GetScreenSpacePosition()));
-	if (ModeLabel.IsInside(Local))
-	{
-		bInterval = !bInterval;
-		UE_LOG(LogUISim, Display, TEXT("Tower: gap column shows %s"), bInterval ? TEXT("the interval to the car ahead") : TEXT("the gap to the leader"));
-		return FReply::Handled();
-	}
 	// A row: the TV camera follows that car (the leader's row: back to following the leader).
-	const int32 Row = FMath::FloorToInt32((Local.Y - HeaderHeight) / RowHeight);
+	const FVector2D Local = FVector2D(TableArea->GetCachedGeometry().AbsoluteToLocal(InMouseEvent.GetScreenSpacePosition()));
+	const int32 Row = FMath::FloorToInt32((Local.Y - RowsTop) / RowHeight);
 	const TArray<FUISimCar>& Cars = Race->Session().Snapshot().Cars;
-	if (Local.X >= 0.0 && Local.X <= TowerWidth && Local.Y >= HeaderHeight && Cars.IsValidIndex(Row))
+	if (Local.Y >= RowsTop && Row < MaxRows && Cars.IsValidIndex(Row))
 	{
 		FUICommand Command;
 		Command.Type = EUICommand::FollowCar;

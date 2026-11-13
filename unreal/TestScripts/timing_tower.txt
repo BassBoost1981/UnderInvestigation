@@ -1,9 +1,8 @@
-# Timing tower check (testring, seed 1, 1600x900): interval and gap mode, a followed car, cars in the pit lane.
+# Live timing check (M12.3; testring, seed 1, 1600x900): the table with a followed car, and cars in the pit lane.
 # Run with -UISimSeed=1 -UISimTimeScale=500 -UISimScript=TestScripts/timing_tower.txt -UISimQuitWhenDone
-# The log names the click targets ("Tower: mode label at ...").
-1790 timescale 20
-1800 click 85 235       # row 4: the TV camera follows that car
-1802 screenshot tower_interval
-1804 click 140 149      # mode label: gap to the leader
-1806 screenshot tower_gap
+# The log names the click targets ("Live timing: row 2 at ...").
+1760 timescale 20
+1770 screenshot timing_pit   # three cars are in the pit lane: IN PIT in the gap column
+1800 click 73 225       # row 4: the TV camera follows that car
+1802 screenshot timing_follow
 1808 timescale 500

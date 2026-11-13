@@ -124,6 +124,26 @@ TEST_CASE("50-lap race result is plausible") {
     CHECK(sim.stats().overtakes > 0);
 }
 
+TEST_CASE("Sector times: the best of each sector is kept per car (M12.3)") {
+    Sim sim = makeRace(42, 10);
+    runToEnd(sim);
+    for (const CarState& car : sim.snapshot().cars) {
+        if (car.retired) {
+            continue;
+        }
+        double bestSum = 0.0;
+        for (int sector = 0; sector < 3; ++sector) {
+            CHECK(car.bestSectorTimes[sector] > 0.0);
+            CHECK(car.bestSectorTimes[sector] <= car.sectorTimes[sector]);     // the latest is never faster than the best
+            CHECK(car.bestSectorTimes[sector] <= car.lastSectorTimes[sector]); // nor is the one of the last lap
+            bestSum += car.bestSectorTimes[sector];
+        }
+        CHECK(bestSum <= car.bestLapTime + 1e-9); // the ideal lap is at least as fast as the best lap
+        CHECK(bestSum > 0.9 * car.bestLapTime);
+        CHECK(car.sectorsDone == 0); // finished on the line
+    }
+}
+
 TEST_CASE("Overtaking level is race-like over several seeds") {
     // Tuning target (2026-11-07): 20-50 overtakes per 50-lap race on average, and the
     // result must not just reproduce the grid. Single races may fall outside the range.

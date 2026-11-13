@@ -292,6 +292,7 @@ private:
         double lastBoundaryTime = 0.0;
         std::vector<double> boundaryTimes; // crossing time of every boundary so far
         std::array<double, 3> sectorTimes{};
+        std::array<double, 3> bestSectorTimes{}; // fastest time per sector so far (M12.3)
         std::array<double, 3> lastSectorTimes{};
         double lastLapTime = 0.0;
         double bestLapTime = 0.0;
