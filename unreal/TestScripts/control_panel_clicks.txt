@@ -1,16 +1,19 @@
-# M8.6 check (testring, 1600x900): every control panel button by synthetic click.
+# M12.4 check (testring, 1600x900): the buttons of the card "Track status" by synthetic click.
 # Same commands at the same times as control_panel_commands.txt; both races must end identically.
-30 click 696 456     # VSC
-50 click 696 456     # VSC ENDE
-60 click 982 456     # UEBERRUNDETE without SC: not allowed
-100 click 785 456    # SC
-250 click 982 456    # UEBERRUNDETE
-260 click 785 456    # SC REIN
-600 click 1098 456   # BOX ZU
-700 click 1098 456   # BOX AUF
-900 click 873 456    # ROT: asks first
-901 click 909 429    # JA, ROT
-1000 click 873 456   # NEUSTART (same button)
-1100 click 769 482   # KAM 3
-1110 click 977 482   # ZEIT -
-1111 click 1109 482  # ZEIT +
+# Run with -UISimTimeScale=20 so frames are drawn between the clicks.
+# The first steps come after the start signal (about 2:37): the formation lap runs behind the Safety Car.
+200 click 1286 239     # VSC
+230 click 1286 239     # VSC ENDING
+240 click 1253 444     # LAPPED CARS PASS without SC: not allowed
+300 click 1484 239    # SAFETY CAR
+450 click 1253 444    # LAPPED CARS PASS
+460 click 1484 239    # SC IN THIS LAP
+600 click 1484 283    # PIT LANE: close
+700 click 1484 283    # PIT LANE: open
+900 click 1484 142    # RED FLAG: asks first
+901 click 1484 142    # RED FLAG again: shown
+1000 click 1286 142   # RESTART (rolling, the first state button while the flag is out)
+1100 click 907 437    # camera tile 3
+1200 click 1207 333   # marshal sector 1: yellow
+1201 click 1286 142   # TRACK CLEAR: sector 1 green again
+1210 click 1199 48    # top bar: sim speed 16x

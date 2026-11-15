@@ -161,7 +161,7 @@ int32 UUIDeskWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Allott
 	Box(FVector2D(Feed.Max.X, Feed.Min.Y), FVector2D(Size.X, Feed.Max.Y), White, UIStyle::Background);
 
 	for (const FBox2D* Card : {&UIStyle::TopTitle, &UIStyle::TopSession, &UIStyle::TopWeather, &UIStyle::TimingCard, &UIStyle::LowerLeftCard,
-		&UIStyle::MapCard, &UIStyle::IncidentCard})
+		&UIStyle::MapCard, &UIStyle::StatusCard, &UIStyle::IncidentCard})
 	{
 		CardBox(*Card, UIStyle::Card);
 	}

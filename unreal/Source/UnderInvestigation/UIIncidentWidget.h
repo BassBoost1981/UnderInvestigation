@@ -71,6 +71,8 @@ private:
 	TObjectPtr<UTextBlock> ReviewControls;
 	UPROPERTY()
 	TObjectPtr<UBorder> ControlArea;
+	UPROPERTY()
+	TObjectPtr<UBorder> ListPanel; // the whole panel; moves up over the status card during a review
 
 	TArray<int32> RowIncident;       // incident index shown in each row, -1 = none
 	int32 ChosenPenalty = -1;        // penalty picked in the dialog, not yet confirmed

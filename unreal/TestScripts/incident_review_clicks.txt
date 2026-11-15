@@ -1,7 +1,7 @@
 # M8.7 check (testring, seed 1, 1600x900): review and verdict by synthetic clicks.
 # Same steps as incident_review_commands.txt; both races must end identically, with the same verdict.
 # Run with -UISimTimeScale=20 so frames are drawn between the clicks.
-300 click 1252 116   # row 1 = the latest incident (#3, collision DRA/OKA): review it
+300 click 1252 536   # row 1 = the latest incident (#3, collision DRA/OKA): review it
 301 click 1295 504   # PAUSE
 302 click 1362 504   # +1 S
 303 click 1285 484   # timeline at about -2.5 s

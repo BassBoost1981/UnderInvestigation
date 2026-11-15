@@ -105,6 +105,7 @@ public:
 	FString ActiveCameraName() const;
 	double TimeScale() const { return SimTimeScale; }
 	int32 ActiveCameraIndex() const { return ActiveCamera; }
+	const TArray<FString>& CameraNameList() const { return CameraNames; } // one per camera, for the camera tiles
 	// Next (Direction > 0) or previous step of the time scale (1, 2, 5, 10, 20, 50).
 	static double StepTimeScale(double Current, int32 Direction);
 	int32 SelectedSector() const { return SelectedMarshalSector; }

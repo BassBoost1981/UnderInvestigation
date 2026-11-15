@@ -88,6 +88,7 @@ TSharedRef<SWidget> UUIIncidentWidget::RebuildWidget()
 
 		UBorder* Panel = WidgetTree->ConstructWidget<UBorder>();
 		Panel->SetBrushColor(FLinearColor::Transparent); // the card of the desk is the background
+		ListPanel = Panel;
 		Panel->SetPadding(FMargin(12.0f));
 		UCanvasPanelSlot* PanelSlot = Canvas->AddChildToCanvas(Panel);
 		PanelSlot->SetAutoSize(true);
@@ -155,6 +156,13 @@ void UUIIncidentWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTim
 	if (!Race || !Race->Session().IsStarted())
 	{
 		return;
+	}
+	if (UCanvasPanelSlot* PanelSlot = ListPanel ? Cast<UCanvasPanelSlot>(ListPanel->Slot) : nullptr)
+	{
+		// Until M12.6 the review dialog is taller than the incident card: it takes the whole right column.
+		const bool bReview = Race->IsReviewing();
+		PanelSlot->SetPosition((bReview ? UIStyle::StatusCard.Min : UIStyle::IncidentCard.Min) + FVector2D(12.0, 4.0));
+		ListPanel->SetBrushColor(bReview ? UIStyle::Card : FLinearColor::Transparent);
 	}
 	const TArray<FUISimIncident>& Incidents = Race->Session().Incidents();
 	const TArray<FUISimEntry>& Entries = Race->Session().Entries();
