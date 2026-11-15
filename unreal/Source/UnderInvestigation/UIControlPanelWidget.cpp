@@ -221,13 +221,16 @@ TArray<UUIControlPanelWidget::FButton> UUIControlPanelWidget::Buttons() const
 		Add(MoreRect(5), ELook::Small, TEXT("STANDING AFTER SC"), FString(), FUICommand(), bStanding, UIStyle::Red, EKind::ToggleStanding).bDarkInk = false;
 	}
 
-	// Camera tiles under the 3D picture (until M12.5 without the number of cars in view).
+	// Camera tiles under the 3D picture: name, cars in the frame and a dot in the colour of the flag over them.
 	const TArray<FString>& Cameras = Race->CameraNameList();
 	for (int32 Index = 0; Index < Cameras.Num() && Index < 10; ++Index)
 	{
 		const FVector2D Min((Index % 5) * TileStep, (Index / 5) * (TileHeight + 6.0));
-		Add(FBox2D(Min, Min + FVector2D(TileWidth, TileHeight)), ELook::Tile, Cameras[Index].ToUpper(), FString(),
-			MakeCommand(EUICommand::SetCamera, Index), Race->ActiveCameraIndex() == Index, UIStyle::Text).bTile = true;
+		const FUICameraView View = Race->CameraView(Index);
+		const FLinearColor Dot = View.bRedFlag ? UIStyle::Red : View.Flag != EUISimFlag::Green ? UIStyle::Yellow : UIStyle::Green;
+		const FString Count = FString::Printf(TEXT("%d %s"), View.Cars.Num(), View.Cars.Num() == 1 ? TEXT("CAR") : TEXT("CARS"));
+		Add(FBox2D(Min, Min + FVector2D(TileWidth, TileHeight)), ELook::Tile, Cameras[Index].ToUpper(), Count,
+			MakeCommand(EUICommand::SetCamera, Index), Race->ActiveCameraIndex() == Index, Dot).bTile = true;
 	}
 	return List;
 }
@@ -361,8 +364,10 @@ int32 UUIControlPanelWidget::NativePaint(const FPaintArgs& Args, const FGeometry
 			TextCentred(Rect.GetCenter(), Button.Label, UIStyle::Font(TEXT("Bold"), 7), Ink);
 			break;
 		case ELook::Tile:
-			Framed(Rect, &Round12, &Round11, Button.bActive ? UIStyle::Text : Edge, UIStyle::Rgb(18, 19, 22));
-			Text(Rect.Min + FVector2D(8.0, 8.0), Button.Label, UIStyle::Font(TEXT("Bold"), 7), UIStyle::Text);
+			Framed(Rect, &Round8, &Round7, Button.bActive ? UIStyle::Text : Edge, UIStyle::Rgb(18, 19, 22));
+			Text(Rect.Min + FVector2D(7.0, 6.0), Button.Label, UIStyle::Font(TEXT("Bold"), 7), UIStyle::Text);
+			Text(FVector2D(Rect.Min.X + 7.0, Rect.Max.Y - 18.0), Button.Sub, UIStyle::Font(TEXT("Regular"), 7), UIStyle::Mute);
+			Box(Rect.Max - FVector2D(14.0, 14.0), Rect.Max - FVector2D(7.0, 7.0), &Round8, Button.Color);
 			break;
 		}
 	}

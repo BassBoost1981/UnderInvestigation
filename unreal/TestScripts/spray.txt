@@ -1,0 +1,9 @@
+# M12.5 check (testring, seed 1, 1600x900): see-through spray on a wet track, trackside and TV camera.
+# Run with -UISimWeather=wet-start.json -UISimSeed=1 -UISimTimeScale=500 -UISimScript=TestScripts/spray.txt -UISimQuitWhenDone
+0 sc_start wet
+240 sc_in
+600 timescale 1     # real time: at higher speeds the car runs ahead of the camera between frames
+601 screenshot spray_tv
+603 camera 2
+606 screenshot spray_t1
+607 timescale 500

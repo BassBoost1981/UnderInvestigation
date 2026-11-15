@@ -5,6 +5,7 @@
 #include "Fonts/SlateFontInfo.h"
 #include "Misc/Paths.h"
 #include "Styling/CoreStyle.h"
+#include "UISimSession.h"
 
 // Shared look of the race director's desk (M12): layout of the cards, colours and fonts in one place.
 // Positions and sizes follow the user's design "Race Control Simulator v3 Modern" on a 1920 x 1080
@@ -48,6 +49,18 @@ namespace UIStyle
 	inline const FLinearColor Yellow = Rgb(245, 197, 24);
 	inline const FLinearColor Red = Rgb(229, 56, 59);
 	inline const FLinearColor Green = Rgb(47, 191, 113);
+
+	// Same colours as the cars (UIRaceDirector.cpp): one hue per team.
+	inline FLinearColor TeamColor(const TArray<FUISimEntry>& Entries, int32 EntryIndex)
+	{
+		TArray<FString> Teams;
+		for (const FUISimEntry& Entry : Entries)
+		{
+			Teams.AddUnique(Entry.Team);
+		}
+		const float Hue = 360.0f * Teams.IndexOfByKey(Entries[EntryIndex].Team) / FMath::Max(1, Teams.Num());
+		return FLinearColor::MakeFromHSV8(static_cast<uint8>(Hue / 360.0f * 255.0f), 200, 230);
+	}
 
 	// Lexend (OFL, Content/Fonts) for text; the engine font stays for "Mono" columns of numbers.
 	// LetterSpacing is in 1/1000 em, as in the design (.04em = 40).

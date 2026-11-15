@@ -68,6 +68,14 @@ struct FUICommand
 	EUISimPenalty Penalty = EUISimPenalty::None;
 };
 
+// What a camera shows (M12.5): the cars in its frame in race order and the flag over them.
+struct FUICameraView
+{
+	TArray<int32> Cars;                  // entry indices
+	EUISimFlag Flag = EUISimFlag::Green; // strongest sector flag at the cars in frame
+	bool bRedFlag = false;
+};
+
 // Runs the UISim race at a fixed 20 Hz tick and shows it: blockout track and cars,
 // interpolated between sim snapshots, plus switchable cameras and the timing tower.
 // All race logic stays in the core; this actor only displays it.
@@ -106,6 +114,7 @@ public:
 	double TimeScale() const { return SimTimeScale; }
 	int32 ActiveCameraIndex() const { return ActiveCamera; }
 	const TArray<FString>& CameraNameList() const { return CameraNames; } // one per camera, for the camera tiles
+	FUICameraView CameraView(int32 Index) const;
 	// Next (Direction > 0) or previous step of the time scale (1, 2, 5, 10, 20, 50).
 	static double StepTimeScale(double Current, int32 Direction);
 	int32 SelectedSector() const { return SelectedMarshalSector; }
@@ -212,6 +221,7 @@ private:
 	UPROPERTY()
 	TArray<TObjectPtr<ACameraActor>> Cameras;
 	TArray<FString> CameraNames;
+	TArray<double> CameraRanges; // cm; a car farther away does not count as in the frame
 	int32 ActiveCamera = 0;
 
 	UPROPERTY()

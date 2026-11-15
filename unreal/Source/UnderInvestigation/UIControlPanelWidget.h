@@ -9,8 +9,9 @@ class UBorder;
 
 // Race control (M12.4), after the card "Track status" of the user's design: the six big state
 // buttons, OVERTAKE and PIT LANE, the marshal sectors, the start lights with the restart button,
-// and below them the commands the design does not know. Until M12.5 it also draws the camera
-// tiles under the 3D picture. The red flag needs a second click. Actions go through Execute().
+// and below them the commands the design does not know. It also draws the camera tiles under
+// the 3D picture (name, cars in the frame, flag dot). The red flag needs a second click.
+// Actions go through Execute().
 UCLASS()
 class UUIControlPanelWidget : public UUserWidget
 {
@@ -35,7 +36,7 @@ private:
 	{
 		FBox2D Rect;       // in the coordinates of its area
 		FString Label;
-		FString Sub;       // second line (Status) or the state chip (Toggle)
+		FString Sub;       // second line (Status, Tile) or the state chip (Toggle)
 		FUICommand Command;
 		EKind Kind = EKind::Command;
 		ELook Look = ELook::Status;

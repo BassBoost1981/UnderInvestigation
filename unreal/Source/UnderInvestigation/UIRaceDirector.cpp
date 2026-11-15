@@ -25,7 +25,7 @@
 #include "UIWeatherWidget.h"
 #include "UISeasonWidget.h"
 #include "UISimCareer.h"
-#include "Engine/LocalPlayer.h"
+#include "Engine/GameViewportClient.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "Engine/TextureRenderTarget2D.h"
 
@@ -253,11 +253,13 @@ void AUIRaceDirector::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	{
 		// Leaving a race for the season screen: its panels and cameras go with it.
 		UUserWidget* Panels[] = {Desk, TimingTower, IncidentPanel, RatingPanel, RadioPanel, TrackMap, ControlPanel, WeatherPanel, SeasonPanel};
-		const APlayerController* Player = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
-		if (ULocalPlayer* Local = Player ? Player->GetLocalPlayer() : nullptr)
+		if (UGameViewportClient* ViewportClient = GetWorld() ? GetWorld()->GetGameViewport() : nullptr)
 		{
-			Local->Origin = FVector2D(0.0, 0.0); // whole screen again for the season screen
-			Local->Size = FVector2D(1.0, 1.0);
+			TArray<FPerPlayerSplitscreenData>& Single = ViewportClient->SplitscreenInfo[ESplitScreenType::None].PlayerData;
+			if (Single.Num() > 0)
+			{
+				Single[0] = FPerPlayerSplitscreenData(1.0f, 1.0f, 0.0f, 0.0f); // whole screen again for the season screen
+			}
 		}
 		for (UUserWidget* Panel : Panels)
 		{
@@ -356,12 +358,21 @@ void AUIRaceDirector::SpawnCars()
 	{
 		Teams.AddUnique(Entry.Team);
 	}
+	// Spray (M12.5): see-through, from the engine's simple translucent material (colour alpha = opacity).
+	UMaterialInterface* SprayMaterial = LoadObject<UMaterialInterface>(nullptr,
+		TEXT("/Engine/EngineDebugMaterials/M_SimpleTranslucent.M_SimpleTranslucent"));
 	for (const FUISimEntry& Entry : Entries)
 	{
 		UStaticMeshComponent* Car = AddMesh(CubeMesh, TeamColor(Teams.IndexOfByKey(Entry.Team), Teams.Num()));
 		Car->SetWorldScale3D(CarScale);
 		CarMeshes.Add(Car);
 		UStaticMeshComponent* Spray = AddMesh(CubeMesh, FLinearColor(0.72f, 0.77f, 0.82f)); // blockout spray: a pale wedge
+		if (SprayMaterial)
+		{
+			UMaterialInstanceDynamic* Mist = UMaterialInstanceDynamic::Create(SprayMaterial, this);
+			Mist->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.72f, 0.77f, 0.82f, 0.35f));
+			Spray->SetMaterial(0, Mist);
+		}
 		Spray->SetVisibility(false);
 		SprayMeshes.Add(Spray);
 	}
@@ -490,19 +501,21 @@ void AUIRaceDirector::SpawnCameras()
 	// Trackside positions (distance along the lap, metres beside the track, height).
 	const FFixedCamera Fixed[] = {
 		{TEXT("T1"), 950.0, -45.0, 10.0},
-		{TEXT("Gegengerade"), 2650.0, 40.0, 8.0},
+		{TEXT("BACK STRAIGHT"), 2650.0, 40.0, 8.0},
 		{TEXT("T10"), 5050.0, -40.0, 10.0},
 	};
 
-	auto Spawn = [this](const FString& Name, const FVector& Location, const FRotator& Rotation)
+	// MaxDistance 800 m: farther cars are too small to count as in the frame.
+	auto Spawn = [this](const FString& Name, const FVector& Location, const FRotator& Rotation, double MaxDistance = 80000.0)
 	{
 		ACameraActor* Camera = GetWorld()->SpawnActor<ACameraActor>(Location, Rotation);
 		Camera->GetCameraComponent()->SetConstraintAspectRatio(false);
 		Cameras.Add(Camera);
 		CameraNames.Add(Name);
+		CameraRanges.Add(MaxDistance);
 	};
 
-	Spawn(TEXT("TV Leader"), FVector::ZeroVector, FRotator::ZeroRotator); // positioned every frame
+	Spawn(TEXT("TV LEADER"), FVector::ZeroVector, FRotator::ZeroRotator); // positioned every frame
 	for (const FFixedCamera& Camera : Fixed)
 	{
 		const FVector Location = SimSession.TrackTransform(Camera.Distance, Camera.Lateral).GetLocation()
@@ -510,11 +523,12 @@ void AUIRaceDirector::SpawnCameras()
 		Spawn(Camera.Name, Location, FRotator::ZeroRotator);
 	}
 	const FBox Bounds(SimSession.CenterlineWorld());
-	Spawn(TEXT("Uebersicht"), Bounds.GetCenter() + FVector(0, 0, Bounds.GetSize().GetMax() * 0.95), FRotator(-90.0, 0.0, 0.0));
+	Spawn(TEXT("OVERVIEW"), Bounds.GetCenter() + FVector(0, 0, Bounds.GetSize().GetMax() * 0.95), FRotator(-90.0, 0.0, 0.0),
+		TNumericLimits<double>::Max());
 	Cameras.Last()->GetCameraComponent()->SetFieldOfView(60.0f);
 
 	// Pit lane (M8.8): fixed, on the far side of the straight, looking across the lane at the boxes.
-	Spawn(TEXT("Boxengasse"), PitCameraLocation(), (PitLaneCentre() - PitCameraLocation()).Rotation());
+	Spawn(TEXT("PIT LANE"), PitCameraLocation(), (PitLaneCentre() - PitCameraLocation()).Rotation());
 	Cameras.Last()->GetCameraComponent()->SetFieldOfView(70.0f);
 }
 
@@ -553,10 +567,16 @@ void AUIRaceDirector::Tick(float DeltaSeconds)
 		Desk = CreateWidget<UUIDeskWidget>(Player, UUIDeskWidget::StaticClass());
 		Desk->SetRaceDirector(this);
 		Desk->AddToViewport(-10);
-		if (ULocalPlayer* Local = Player->GetLocalPlayer())
+		// The viewport lays out its players every frame from the split screen layout, so the layout of a
+		// single player is changed (setting the local player's Origin and Size alone does not last).
+		if (UGameViewportClient* ViewportClient = GetWorld()->GetGameViewport())
 		{
-			Local->Origin = UIStyle::Feed.Min / UIStyle::Screen;
-			Local->Size = UIStyle::Feed.GetSize() / UIStyle::Screen;
+			TArray<FPerPlayerSplitscreenData>& Single = ViewportClient->SplitscreenInfo[ESplitScreenType::None].PlayerData;
+			const FVector2D Origin = UIStyle::Feed.Min / UIStyle::Screen, Size = UIStyle::Feed.GetSize() / UIStyle::Screen;
+			if (Single.Num() > 0)
+			{
+				Single[0] = FPerPlayerSplitscreenData(Size.X, Size.Y, Origin.X, Origin.Y);
+			}
 		}
 		TimingTower = CreateWidget<UUITimingTowerWidget>(Player, UUITimingTowerWidget::StaticClass());
 		TimingTower->SetRaceDirector(this);
@@ -1204,11 +1224,53 @@ void AUIRaceDirector::HandleRaceControlInput(APlayerController* Player)
 	}
 }
 
+FUICameraView AUIRaceDirector::CameraView(int32 Index) const
+{
+	FUICameraView View;
+	if (!Cameras.IsValidIndex(Index) || !Cameras[Index])
+	{
+		return View;
+	}
+	// The frame of the 3D picture (16:9; the field of view of a camera is horizontal).
+	const UCameraComponent* Lens = Cameras[Index]->GetCameraComponent();
+	const double TanX = FMath::Tan(FMath::DegreesToRadians(Lens->FieldOfView * 0.5));
+	const double TanY = TanX * 9.0 / 16.0;
+	const FTransform& From = Lens->GetComponentTransform();
+	const FUISimSnapshot& Snapshot = SimSession.Snapshot();
+	const int32 Sectors = FMath::Max(1, SimSession.MarshalSectorCount());
+	TArray<const FUISimCar*> InFrame;
+	for (const FUISimCar& Car : Snapshot.Cars)
+	{
+		if (!CarMeshes.IsValidIndex(Car.EntryIndex) || !CarMeshes[Car.EntryIndex]->IsVisible())
+		{
+			continue;
+		}
+		const FVector Local = From.InverseTransformPositionNoScale(CarLocation(Car.EntryIndex));
+		if (Local.X > 0.0 && Local.X < CameraRanges[Index] && FMath::Abs(Local.Y) <= Local.X * TanX && FMath::Abs(Local.Z) <= Local.X * TanY)
+		{
+			InFrame.Add(&Car);
+		}
+	}
+	InFrame.Sort([](const FUISimCar& A, const FUISimCar& B) { return A.Position < B.Position; });
+	for (const FUISimCar* Car : InFrame)
+	{
+		View.Cars.Add(Car->EntryIndex);
+		const double Lap = FMath::Fmod(FMath::Max(Car->Distance, 0.0), SimSession.TrackLength());
+		const int32 Sector = FMath::Clamp(FMath::FloorToInt32(Lap / SimSession.TrackLength() * Sectors), 0, Sectors - 1);
+		if (Snapshot.SectorFlags.IsValidIndex(Sector) && Snapshot.SectorFlags[Sector] > View.Flag)
+		{
+			View.Flag = Snapshot.SectorFlags[Sector];
+		}
+	}
+	View.bRedFlag = Snapshot.State == EUISimRaceState::RedFlag;
+	return View;
+}
+
 FString AUIRaceDirector::ActiveCameraName() const
 {
 	if (ActiveCamera == 0 && SimSession.Entries().IsValidIndex(FollowedEntry))
 	{
-		return TEXT("TV ") + SimSession.Entries()[FollowedEntry].Code;
+		return TEXT("TV ") + SimSession.Entries()[FollowedEntry].Code.ToUpper();
 	}
 	return CameraNames.IsValidIndex(ActiveCamera) ? CameraNames[ActiveCamera] : FString();
 }

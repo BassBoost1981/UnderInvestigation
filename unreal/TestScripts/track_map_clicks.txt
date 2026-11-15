@@ -1,5 +1,23 @@
-# M8.5 check (testring, 1600x900): synthetic clicks on the track map.
-# Coordinates come from the 'Track map:' lines in the log.
-3 click 997 719      # a car on the grid: the TV camera follows it
-40 click 874 693     # sector 8: opens the flag menu
-41 click 714 623     # menu row 'Gelb': yellow in sector 8
+# M12.5 check (testring, seed 1, 1600x900): clicks on the track map and the camera tiles.
+# Coordinates come from the 'Track map:' and 'Track status:' lines in the log.
+# Run with -UISimSeed=1 -UISimTimeScale=500 -UISimScript=TestScripts/track_map_clicks.txt -UISimQuitWhenDone
+0 timescale 1        # real time at first, so the map is laid out before the click
+5 click 996 735      # a car on the grid: the TV camera follows it
+6 timescale 500
+1800 timescale 20
+1802 click 874 707   # sector 8: yellow
+1804 click 874 707   # sector 8: double yellow
+1806 click 841 778   # sector 10: yellow
+1808 click 1112 437  # camera tile OVERVIEW
+1810 screenshot map_flags
+1812 click 874 707   # sector 8: clear again
+1814 click 841 778   # sector 10: double yellow
+1816 click 841 778   # sector 10: clear again
+1818 camera 1
+1820 sc
+1840 screenshot map_sc
+1900 sc_in
+2400 red
+2420 screenshot map_red
+2430 restart
+2440 timescale 500

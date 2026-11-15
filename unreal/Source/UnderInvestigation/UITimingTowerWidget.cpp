@@ -42,18 +42,6 @@ namespace
 	const FLinearColor PurpleChip = UIStyle::Rgb(123, 47, 190);  // fastest lap chip
 	const FLinearColor SectorEmpty = UIStyle::Rgb(44, 45, 50);
 
-	// Same colours as the cars (UIRaceDirector.cpp): one hue per team.
-	FLinearColor TeamColor(const TArray<FUISimEntry>& Entries, int32 EntryIndex)
-	{
-		TArray<FString> Teams;
-		for (const FUISimEntry& Entry : Entries)
-		{
-			Teams.AddUnique(Entry.Team);
-		}
-		const float Hue = 360.0f * Teams.IndexOfByKey(Entries[EntryIndex].Team) / FMath::Max(1, Teams.Num());
-		return FLinearColor::MakeFromHSV8(static_cast<uint8>(Hue / 360.0f * 255.0f), 200, 230);
-	}
-
 	FString LapText(double Seconds)
 	{
 		if (Seconds <= 0.0)
@@ -274,7 +262,7 @@ int32 UUITimingTowerWidget::NativePaint(const FPaintArgs& Args, const FGeometry&
 
 		Box(FVector2D(PositionLeft, Top + 4.0), FVector2D(PositionWidth, 21.0), &Round6, Faded(UIStyle::Text));
 		TextCentred(PositionLeft + PositionWidth / 2.0, Top + 7.0, FString::FromInt(Car.Position), BoldFont, UIStyle::Ink);
-		Box(FVector2D(BarLeft, Top + 5.0), FVector2D(5.0, 19.0), &Round2, Faded(TeamColor(Entries, Car.EntryIndex)));
+		Box(FVector2D(BarLeft, Top + 5.0), FVector2D(5.0, 19.0), &Round2, Faded(UIStyle::TeamColor(Entries, Car.EntryIndex)));
 		Text(FVector2D(CodeLeft, Top + 6.0), Entries[Car.EntryIndex].Code, CodeFont, Faded(UIStyle::Text));
 
 		const FString Gap = GapText(Snapshot, Index);

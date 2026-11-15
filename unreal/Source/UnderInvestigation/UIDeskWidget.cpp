@@ -132,6 +132,7 @@ int32 UUIDeskWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Allott
 	static const FSlateRoundedBoxBrush Round16(FLinearColor::White, 16.0f);
 	static const FSlateRoundedBoxBrush Round15(FLinearColor::White, 15.0f);
 	static const FSlateRoundedBoxBrush Capsule(FLinearColor::White, 36.0f); // radius of half the height
+	static const FSlateRoundedBoxBrush Dot(FLinearColor::White, 4.0f);
 	const FSlateBrush* White = FCoreStyle::Get().GetBrush("WhiteBrush");
 	const FVector2D Size = AllottedGeometry.GetLocalSize();
 	const TSharedRef<FSlateFontMeasure> Measure = FSlateApplication::Get().GetRenderer()->GetFontMeasureService();
@@ -279,6 +280,33 @@ int32 UUIDeskWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Allott
 	const double CameraLeft = Video.Max.X - 16.0 - Width(Camera, CameraFont);
 	Text(FVector2D(CameraLeft, Video.Min.Y + 16.0), Camera, CameraFont, UIStyle::Text);
 	Text(FVector2D(CameraLeft - 5.0 - Width(TEXT("ROUTED TO MAIN:"), SubFont), Video.Min.Y + 16.0), TEXT("ROUTED TO MAIN:"), SubFont, UIStyle::Mute);
+
+	// On the 3D picture (M12.5): routed camera and clock on top, cars in the frame and the flag over them below.
+	// Dark bands keep the text readable on the 3D picture (the design has a plain placeholder there).
+	if (!Race->IsReviewing())
+	{
+		const FUICameraView View = Race->CameraView(Race->ActiveCameraIndex());
+		const FLinearColor Band(0.0f, 0.0f, 0.0f, 0.45f);
+		Box(Feed.Min, FVector2D(Feed.Max.X, Feed.Min.Y + 26.0), White, Band);
+		Box(FVector2D(Feed.Min.X, Feed.Max.Y - 26.0), Feed.Max, White, Band);
+		Box(Feed.Min + FVector2D(10.0, 9.0), Feed.Min + FVector2D(18.0, 17.0), &Dot, UIStyle::Red);
+		Text(Feed.Min + FVector2D(25.0, 6.0), Camera, CameraFont, UIStyle::Text);
+		const FString Clock = FString::Printf(TEXT("%d:%02d:%02d"), Seconds / 3600, Seconds / 60 % 60, Seconds % 60);
+		Text(FVector2D(Feed.Max.X - 10.0 - Width(Clock, SubFont), Feed.Min.Y + 6.0), Clock, SubFont, UIStyle::Mute);
+		TArray<FString> Codes;
+		for (int32 Index = 0; Index < View.Cars.Num() && Index < 7; ++Index)
+		{
+			Codes.Add(Session.Entries()[View.Cars[Index]].Code.ToUpper());
+		}
+		const FString InFrame = Codes.Num() > 0 ? FString::Join(Codes, TEXT(" · ")) : FString(TEXT("—"));
+		const double BottomY = Feed.Max.Y - 21.0;
+		Text(FVector2D(Feed.Min.X + 10.0, BottomY), TEXT("IN FRAME"), SubFont, UIStyle::Mute);
+		Text(FVector2D(Feed.Min.X + 15.0 + Width(TEXT("IN FRAME"), SubFont), BottomY), InFrame, CameraFont, UIStyle::Text);
+		const FString Flag = View.bRedFlag ? TEXT("RED FLAG") : View.Flag == EUISimFlag::DoubleYellow ? TEXT("DOUBLE YELLOW")
+			: View.Flag == EUISimFlag::Yellow ? TEXT("YELLOW") : TEXT("CLEAR");
+		const FLinearColor FlagColor = View.bRedFlag ? UIStyle::Red : View.Flag != EUISimFlag::Green ? UIStyle::Yellow : UIStyle::Green;
+		Text(FVector2D(Feed.Max.X - 10.0 - Width(Flag, CameraFont), BottomY), Flag, CameraFont, FlagColor);
+	}
 
 	if (!bLogged && SpeedArea && SpeedArea->GetCachedGeometry().GetLocalSize().X > 0.0)
 	{

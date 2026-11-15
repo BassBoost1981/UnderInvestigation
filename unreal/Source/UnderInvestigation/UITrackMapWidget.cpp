@@ -4,40 +4,45 @@
 #include "UIStyle.h"
 
 #include "Blueprint/WidgetTree.h"
+#include "Brushes/SlateRoundedBoxBrush.h"
 #include "Components/Border.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
-#include "Components/SizeBox.h"
-#include "Components/TextBlock.h"
-#include "Components/VerticalBox.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
+#include "Fonts/FontMeasure.h"
+#include "Framework/Application/SlateApplication.h"
 #include "Rendering/DrawElements.h"
-#include "Styling/CoreStyle.h"
 #include "Widgets/SViewport.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogUISim, Log, All); // same category name as UIRaceDirector.cpp
 
 namespace
 {
-	constexpr double MapWidth = 600.0;
-	constexpr double MapHeight = 340.0;
-	constexpr double MapMargin = 12.0;
-	constexpr double CarHitRadius = 8.0;    // map units
-	constexpr double TrackHitRadius = 12.0;
+	// The map inside the card. Sizes below are the design's SVG units at the scale of this map (x 0.645).
+	const FBox2D MapRect(UIStyle::MapCard.Min + FVector2D(8.0, 38.0), UIStyle::MapCard.Max - FVector2D(8.0, 8.0));
+	constexpr double MapMargin = 26.0;       // room for the sector numbers beside the track
+	constexpr double TrackWidth = 11.5;      // dark band under the sectors
+	constexpr double SectorWidth = 2.6, FlaggedWidth = 4.5;
+	constexpr double DashOn = 4.5, DashOff = 2.6; // double yellow
+	constexpr double LabelOffset = 19.0;     // sector numbers beside the track
+	constexpr double CarHitRadius = 9.0;     // map units
+	constexpr double TrackHitRadius = 14.0;
 	constexpr int32 TrackSamples = 600;
 
-	const TCHAR* const MenuLabels[] = {TEXT("Gruen"), TEXT("Gelb"), TEXT("Doppelt Gelb")};
+	const FLinearColor TrackBand = UIStyle::Rgb(35, 40, 48);
+	const FLinearColor SectorIdle = UIStyle::Rgb(89, 97, 110);
 
-	FLinearColor FlagColor(EUISimFlag Flag)
+	EUISimFlag NextFlag(EUISimFlag Flag)
 	{
-		switch (Flag)
-		{
-		case EUISimFlag::Yellow: return FLinearColor(1.0f, 0.85f, 0.1f);
-		case EUISimFlag::DoubleYellow: return FLinearColor(1.0f, 0.4f, 0.05f);
-		case EUISimFlag::Green: break;
-		}
-		return FLinearColor(0.55f, 0.6f, 0.55f);
+		return Flag == EUISimFlag::Green ? EUISimFlag::Yellow : Flag == EUISimFlag::Yellow ? EUISimFlag::DoubleYellow : EUISimFlag::Green;
+	}
+
+	int32 SectorAt(const FUISimSession& Session, double Distance)
+	{
+		const int32 Sectors = FMath::Max(1, Session.MarshalSectorCount());
+		const double Lap = FMath::Fmod(FMath::Max(Distance, 0.0), Session.TrackLength());
+		return FMath::Clamp(FMath::FloorToInt32(Lap / Session.TrackLength() * Sectors), 0, Sectors - 1);
 	}
 }
 
@@ -47,30 +52,11 @@ TSharedRef<SWidget> UUITrackMapWidget::RebuildWidget()
 	{
 		UCanvasPanel* Canvas = WidgetTree->ConstructWidget<UCanvasPanel>();
 		WidgetTree->RootWidget = Canvas;
-
-		UBorder* Panel = WidgetTree->ConstructWidget<UBorder>();
-		Panel->SetBrushColor(FLinearColor::Transparent); // the card of the desk is the background
-		Panel->SetPadding(FMargin(8.0f));
-		UCanvasPanelSlot* PanelSlot = Canvas->AddChildToCanvas(Panel);
-		PanelSlot->SetAutoSize(true);
-		PanelSlot->SetPosition(UIStyle::MapCard.Min + FVector2D(10.0, 8.0));
-
-		UVerticalBox* Column = WidgetTree->ConstructWidget<UVerticalBox>();
-		Panel->SetContent(Column);
-		UTextBlock* Title = WidgetTree->ConstructWidget<UTextBlock>();
-		Title->SetFont(FCoreStyle::GetDefaultFontStyle("Mono", 11));
-		Title->SetColorAndOpacity(FSlateColor(FLinearColor(1.0f, 0.85f, 0.2f)));
-		Title->SetText(FText::FromString(TEXT("STRECKE  Klick: Flagge, Auto")));
-		Title->SetVisibility(ESlateVisibility::HitTestInvisible);
-		Column->AddChildToVerticalBox(Title);
-
-		USizeBox* Box = WidgetTree->ConstructWidget<USizeBox>();
-		Box->SetWidthOverride(MapWidth);
-		Box->SetHeightOverride(MapHeight);
-		Column->AddChildToVerticalBox(Box);
 		MapArea = WidgetTree->ConstructWidget<UBorder>();
-		MapArea->SetBrushColor(FLinearColor(0.0f, 0.0f, 0.0f, 0.2f)); // visible, so it takes the clicks
-		Box->SetContent(MapArea);
+		MapArea->SetBrushColor(FLinearColor(0.0f, 0.0f, 0.0f, 0.01f)); // visible, so it takes the clicks
+		UCanvasPanelSlot* AreaSlot = Canvas->AddChildToCanvas(MapArea);
+		AreaSlot->SetPosition(MapRect.Min);
+		AreaSlot->SetSize(MapRect.GetSize());
 	}
 	return Super::RebuildWidget();
 }
@@ -111,10 +97,11 @@ FVector2D UUITrackMapWidget::ToMap(double Distance) const
 	return FVector2D((World.Y - WorldMin.X) * Scale + Offset.X, (WorldMin.Y - World.X) * Scale + Offset.Y);
 }
 
-FBox2D UUITrackMapWidget::MenuRow(int32 Row) const
+FVector2D UUITrackMapWidget::Across(double Distance) const
 {
-	const double Top = 28.0 + Row * 22.0;
-	return FBox2D(FVector2D(8.0, Top), FVector2D(128.0, Top + 20.0));
+	const double Step = Director->Session().TrackLength() * 0.003;
+	const FVector2D Along = ToMap(Distance + Step) - ToMap(Distance - Step);
+	return FVector2D(-Along.Y, Along.X).GetSafeNormal();
 }
 
 void UUITrackMapWidget::LogClickTargets(const FGeometry& Map) const
@@ -136,11 +123,6 @@ void UUITrackMapWidget::LogClickTargets(const FGeometry& Map) const
 	{
 		const FVector2D At = Pixel(ToMap((Sector + 0.5) * SectorLength));
 		UE_LOG(LogUISim, Display, TEXT("Track map: sector %d at %.0f %.0f"), Sector + 1, At.X, At.Y);
-	}
-	for (int32 Row = 0; Row < UE_ARRAY_COUNT(MenuLabels); ++Row)
-	{
-		const FVector2D At = Pixel(MenuRow(Row).GetCenter());
-		UE_LOG(LogUISim, Display, TEXT("Track map: menu '%s' at %.0f %.0f"), MenuLabels[Row], At.X, At.Y);
 	}
 	for (const FUISimCar& Car : Session.Snapshot().Cars)
 	{
@@ -164,28 +146,41 @@ int32 UUITrackMapWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Al
 	{
 		return Layer;
 	}
+	static const FSlateRoundedBoxBrush Circle(FLinearColor::White, 16.0f);
+	static const FSlateRoundedBoxBrush Ring(FLinearColor::Transparent, 10.0f, FLinearColor::White, 2.0f);
+	const FSlateBrush* White = FCoreStyle::Get().GetBrush("WhiteBrush");
+	const TSharedRef<FSlateFontMeasure> Measure = FSlateApplication::Get().GetRenderer()->GetFontMeasureService();
 	const FUISimSession& Session = Race->Session();
 	const FUISimSnapshot& Snapshot = Session.Snapshot();
-	const double Length = Session.TrackLength();
 	const int32 Sectors = Session.MarshalSectorCount();
-	const double SectorLength = Length / FMath::Max(1, Sectors);
+	const double SectorLength = Session.TrackLength() / FMath::Max(1, Sectors);
 	const FPaintGeometry Paint = Map.ToPaintGeometry();
-	const FSlateBrush* White = FCoreStyle::Get().GetBrush("WhiteBrush");
-	const FSlateFontInfo Small = FCoreStyle::GetDefaultFontStyle("Mono", 8);
-	auto Box = [&](const FVector2D& Centre, double Size, const FLinearColor& Color)
-	{
-		FSlateDrawElement::MakeBox(OutDrawElements, Layer, Map.ToPaintGeometry(FVector2D(Size, Size),
-			FSlateLayoutTransform(1.0f, Centre - FVector2D(Size, Size) / 2.0)), White, ESlateDrawEffect::None, Color);
-	};
-	auto Text = [&](const FVector2D& TopLeft, const FString& String, const FLinearColor& Color)
-	{
-		FSlateDrawElement::MakeText(OutDrawElements, Layer, Map.ToPaintGeometry(FVector2D(120.0, 14.0),
-			FSlateLayoutTransform(1.0f, TopLeft)), String, Small, ESlateDrawEffect::None, Color);
-	};
 
-	// Track, one polyline per marshal sector in its flag colour; the selected sector drawn wider.
+	// Card title and hint, in desk coordinates.
+	auto CardText = [&](const FVector2D& At, const FString& String, const FSlateFontInfo& Font, const FLinearColor& Color)
+	{
+		FSlateDrawElement::MakeText(OutDrawElements, Layer, AllottedGeometry.ToPaintGeometry(FVector2D(600.0, 30.0),
+			FSlateLayoutTransform(1.0f, At)), String, Font, ESlateDrawEffect::None, Color);
+	};
 	++Layer;
-	for (int32 Sector = 0; Sector < Sectors; ++Sector)
+	CardText(UIStyle::MapCard.Min + FVector2D(16.0, 13.0), TEXT("Track map"), UIStyle::Font(TEXT("Bold"), 11), UIStyle::Text);
+	const FString Hint = TEXT("CLICK SECTOR: CLEAR > YELLOW > DOUBLE");
+	const FSlateFontInfo HintFont = UIStyle::Font(TEXT("Regular"), 7);
+	CardText(FVector2D(UIStyle::MapCard.Max.X - 16.0 - Measure->Measure(Hint, HintFont).X, UIStyle::MapCard.Min.Y + 17.0), Hint, HintFont,
+		UIStyle::Mute);
+
+	auto Box = [&](const FVector2D& Centre, const FVector2D& Size, const FSlateBrush* Brush, const FLinearColor& Color)
+	{
+		FSlateDrawElement::MakeBox(OutDrawElements, Layer, Map.ToPaintGeometry(Size, FSlateLayoutTransform(1.0f, Centre - Size / 2.0)), Brush,
+			ESlateDrawEffect::None, Color);
+	};
+	auto Text = [&](const FVector2D& Centre, const FString& String, const FSlateFontInfo& Font, const FLinearColor& Color)
+	{
+		const FVector2D Size = Measure->Measure(String, Font);
+		FSlateDrawElement::MakeText(OutDrawElements, Layer, Map.ToPaintGeometry(Size + FVector2D(4.0, 0.0),
+			FSlateLayoutTransform(1.0f, Centre - Size / 2.0)), String, Font, ESlateDrawEffect::None, Color);
+	};
+	auto SectorPoints = [&](int32 Sector)
 	{
 		TArray<FVector2D> Points;
 		const int32 Steps = FMath::Max(2, TrackSamples / FMath::Max(1, Sectors));
@@ -193,55 +188,127 @@ int32 UUITrackMapWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Al
 		{
 			Points.Add(ToMap(SectorLength * (Sector + static_cast<double>(Step) / Steps)));
 		}
-		const bool bSelected = Sector == Race->SelectedSector() || Sector == MenuSector;
-		const EUISimFlag Flag = Snapshot.SectorFlags.IsValidIndex(Sector) ? Snapshot.SectorFlags[Sector] : EUISimFlag::Green;
-		FSlateDrawElement::MakeLines(OutDrawElements, Layer, Paint, Points, ESlateDrawEffect::None, FlagColor(Flag), true,
-			bSelected ? 8.0f : 4.0f);
-	}
-	++Layer;
-	const FVector2D Line = ToMap(0.0);
-	Box(Line, 6.0, FLinearColor::White); // start/finish line
+		return Points;
+	};
+	auto Lines = [&](const TArray<FVector2D>& Points, const FLinearColor& Color, double Thickness)
+	{
+		FSlateDrawElement::MakeLines(OutDrawElements, Layer, Paint, Points, ESlateDrawEffect::None, Color, true, Thickness);
+	};
 
-	// Accident sites, Safety Car, cars.
+	// Dark band under the whole lap.
+	++Layer;
+	for (int32 Sector = 0; Sector < Sectors; ++Sector)
+	{
+		Lines(SectorPoints(Sector), TrackBand, TrackWidth);
+	}
+
+	// Sectors: grey (every other one fainter), yellow when flagged, dashed for double yellow. Under SC and
+	// VSC all of them yellow, under the red flag red, as in the design. The sector picked by key is brighter.
+	const bool bAll = Snapshot.State != EUISimRaceState::Green;
+	const FLinearColor All = Snapshot.State == EUISimRaceState::RedFlag ? UIStyle::Red : UIStyle::Yellow;
+	++Layer;
+	for (int32 Sector = 0; Sector < Sectors; ++Sector)
+	{
+		const EUISimFlag Flag = Snapshot.SectorFlags.IsValidIndex(Sector) ? Snapshot.SectorFlags[Sector] : EUISimFlag::Green;
+		const bool bFlagged = Flag != EUISimFlag::Green;
+		FLinearColor Color = bFlagged ? UIStyle::Yellow : bAll ? All : Sector == Race->SelectedSector() ? UIStyle::Text : SectorIdle;
+		if (!bFlagged && !bAll && Sector != Race->SelectedSector() && Sector % 2 == 0)
+		{
+			Color.A = 0.65f;
+		}
+		const TArray<FVector2D> Points = SectorPoints(Sector);
+		if (Flag != EUISimFlag::DoubleYellow)
+		{
+			Lines(Points, Color, bFlagged ? FlaggedWidth : SectorWidth);
+		}
+		else
+		{
+			// Dashes along the polyline.
+			TArray<FVector2D> Dash = {Points[0]};
+			double Done = 0.0; // length of the current dash or gap so far
+			bool bOn = true;
+			for (int32 Index = 1; Index < Points.Num(); ++Index)
+			{
+				FVector2D From = Points[Index - 1];
+				const FVector2D Direction = (Points[Index] - From).GetSafeNormal();
+				double Left = FVector2D::Distance(From, Points[Index]);
+				while (Left > 1e-6)
+				{
+					const double Step = FMath::Min(Left, (bOn ? DashOn : DashOff) - Done);
+					From += Direction * Step;
+					Done += Step;
+					Left -= Step;
+					if (bOn)
+					{
+						Dash.Add(From);
+					}
+					if (Done >= (bOn ? DashOn : DashOff) - 1e-6)
+					{
+						if (bOn)
+						{
+							Lines(Dash, Color, FlaggedWidth);
+						}
+						Dash = {From};
+						bOn = !bOn;
+						Done = 0.0;
+					}
+				}
+			}
+			if (bOn && Dash.Num() > 1)
+			{
+				Lines(Dash, Color, FlaggedWidth);
+			}
+		}
+		const double Middle = (Sector + 0.5) * SectorLength;
+		Text(ToMap(Middle) + Across(Middle) * LabelOffset, FString::FromInt(Sector + 1),
+			UIStyle::Font(bFlagged ? TEXT("Bold") : TEXT("Regular"), 8), bFlagged ? UIStyle::Yellow : UIStyle::Mute);
+	}
+
+	// Start/finish line and the pit entry.
+	++Layer;
+	const FVector2D Line = ToMap(0.0), LineAcross = Across(0.0);
+	Lines({Line - LineAcross * 8.4, Line + LineAcross * 8.4}, UIStyle::Text, 2.0);
+	Text(Line - LineAcross * 26.0, TEXT("S/F"), UIStyle::Font(TEXT("Bold"), 8), UIStyle::Text);
+	const double PitAt = Session.TrackLength() * 0.985;
+	Text(ToMap(PitAt) - Across(PitAt) * 37.0 + FVector2D(0.0, 20.0), Snapshot.bPitEntryClosed ? TEXT("PIT CLOSED") : TEXT("PIT"),
+		UIStyle::Font(TEXT("Regular"), 8), Snapshot.bPitEntryClosed ? UIStyle::Red : UIStyle::Mute);
+
+	// Accident sites and the Safety Car.
 	for (const FUISimHazard& Hazard : Snapshot.Hazards)
 	{
-		Box(ToMap(Hazard.TrackPosition), 9.0, FLinearColor(0.9f, 0.1f, 0.1f));
+		Box(ToMap(Hazard.TrackPosition), FVector2D(9.0, 9.0), White, UIStyle::Red);
 	}
 	if (Snapshot.bSafetyCarOnTrack)
 	{
-		Box(ToMap(Snapshot.SafetyCarDistance), 9.0, FLinearColor(1.0f, 0.45f, 0.0f));
+		const FVector2D At = ToMap(Snapshot.SafetyCarDistance);
+		Box(At, FVector2D(19.0, 13.0), White, UIStyle::Yellow);
+		++Layer;
+		Text(At, TEXT("SC"), UIStyle::Font(TEXT("Bold"), 7), UIStyle::Ink);
 	}
+
+	// Cars in team colours, the leader on top; the followed car gets a ring, it and the leader their code.
 	++Layer;
-	for (const FUISimCar& Car : Snapshot.Cars)
+	FSlateFontInfo CodeFont = UIStyle::Font(TEXT("Bold"), 9);
+	CodeFont.OutlineSettings.OutlineSize = 2;
+	CodeFont.OutlineSettings.OutlineColor = UIStyle::Ink;
+	for (int32 Index = Snapshot.Cars.Num() - 1; Index >= 0; --Index)
 	{
+		const FUISimCar& Car = Snapshot.Cars[Index];
 		if (Car.bFinished || Car.bRetired || Car.bInPitLane)
 		{
 			continue;
 		}
 		const bool bFollowed = Car.EntryIndex == Race->FollowedCar();
 		const FVector2D At = ToMap(Car.Distance);
-		Box(At, bFollowed ? 9.0 : 6.0, bFollowed ? FLinearColor(1.0f, 0.85f, 0.2f) : FLinearColor::White);
+		if (bFollowed)
+		{
+			Box(At, FVector2D(19.0, 19.0), &Ring, UIStyle::Text);
+		}
+		Box(At, FVector2D(14.0, 14.0), &Circle, UIStyle::Ink);
+		Box(At, FVector2D(11.5, 11.5), &Circle, UIStyle::TeamColor(Session.Entries(), Car.EntryIndex));
 		if (bFollowed || Car.Position == 1) // more labels would pile up in the pack
 		{
-			Text(At + FVector2D(5.0, -6.0), Session.Entries()[Car.EntryIndex].Code,
-				bFollowed ? FLinearColor(1.0f, 0.85f, 0.2f) : FLinearColor(0.85f, 0.85f, 0.85f));
-		}
-	}
-
-	// Flag menu for the clicked sector.
-	if (MenuSector >= 0)
-	{
-		++Layer;
-		FSlateDrawElement::MakeBox(OutDrawElements, Layer, Map.ToPaintGeometry(FVector2D(128.0, 96.0),
-			FSlateLayoutTransform(1.0f, FVector2D(4.0, 4.0))), White, ESlateDrawEffect::None, FLinearColor(0.0f, 0.0f, 0.0f, 0.85f));
-		++Layer;
-		Text(FVector2D(10.0, 9.0), FString::Printf(TEXT("Sektor %d"), MenuSector + 1), FLinearColor(1.0f, 0.85f, 0.2f));
-		for (int32 Row = 0; Row < UE_ARRAY_COUNT(MenuLabels); ++Row)
-		{
-			const FBox2D Rect = MenuRow(Row);
-			FSlateDrawElement::MakeBox(OutDrawElements, Layer, Map.ToPaintGeometry(Rect.GetSize(), FSlateLayoutTransform(1.0f, Rect.Min)),
-				White, ESlateDrawEffect::None, FlagColor(static_cast<EUISimFlag>(Row)) * FLinearColor(1.0f, 1.0f, 1.0f, 0.6f));
-			Text(Rect.Min + FVector2D(6.0, 3.0), MenuLabels[Row], FLinearColor::White);
+			Text(At + FVector2D(0.0, -14.0), Session.Entries()[Car.EntryIndex].Code.ToUpper(), CodeFont, UIStyle::Text);
 		}
 	}
 
@@ -256,7 +323,7 @@ int32 UUITrackMapWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Al
 FReply UUITrackMapWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
 	AUIRaceDirector* Race = Director.Get();
-	if (!Race || !MapArea || InMouseEvent.GetEffectingButton() != EKeys::LeftMouseButton ||
+	if (!Race || !MapArea || !Race->Session().IsStarted() || InMouseEvent.GetEffectingButton() != EKeys::LeftMouseButton ||
 		!PrepareProjection(MapArea->GetCachedGeometry().GetLocalSize()))
 	{
 		return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
@@ -264,25 +331,7 @@ FReply UUITrackMapWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, c
 	const FVector2D Local = FVector2D(MapArea->GetCachedGeometry().AbsoluteToLocal(InMouseEvent.GetScreenSpacePosition()));
 	const FUISimSession& Session = Race->Session();
 
-	// 1. A row of the open flag menu.
-	if (MenuSector >= 0)
-	{
-		for (int32 Row = 0; Row < UE_ARRAY_COUNT(MenuLabels); ++Row)
-		{
-			if (MenuRow(Row).IsInside(Local))
-			{
-				FUICommand Command;
-				Command.Type = EUICommand::SetSectorFlag;
-				Command.Index = MenuSector;
-				Command.Flag = static_cast<EUISimFlag>(Row);
-				Race->Execute(Command);
-				MenuSector = -1;
-				return FReply::Handled();
-			}
-		}
-	}
-
-	// 2. The nearest car on track.
+	// 1. The nearest car on track.
 	int32 BestCar = -1;
 	double BestDistance = CarHitRadius;
 	for (const FUISimCar& Car : Session.Snapshot().Cars)
@@ -304,34 +353,31 @@ FReply UUITrackMapWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, c
 		Command.Type = EUICommand::FollowCar;
 		Command.Index = BestCar;
 		Race->Execute(Command);
-		MenuSector = -1;
 		return FReply::Handled();
 	}
 
-	// 3. The nearest point of the track: open the flag menu for its marshal sector.
-	const int32 Sectors = Session.MarshalSectorCount();
+	// 2. The nearest point of the track: its marshal sector gets the next flag.
 	const double Length = Session.TrackLength();
 	int32 BestSector = -1;
 	BestDistance = TrackHitRadius;
 	for (int32 Sample = 0; Sample < TrackSamples; ++Sample)
 	{
-		const double Along = Length * Sample / TrackSamples;
+		const double Along = Length * (Sample + 0.5) / TrackSamples;
 		const double Distance = FVector2D::Distance(ToMap(Along), Local);
 		if (Distance < BestDistance)
 		{
 			BestDistance = Distance;
-			BestSector = FMath::Clamp(static_cast<int32>(Along / (Length / Sectors)), 0, Sectors - 1);
+			BestSector = SectorAt(Session, Along);
 		}
 	}
 	if (BestSector >= 0)
 	{
+		const TArray<EUISimFlag>& Flags = Session.Snapshot().SectorFlags;
 		FUICommand Command;
-		Command.Type = EUICommand::SelectSector;
+		Command.Type = EUICommand::SetSectorFlag;
 		Command.Index = BestSector;
+		Command.Flag = NextFlag(Flags.IsValidIndex(BestSector) ? Flags[BestSector] : EUISimFlag::Green);
 		Race->Execute(Command);
-		MenuSector = BestSector;
-		return FReply::Handled();
 	}
-	MenuSector = -1; // a click beside the track closes the menu
 	return FReply::Handled();
 }

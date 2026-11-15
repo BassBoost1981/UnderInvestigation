@@ -7,9 +7,11 @@
 class AUIRaceDirector;
 class UBorder;
 
-// Track map (bottom right, M8.5): marshal sectors in their flag colour, cars, Safety Car and
-// accident sites. Click a sector for the flag menu (green, yellow, double yellow), click a car
-// to follow it with the TV camera. All actions go through AUIRaceDirector::Execute().
+// Track map card (M12.5, after the card "Track map" of the user's design): marshal sectors with
+// their numbers, yellow when flagged (dashed for double yellow), start/finish, pit entry, Safety
+// Car, accident sites and the cars in team colours. A click on a sector switches its flag on
+// (clear, yellow, double yellow), a click on a car follows it with the TV camera. All actions go
+// through AUIRaceDirector::Execute().
 UCLASS()
 class UUITrackMapWidget : public UUserWidget
 {
@@ -28,16 +30,15 @@ protected:
 private:
 	// Track point (metres along the lap) in map coordinates (local to MapArea).
 	FVector2D ToMap(double Distance) const;
+	// Unit vector across the track at that point, in map coordinates (as the design's normal).
+	FVector2D Across(double Distance) const;
 	bool PrepareProjection(const FVector2D& Size) const;
-	FBox2D MenuRow(int32 Row) const; // 0 green, 1 yellow, 2 double yellow
 	void LogClickTargets(const FGeometry& Map) const;
 
 	TWeakObjectPtr<AUIRaceDirector> Director;
 
 	UPROPERTY()
 	TObjectPtr<UBorder> MapArea;
-
-	int32 MenuSector = -1; // flag menu open for this marshal sector
 
 	// Projection, rebuilt when the map size changes.
 	mutable FVector2D ProjectedSize = FVector2D::ZeroVector;
