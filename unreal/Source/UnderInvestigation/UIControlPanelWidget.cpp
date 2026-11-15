@@ -77,17 +77,6 @@ TSharedRef<SWidget> UUIControlPanelWidget::RebuildWidget()
 	return Super::RebuildWidget();
 }
 
-void UUIControlPanelWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
-{
-	Super::NativeTick(MyGeometry, InDeltaTime);
-	// Until M12.6 the review dialog needs the whole right column: the card makes room for it.
-	const AUIRaceDirector* Race = Director.Get();
-	if (StatusArea)
-	{
-		StatusArea->SetVisibility(Race && Race->IsReviewing() ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
-	}
-}
-
 bool UUIControlPanelWidget::IsConfirming() const
 {
 	return FPlatformTime::Seconds() < ConfirmUntil;
@@ -122,104 +111,101 @@ TArray<UUIControlPanelWidget::FButton> UUIControlPanelWidget::Buttons() const
 		return Button;
 	};
 
-	if (!Race->IsReviewing())
+	// The six state buttons, two in a row.
+	const double Half = (Inner - 6.0) / 2.0;
+	auto StatusRect = [&](int32 Index)
 	{
-		// The six state buttons, two in a row.
-		const double Half = (Inner - 6.0) / 2.0;
-		auto StatusRect = [&](int32 Index)
-		{
-			const FVector2D Min(Pad + (Index % 2) * (Half + 6.0), StatusTop + (Index / 2) * StatusStep);
-			return FBox2D(Min, Min + FVector2D(Half, StatusHeight));
-		};
-		bool bYellow = false;
-		for (const EUISimFlag Flag : Snapshot.SectorFlags)
-		{
-			bYellow |= Flag != EUISimFlag::Green;
-		}
-		const bool bRed = State == EUISimRaceState::RedFlag;
-		const int32 Sector = LeaderSector(Session);
-		const FString AtLeader = FString::Printf(TEXT("at leader · sector %d"), Sector + 1);
-		if (bRed)
-		{
-			Add(StatusRect(0), ELook::Status, TEXT("RESTART"), TEXT("rolling start behind the safety car"),
-				MakeCommand(EUICommand::Restart, bWetMandate ? 1 : 0), false, UIStyle::Green);
-		}
-		else
-		{
-			Add(StatusRect(0), ELook::Status, TEXT("TRACK CLEAR"), TEXT("green · clears all sectors"), FUICommand(),
-				State == EUISimRaceState::Green && !bYellow && Snapshot.bRaceStarted, UIStyle::Green, EKind::ClearTrack);
-		}
-		FButton& Red = Add(StatusRect(1), ELook::Status, IsConfirming() ? TEXT("CONFIRM RED FLAG") : TEXT("RED FLAG"),
-			IsConfirming() ? TEXT("click again to show it") : TEXT("suspend session"), MakeCommand(EUICommand::RedFlag), bRed || IsConfirming(),
-			UIStyle::Red, EKind::AskRedFlag);
-		Red.bDarkInk = false;
-		Red.bEnabled |= bRed; // shown bright while the flag is out
-		Add(StatusRect(2), ELook::Status, TEXT("YELLOW"), AtLeader, MakeCommand(EUICommand::SetSectorFlag, Sector, EUISimFlag::Yellow), false,
-			UIStyle::Yellow);
-		Add(StatusRect(3), ELook::Status, TEXT("DOUBLE YELLOW"), AtLeader, MakeCommand(EUICommand::SetSectorFlag, Sector, EUISimFlag::DoubleYellow),
-			false, UIStyle::Yellow);
-		const bool bVsc = State == EUISimRaceState::VirtualSafetyCar;
-		Add(StatusRect(4), ELook::Status, bVsc ? TEXT("VSC ENDING") : TEXT("VSC"), bVsc ? TEXT("return to green") : TEXT("virtual safety car"),
-			MakeCommand(bVsc ? EUICommand::EndVsc : EUICommand::DeployVsc), bVsc, UIStyle::Yellow);
-		const bool bSc = State == EUISimRaceState::SafetyCar;
-		FButton& Sc = Add(StatusRect(5), ELook::Status, bSc ? TEXT("SC IN THIS LAP") : TEXT("SAFETY CAR"),
-			!bSc ? TEXT("deploy") : Snapshot.bSafetyCarInThisLap ? TEXT("lights out, pitting") : TEXT("call the car in"),
-			MakeCommand(bSc ? EUICommand::RecallSafetyCar : EUICommand::DeploySafetyCar, bSc && bStanding ? 2 : 0), bSc, UIStyle::Yellow);
-		Sc.bEnabled |= bSc;
-
-		// Overtake (shown only: the core switches it) and the pit lane.
-		const bool bOvertake = State == EUISimRaceState::Green && Snapshot.bRaceStarted && !Snapshot.bChequered;
-		Add(FBox2D(FVector2D(Pad, ToggleTop), FVector2D(Pad + Half, ToggleTop + ToggleHeight)), ELook::Toggle, TEXT("OVERTAKE"),
-			bOvertake ? TEXT("ENABLED") : TEXT("DISABLED"), FUICommand(), false, bOvertake ? UIStyle::Green : UIStyle::Mute, EKind::Display);
-		Add(FBox2D(FVector2D(Pad + Half + 6.0, ToggleTop), FVector2D(Pad + Inner, ToggleTop + ToggleHeight)), ELook::Toggle, TEXT("PIT LANE"),
-			Snapshot.bPitEntryClosed ? TEXT("CLOSED") : TEXT("OPEN"),
-			MakeCommand(Snapshot.bPitEntryClosed ? EUICommand::OpenPitEntry : EUICommand::ClosePitEntry), false,
-			Snapshot.bPitEntryClosed ? UIStyle::Red : UIStyle::Green);
-
-		// Marshal sectors: a click moves the flag on, green - yellow - double yellow.
-		const int32 Sectors = Snapshot.SectorFlags.Num();
-		const int32 Columns = FMath::Max(9, FMath::DivideAndRoundUp(Sectors, 2));
-		const double Cell = (Inner - 3.0 * (Columns - 1)) / Columns;
-		for (int32 Index = 0; Index < Sectors; ++Index)
-		{
-			const EUISimFlag Flag = Snapshot.SectorFlags[Index];
-			const EUISimFlag Next = Flag == EUISimFlag::Green ? EUISimFlag::Yellow
-				: Flag == EUISimFlag::Yellow ? EUISimFlag::DoubleYellow : EUISimFlag::Green;
-			const FVector2D Min(Pad + (Index % Columns) * (Cell + 3.0), SectorTop + (Index / Columns) * SectorStep);
-			FButton& Button = Add(FBox2D(Min, Min + FVector2D(Cell, SectorHeight)), ELook::Sector, FString::FromInt(Index + 1), FString(),
-				MakeCommand(EUICommand::SetSectorFlag, Index, Next), Flag != EUISimFlag::Green, UIStyle::Yellow);
-			Button.Flag = Flag;
-		}
-
-		// Start lights (drawn in NativePaint) and the standing restart beside them.
-		const FBox2D RestartRect(FVector2D(143.0, LightsTop - 2.0), FVector2D(CardWidth - 11.0, LightsTop + 32.0));
-		if (bRed)
-		{
-			Add(RestartRect, ELook::Capsule, TEXT("START LIGHT SEQUENCE"), FString(), MakeCommand(EUICommand::Restart, (bWetMandate ? 1 : 0) | 2),
-				false, UIStyle::Text);
-		}
-		else
-		{
-			Add(RestartRect, ELook::Capsule, Snapshot.bGridStart ? TEXT("LIGHTS…") : TEXT("START LIGHTS · STANDBY"), FString(), FUICommand(),
-				false, UIStyle::Mute, EKind::Display);
-		}
-
-		// What the design does not know: three in a row.
-		const double Third = (Inner - 8.0) / 3.0;
-		auto MoreRect = [&](int32 Index)
-		{
-			const FVector2D Min(Pad + (Index % 3) * (Third + 4.0), MoreTop + (Index / 3) * MoreStep);
-			return FBox2D(Min, Min + FVector2D(Third, MoreHeight));
-		};
-		Add(MoreRect(0), ELook::Small, TEXT("LAPPED CARS PASS"), FString(), MakeCommand(EUICommand::LappedCarsMayOvertake),
-			Snapshot.bLappedCarsReleased, UIStyle::Yellow);
-		Add(MoreRect(1), ELook::Small, TEXT("START BEHIND SC"), FString(), MakeCommand(EUICommand::SafetyCarStart, bWetMandate ? 1 : 0), false,
-			UIStyle::Yellow);
-		Add(MoreRect(2), ELook::Small, TEXT("ABORT START"), FString(), MakeCommand(EUICommand::AbortStart), false, UIStyle::Yellow);
-		Add(MoreRect(3), ELook::Small, TEXT("EXTRA FORMATION LAP"), FString(), MakeCommand(EUICommand::ExtraFormationLap), false, UIStyle::Yellow);
-		Add(MoreRect(4), ELook::Small, TEXT("WET TYRES ONLY"), FString(), FUICommand(), bWetMandate, UIStyle::Rgb(80, 150, 255), EKind::ToggleWet);
-		Add(MoreRect(5), ELook::Small, TEXT("STANDING AFTER SC"), FString(), FUICommand(), bStanding, UIStyle::Red, EKind::ToggleStanding).bDarkInk = false;
+		const FVector2D Min(Pad + (Index % 2) * (Half + 6.0), StatusTop + (Index / 2) * StatusStep);
+		return FBox2D(Min, Min + FVector2D(Half, StatusHeight));
+	};
+	bool bYellow = false;
+	for (const EUISimFlag Flag : Snapshot.SectorFlags)
+	{
+		bYellow |= Flag != EUISimFlag::Green;
 	}
+	const bool bRed = State == EUISimRaceState::RedFlag;
+	const int32 Sector = LeaderSector(Session);
+	const FString AtLeader = FString::Printf(TEXT("at leader · sector %d"), Sector + 1);
+	if (bRed)
+	{
+		Add(StatusRect(0), ELook::Status, TEXT("RESTART"), TEXT("rolling start behind the safety car"),
+			MakeCommand(EUICommand::Restart, bWetMandate ? 1 : 0), false, UIStyle::Green);
+	}
+	else
+	{
+		Add(StatusRect(0), ELook::Status, TEXT("TRACK CLEAR"), TEXT("green · clears all sectors"), FUICommand(),
+			State == EUISimRaceState::Green && !bYellow && Snapshot.bRaceStarted, UIStyle::Green, EKind::ClearTrack);
+	}
+	FButton& Red = Add(StatusRect(1), ELook::Status, IsConfirming() ? TEXT("CONFIRM RED FLAG") : TEXT("RED FLAG"),
+		IsConfirming() ? TEXT("click again to show it") : TEXT("suspend session"), MakeCommand(EUICommand::RedFlag), bRed || IsConfirming(),
+		UIStyle::Red, EKind::AskRedFlag);
+	Red.bDarkInk = false;
+	Red.bEnabled |= bRed; // shown bright while the flag is out
+	Add(StatusRect(2), ELook::Status, TEXT("YELLOW"), AtLeader, MakeCommand(EUICommand::SetSectorFlag, Sector, EUISimFlag::Yellow), false,
+		UIStyle::Yellow);
+	Add(StatusRect(3), ELook::Status, TEXT("DOUBLE YELLOW"), AtLeader, MakeCommand(EUICommand::SetSectorFlag, Sector, EUISimFlag::DoubleYellow),
+		false, UIStyle::Yellow);
+	const bool bVsc = State == EUISimRaceState::VirtualSafetyCar;
+	Add(StatusRect(4), ELook::Status, bVsc ? TEXT("VSC ENDING") : TEXT("VSC"), bVsc ? TEXT("return to green") : TEXT("virtual safety car"),
+		MakeCommand(bVsc ? EUICommand::EndVsc : EUICommand::DeployVsc), bVsc, UIStyle::Yellow);
+	const bool bSc = State == EUISimRaceState::SafetyCar;
+	FButton& Sc = Add(StatusRect(5), ELook::Status, bSc ? TEXT("SC IN THIS LAP") : TEXT("SAFETY CAR"),
+		!bSc ? TEXT("deploy") : Snapshot.bSafetyCarInThisLap ? TEXT("lights out, pitting") : TEXT("call the car in"),
+		MakeCommand(bSc ? EUICommand::RecallSafetyCar : EUICommand::DeploySafetyCar, bSc && bStanding ? 2 : 0), bSc, UIStyle::Yellow);
+	Sc.bEnabled |= bSc;
+
+	// Overtake (shown only: the core switches it) and the pit lane.
+	const bool bOvertake = State == EUISimRaceState::Green && Snapshot.bRaceStarted && !Snapshot.bChequered;
+	Add(FBox2D(FVector2D(Pad, ToggleTop), FVector2D(Pad + Half, ToggleTop + ToggleHeight)), ELook::Toggle, TEXT("OVERTAKE"),
+		bOvertake ? TEXT("ENABLED") : TEXT("DISABLED"), FUICommand(), false, bOvertake ? UIStyle::Green : UIStyle::Mute, EKind::Display);
+	Add(FBox2D(FVector2D(Pad + Half + 6.0, ToggleTop), FVector2D(Pad + Inner, ToggleTop + ToggleHeight)), ELook::Toggle, TEXT("PIT LANE"),
+		Snapshot.bPitEntryClosed ? TEXT("CLOSED") : TEXT("OPEN"),
+		MakeCommand(Snapshot.bPitEntryClosed ? EUICommand::OpenPitEntry : EUICommand::ClosePitEntry), false,
+		Snapshot.bPitEntryClosed ? UIStyle::Red : UIStyle::Green);
+
+	// Marshal sectors: a click moves the flag on, green - yellow - double yellow.
+	const int32 Sectors = Snapshot.SectorFlags.Num();
+	const int32 Columns = FMath::Max(9, FMath::DivideAndRoundUp(Sectors, 2));
+	const double Cell = (Inner - 3.0 * (Columns - 1)) / Columns;
+	for (int32 Index = 0; Index < Sectors; ++Index)
+	{
+		const EUISimFlag Flag = Snapshot.SectorFlags[Index];
+		const EUISimFlag Next = Flag == EUISimFlag::Green ? EUISimFlag::Yellow
+			: Flag == EUISimFlag::Yellow ? EUISimFlag::DoubleYellow : EUISimFlag::Green;
+		const FVector2D Min(Pad + (Index % Columns) * (Cell + 3.0), SectorTop + (Index / Columns) * SectorStep);
+		FButton& Button = Add(FBox2D(Min, Min + FVector2D(Cell, SectorHeight)), ELook::Sector, FString::FromInt(Index + 1), FString(),
+			MakeCommand(EUICommand::SetSectorFlag, Index, Next), Flag != EUISimFlag::Green, UIStyle::Yellow);
+		Button.Flag = Flag;
+	}
+
+	// Start lights (drawn in NativePaint) and the standing restart beside them.
+	const FBox2D RestartRect(FVector2D(143.0, LightsTop - 2.0), FVector2D(CardWidth - 11.0, LightsTop + 32.0));
+	if (bRed)
+	{
+		Add(RestartRect, ELook::Capsule, TEXT("START LIGHT SEQUENCE"), FString(), MakeCommand(EUICommand::Restart, (bWetMandate ? 1 : 0) | 2),
+			false, UIStyle::Text);
+	}
+	else
+	{
+		Add(RestartRect, ELook::Capsule, Snapshot.bGridStart ? TEXT("LIGHTS…") : TEXT("START LIGHTS · STANDBY"), FString(), FUICommand(),
+			false, UIStyle::Mute, EKind::Display);
+	}
+
+	// What the design does not know: three in a row.
+	const double Third = (Inner - 8.0) / 3.0;
+	auto MoreRect = [&](int32 Index)
+	{
+		const FVector2D Min(Pad + (Index % 3) * (Third + 4.0), MoreTop + (Index / 3) * MoreStep);
+		return FBox2D(Min, Min + FVector2D(Third, MoreHeight));
+	};
+	Add(MoreRect(0), ELook::Small, TEXT("LAPPED CARS PASS"), FString(), MakeCommand(EUICommand::LappedCarsMayOvertake),
+		Snapshot.bLappedCarsReleased, UIStyle::Yellow);
+	Add(MoreRect(1), ELook::Small, TEXT("START BEHIND SC"), FString(), MakeCommand(EUICommand::SafetyCarStart, bWetMandate ? 1 : 0), false,
+		UIStyle::Yellow);
+	Add(MoreRect(2), ELook::Small, TEXT("ABORT START"), FString(), MakeCommand(EUICommand::AbortStart), false, UIStyle::Yellow);
+	Add(MoreRect(3), ELook::Small, TEXT("EXTRA FORMATION LAP"), FString(), MakeCommand(EUICommand::ExtraFormationLap), false, UIStyle::Yellow);
+	Add(MoreRect(4), ELook::Small, TEXT("WET TYRES ONLY"), FString(), FUICommand(), bWetMandate, UIStyle::Rgb(80, 150, 255), EKind::ToggleWet);
+	Add(MoreRect(5), ELook::Small, TEXT("STANDING AFTER SC"), FString(), FUICommand(), bStanding, UIStyle::Red, EKind::ToggleStanding).bDarkInk = false;
 
 	// Camera tiles under the 3D picture: name, cars in the frame and a dot in the colour of the flag over them.
 	const TArray<FString>& Cameras = Race->CameraNameList();
@@ -272,7 +258,6 @@ int32 UUIControlPanelWidget::NativePaint(const FPaintArgs& Args, const FGeometry
 	const FSlateBrush* White = FCoreStyle::Get().GetBrush("WhiteBrush");
 	const TSharedRef<FSlateFontMeasure> Measure = FSlateApplication::Get().GetRenderer()->GetFontMeasureService();
 	const FUISimSnapshot& Snapshot = Race->Session().Snapshot();
-	const bool bReviewing = Race->IsReviewing();
 	const FGeometry* Area = &StatusArea->GetCachedGeometry();
 	++Layer;
 	auto Box = [&](const FVector2D& Min, const FVector2D& Max, const FSlateBrush* Brush, const FLinearColor& Color)
@@ -304,20 +289,18 @@ int32 UUIControlPanelWidget::NativePaint(const FPaintArgs& Args, const FGeometry
 	const FSlateFontInfo LabelFont = UIStyle::Font(TEXT("Regular"), 7);
 	const double CardWidth = UIStyle::StatusCard.GetSize().X;
 
-	if (!bReviewing)
+	Text(FVector2D(17.0, 15.0), TEXT("Track status"), UIStyle::Font(TEXT("Bold"), 10), UIStyle::Text);
+	Text(FVector2D(Pad, SectorLabelTop), TEXT("MARSHAL SECTORS"), LabelFont, UIStyle::Mute);
+	Box(FVector2D(1.0, LineTop), FVector2D(CardWidth - 1.0, LineTop + 1.0), White, FLinearColor(1.0f, 1.0f, 1.0f, 0.07f));
+	Text(FVector2D(Pad, MoreLabelTop), TEXT("MORE COMMANDS"), LabelFont, UIStyle::Mute);
+	// Start lights: five in a dark capsule, red one after the other.
+	Framed(FBox2D(FVector2D(11.0, LightsTop), FVector2D(133.0, LightsTop + 32.0)), &Capsule, &Capsule, Edge, UIStyle::Rgb(13, 14, 16));
+	for (int32 Index = 0; Index < 5; ++Index)
 	{
-		Text(FVector2D(17.0, 15.0), TEXT("Track status"), UIStyle::Font(TEXT("Bold"), 10), UIStyle::Text);
-		Text(FVector2D(Pad, SectorLabelTop), TEXT("MARSHAL SECTORS"), LabelFont, UIStyle::Mute);
-		Box(FVector2D(1.0, LineTop), FVector2D(CardWidth - 1.0, LineTop + 1.0), White, FLinearColor(1.0f, 1.0f, 1.0f, 0.07f));
-		Text(FVector2D(Pad, MoreLabelTop), TEXT("MORE COMMANDS"), LabelFont, UIStyle::Mute);
-		// Start lights: five in a dark capsule, red one after the other.
-		Framed(FBox2D(FVector2D(11.0, LightsTop), FVector2D(133.0, LightsTop + 32.0)), &Capsule, &Capsule, Edge, UIStyle::Rgb(13, 14, 16));
-		for (int32 Index = 0; Index < 5; ++Index)
-		{
-			const FVector2D Min(22.0 + Index * 21.0, LightsTop + 8.0);
-			Box(Min, Min + FVector2D(16.0, 16.0), &Round8, Snapshot.bGridStart && Index < Snapshot.StartLights ? UIStyle::Red : UIStyle::Rgb(42, 20, 22));
-		}
+		const FVector2D Min(22.0 + Index * 21.0, LightsTop + 8.0);
+		Box(Min, Min + FVector2D(16.0, 16.0), &Round8, Snapshot.bGridStart && Index < Snapshot.StartLights ? UIStyle::Red : UIStyle::Rgb(42, 20, 22));
 	}
+
 
 	for (const FButton& Button : Buttons())
 	{
@@ -373,7 +356,7 @@ int32 UUIControlPanelWidget::NativePaint(const FPaintArgs& Args, const FGeometry
 	}
 	Layer += 2;
 
-	if (!bTargetsLogged && !bReviewing && StatusArea->GetCachedGeometry().GetLocalSize().X > 0.0)
+	if (!bTargetsLogged && StatusArea->GetCachedGeometry().GetLocalSize().X > 0.0)
 	{
 		bTargetsLogged = true;
 		LogClickTargets();

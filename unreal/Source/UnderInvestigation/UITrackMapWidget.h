@@ -11,7 +11,7 @@ class UBorder;
 // their numbers, yellow when flagged (dashed for double yellow), start/finish, pit entry, Safety
 // Car, accident sites and the cars in team colours. A click on a sector switches its flag on
 // (clear, yellow, double yellow), a click on a car follows it with the TV camera. All actions go
-// through AUIRaceDirector::Execute().
+// through AUIRaceDirector::Execute(). While an incident is reviewed, the review card takes its place.
 UCLASS()
 class UUITrackMapWidget : public UUserWidget
 {

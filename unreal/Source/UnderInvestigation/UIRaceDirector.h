@@ -17,6 +17,8 @@ class UUIIncidentWidget;
 class UUIRatingWidget;
 class UUIRadioWidget;
 class UUITrackMapWidget;
+class UUIReviewWidget;
+class UUIMessagesWidget;
 class UUIControlPanelWidget;
 class UUIWeatherWidget;
 class UUISeasonWidget;
@@ -54,9 +56,11 @@ enum class EUICommand : uint8
 	StartSeasonRace,       // season screen: start the next race of the calendar (M10.6)
 	BackToSeason,          // after the flag: book the race and return to the season screen
 	NewSeason,             // season screen after the last race: a fresh season
-	HoldHearing,           // hear the drivers on the incident under review (M11.7)
+	HoldHearing,           // hear the drivers on the incident under review (M11.7), else on incident Index (M12.6)
 	AbortStart,            // before the start signal: begin the procedure again (B5.8)
-	ExtraFormationLap      // before the start signal: one more formation lap (B5.9)
+	ExtraFormationLap,     // before the start signal: one more formation lap (B5.9)
+	NoteIncident,          // Index into the incident list: seen, decided later (M12.6, display only)
+	DismissIncident        // Index into the incident list: no further action, without a review (M12.6)
 };
 
 struct FUICommand
@@ -66,6 +70,14 @@ struct FUICommand
 	double Value = 0.0;
 	EUISimFlag Flag = EUISimFlag::Green;
 	EUISimPenalty Penalty = EUISimPenalty::None;
+};
+
+// A line of the race control messages (M12.6): own decisions, in the wording of race control.
+struct FUIMessage
+{
+	double Time = 0.0;
+	FString Text;
+	FLinearColor Color = FLinearColor::White;
 };
 
 // What a camera shows (M12.5): the cars in its frame in race order and the flag over them.
@@ -130,6 +142,11 @@ public:
 	// Verdict input while reviewing: which car is accused (0 = car, 1 = other car).
 	int32 AccusedSide() const { return Accused; }
 	static FString PenaltyName(EUISimPenalty Penalty);
+	static FString IncidentTypeName(EUISimIncidentType Type);
+	// Incidents list (M12.6): what the player did with an incident before the verdict.
+	bool IsNoted(int32 IncidentId) const { return NotedIncidents.Contains(IncidentId); }
+	bool IsInvestigated(int32 IncidentId) const { return InvestigatedIncidents.Contains(IncidentId); }
+	const TArray<FUIMessage>& Messages() const { return MessageLog; } // oldest first
 	UTextureRenderTarget2D* PictureInPicture() const { return PipTarget; }
 
 	// "1:23.456" or "1:02:03.456".
@@ -222,6 +239,12 @@ private:
 	TArray<TObjectPtr<ACameraActor>> Cameras;
 	TArray<FString> CameraNames;
 	TArray<double> CameraRanges; // cm; a car farther away does not count as in the frame
+
+	TSet<int32> NotedIncidents;        // incident ids
+	TSet<int32> InvestigatedIncidents; // incident ids, reviewed at least once
+	TArray<FUIMessage> MessageLog;
+	void AddMessage(const FString& Text, const FLinearColor& Color);
+	void LogDecision(const FUICommand& Command); // the message for a race control command, after it ran
 	int32 ActiveCamera = 0;
 
 	UPROPERTY()
@@ -249,6 +272,10 @@ private:
 	TObjectPtr<UUIRadioWidget> RadioPanel;
 	UPROPERTY()
 	TObjectPtr<UUITrackMapWidget> TrackMap;
+	UPROPERTY()
+	TObjectPtr<UUIReviewWidget> ReviewPanel; // over the track map while reviewing (M12.6)
+	UPROPERTY()
+	TObjectPtr<UUIMessagesWidget> MessagesPanel;
 	UPROPERTY()
 	TObjectPtr<UUIControlPanelWidget> ControlPanel;
 	UPROPERTY()

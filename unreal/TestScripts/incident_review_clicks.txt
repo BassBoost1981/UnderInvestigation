@@ -1,15 +1,15 @@
-# M8.7 check (testring, seed 1, 1600x900): review and verdict by synthetic clicks.
+# M12.6 check (testring, seed 1, 1600x900): review and verdict by synthetic clicks.
 # Same steps as incident_review_commands.txt; both races must end identically, with the same verdict.
 # Run with -UISimTimeScale=20 so frames are drawn between the clicks.
-300 click 1252 536   # row 1 = the latest incident (#3, collision DRA/OKA): review it
-301 click 1295 504   # PAUSE
-302 click 1362 504   # +1 S
-303 click 1285 484   # timeline at about -2.5 s
-304 click 1429 504   # KAMERA
-305 click 1386 529   # accused: OKA
-306 click 1372 552   # penalty 5 S (chosen, not yet given)
-307 click 1461 576   # BESTAETIGEN
-308 click 1502 504   # ENDE
+300 click 1312 579   # card of the newest incident (#2, collision KEL/OKA): INVESTIGATE
+301 click 996 621    # PAUSE
+302 click 1042 621   # +1 S
+303 click 989 600    # timeline at about -2.5 s
+304 click 1090 621   # CAMERA
+305 click 1067 650   # accused: OKA
+306 click 1078 676   # penalty 5 S (chosen, not yet given)
+307 click 1119 700   # CONFIRM
+308 click 1141 621   # END
 309 timescale 500   # clicks need drawn frames in between: run with -UISimTimeScale=20 up to here
 # After the flag: every incident gets no action (17 incidents, two pages), then page through the rating.
 99000 review 1

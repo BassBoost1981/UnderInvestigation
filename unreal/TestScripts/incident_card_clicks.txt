@@ -1,0 +1,12 @@
+# M12.6 check (testring, seed 1, 1600x900): the buttons of the incident cards, and the messages they leave.
+# Coordinates come from the 'Incidents:' lines in the log (they move when a button goes away).
+# Run with -UISimSeed=1 -UISimTimeScale=500 -UISimScript=TestScripts/incident_card_clicks.txt -UISimQuitWhenDone
+290 timescale 20
+300 click 1251 579   # #2 NOTED
+302 click 1434 641   # #1 DISMISS (no further action, without a review)
+304 click 1330 579   # #2 HEARING, straight from the card
+306 click 1209 579   # #2 CAM: the TV camera follows KEL
+308 review 2
+310 screenshot incident_cards
+312 review_end
+313 timescale 500

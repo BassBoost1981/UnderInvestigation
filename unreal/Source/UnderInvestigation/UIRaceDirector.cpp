@@ -21,6 +21,8 @@
 #include "UIRatingWidget.h"
 #include "UIRadioWidget.h"
 #include "UITrackMapWidget.h"
+#include "UIReviewWidget.h"
+#include "UIMessagesWidget.h"
 #include "UIControlPanelWidget.h"
 #include "UIWeatherWidget.h"
 #include "UISeasonWidget.h"
@@ -252,7 +254,8 @@ void AUIRaceDirector::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	if (EndPlayReason == EEndPlayReason::Destroyed)
 	{
 		// Leaving a race for the season screen: its panels and cameras go with it.
-		UUserWidget* Panels[] = {Desk, TimingTower, IncidentPanel, RatingPanel, RadioPanel, TrackMap, ControlPanel, WeatherPanel, SeasonPanel};
+		UUserWidget* Panels[] = {Desk, TimingTower, IncidentPanel, RatingPanel, RadioPanel, TrackMap, ReviewPanel, MessagesPanel, ControlPanel,
+			WeatherPanel, SeasonPanel};
 		if (UGameViewportClient* ViewportClient = GetWorld() ? GetWorld()->GetGameViewport() : nullptr)
 		{
 			TArray<FPerPlayerSplitscreenData>& Single = ViewportClient->SplitscreenInfo[ESplitScreenType::None].PlayerData;
@@ -593,6 +596,13 @@ void AUIRaceDirector::Tick(float DeltaSeconds)
 		TrackMap = CreateWidget<UUITrackMapWidget>(Player, UUITrackMapWidget::StaticClass());
 		TrackMap->SetRaceDirector(this);
 		TrackMap->AddToViewport();
+		ReviewPanel = CreateWidget<UUIReviewWidget>(Player, UUIReviewWidget::StaticClass());
+		ReviewPanel->SetRaceDirector(this);
+		ReviewPanel->AddToViewport();
+		MessagesPanel = CreateWidget<UUIMessagesWidget>(Player, UUIMessagesWidget::StaticClass());
+		MessagesPanel->SetRaceDirector(this);
+		MessagesPanel->SetVisibility(ESlateVisibility::HitTestInvisible); // display only
+		MessagesPanel->AddToViewport();
 		ControlPanel = CreateWidget<UUIControlPanelWidget>(Player, UUIControlPanelWidget::StaticClass());
 		ControlPanel->SetRaceDirector(this);
 		ControlPanel->AddToViewport();
@@ -1022,13 +1032,37 @@ FString AUIRaceDirector::PenaltyName(EUISimPenalty Penalty)
 {
 	switch (Penalty)
 	{
-	case EUISimPenalty::None: return TEXT("keine Aktion");
-	case EUISimPenalty::Warning: return TEXT("Verwarnung");
-	case EUISimPenalty::FiveSeconds: return TEXT("5 s");
-	case EUISimPenalty::TenSeconds: return TEXT("10 s");
-	case EUISimPenalty::DriveThrough: return TEXT("Drive-Through");
-	case EUISimPenalty::StopAndGo: return TEXT("Stop-and-Go");
-	case EUISimPenalty::Disqualification: return TEXT("Disqualifikation");
+	case EUISimPenalty::None: return TEXT("No further action");
+	case EUISimPenalty::Warning: return TEXT("Reprimand");
+	case EUISimPenalty::FiveSeconds: return TEXT("5 s time penalty");
+	case EUISimPenalty::TenSeconds: return TEXT("10 s time penalty");
+	case EUISimPenalty::DriveThrough: return TEXT("Drive-through");
+	case EUISimPenalty::StopAndGo: return TEXT("Stop-and-go");
+	case EUISimPenalty::Disqualification: return TEXT("Disqualification");
+	}
+	return FString();
+}
+
+FString AUIRaceDirector::IncidentTypeName(EUISimIncidentType Type)
+{
+	switch (Type)
+	{
+	case EUISimIncidentType::Collision: return TEXT("COLLISION");
+	case EUISimIncidentType::OvertakeUnderYellow: return TEXT("OVERTAKING UNDER YELLOW");
+	case EUISimIncidentType::OvertakeUnderVsc: return TEXT("OVERTAKING UNDER VSC");
+	case EUISimIncidentType::OvertakeUnderSafetyCar: return TEXT("OVERTAKING UNDER SC");
+	case EUISimIncidentType::OvertakeUnderRedFlag: return TEXT("OVERTAKING UNDER RED FLAG");
+	case EUISimIncidentType::OvertakeBeforeRestartLine: return TEXT("OVERTAKING BEFORE THE LINE");
+	case EUISimIncidentType::IgnoringBlueFlags: return TEXT("IGNORING BLUE FLAGS");
+	case EUISimIncidentType::Accident: return TEXT("ACCIDENT");
+	case EUISimIncidentType::PitLaneSpeeding: return TEXT("PIT LANE SPEEDING");
+	case EUISimIncidentType::UnsafeRelease: return TEXT("UNSAFE RELEASE");
+	case EUISimIncidentType::TrackLimits: return TEXT("TRACK LIMITS");
+	case EUISimIncidentType::CompoundRule: return TEXT("COMPOUND RULE");
+	case EUISimIncidentType::PitEntryClosed: return TEXT("PIT ENTRY CLOSED");
+	case EUISimIncidentType::WetTyreRule: return TEXT("WET TYRE RULE");
+	case EUISimIncidentType::FalseStart: return TEXT("FALSE START");
+	case EUISimIncidentType::GridPosition: return TEXT("GRID POSITION");
 	}
 	return FString();
 }
@@ -1160,11 +1194,11 @@ FString AUIRaceDirector::ReviewCameraName(bool bPictureInPicture) const
 	const FUISimIncident& Incident = SimSession.Incidents()[ReviewIncidentIndex];
 	switch (Mode)
 	{
-	case 0: return TEXT("Streckenposten");
-	case 1: return TEXT("Heli");
-	case 4: return TEXT("Boxengasse");
-	case 2: return FString::Printf(TEXT("Onboard %s"), *SimSession.Entries()[Incident.Car].Code);
-	default: return FString::Printf(TEXT("Onboard %s"), *SimSession.Entries()[Incident.OtherCar].Code);
+	case 0: return TEXT("MARSHAL POST");
+	case 1: return TEXT("HELI");
+	case 4: return TEXT("PIT LANE");
+	case 2: return FString::Printf(TEXT("ONBOARD %s"), *SimSession.Entries()[Incident.Car].Code.ToUpper());
+	default: return FString::Printf(TEXT("ONBOARD %s"), *SimSession.Entries()[Incident.OtherCar].Code.ToUpper());
 	}
 }
 

@@ -137,7 +137,7 @@ int32 UUITrackMapWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Al
 {
 	int32 Layer = Super::NativePaint(Args, AllottedGeometry, MyCullingRect, OutDrawElements, LayerId, InWidgetStyle, bParentEnabled);
 	const AUIRaceDirector* Race = Director.Get();
-	if (!Race || !Race->Session().IsStarted() || !MapArea)
+	if (!Race || !Race->Session().IsStarted() || !MapArea || Race->IsReviewing()) // the review card takes this place
 	{
 		return Layer;
 	}
@@ -323,7 +323,7 @@ int32 UUITrackMapWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Al
 FReply UUITrackMapWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
 	AUIRaceDirector* Race = Director.Get();
-	if (!Race || !MapArea || !Race->Session().IsStarted() || InMouseEvent.GetEffectingButton() != EKeys::LeftMouseButton ||
+	if (!Race || !MapArea || !Race->Session().IsStarted() || Race->IsReviewing() || InMouseEvent.GetEffectingButton() != EKeys::LeftMouseButton ||
 		!PrepareProjection(MapArea->GetCachedGeometry().GetLocalSize()))
 	{
 		return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);

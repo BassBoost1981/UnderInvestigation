@@ -3,6 +3,7 @@
 
 #include "UIRaceDirector.h"
 #include "UISimCareer.h"
+#include "UIStyle.h"
 
 #include "Engine/Engine.h"
 #include "Engine/GameViewportClient.h"
@@ -79,12 +80,26 @@ bool AUIRaceDirector::CanExecute(const FUICommand& Command) const
 	}
 	case EUICommand::HoldHearing:
 	{
-		if (!bReviewing)
+		const int32 Index = bReviewing ? ReviewIncidentIndex : Command.Index;
+		if (!SimSession.Incidents().IsValidIndex(Index))
 		{
 			return false;
 		}
-		const int32 Id = SimSession.Incidents()[ReviewIncidentIndex].Id;
+		const int32 Id = SimSession.Incidents()[Index].Id;
 		return !SimSession.VerdictFor(Id) && !SimSession.IsHeard(Id);
+	}
+	case EUICommand::NoteIncident:
+		return SimSession.Incidents().IsValidIndex(Command.Index) && !SimSession.VerdictFor(SimSession.Incidents()[Command.Index].Id)
+			&& !NotedIncidents.Contains(SimSession.Incidents()[Command.Index].Id);
+	case EUICommand::DismissIncident:
+	{
+		if (!SimSession.Incidents().IsValidIndex(Command.Index))
+		{
+			return false;
+		}
+		const int32 Id = SimSession.Incidents()[Command.Index].Id;
+		const bool bHearingRuns = SimSession.IsHeard(Id) && !Snapshot.bFinished && Snapshot.Time < SimSession.HearingUntil(Id);
+		return !SimSession.VerdictFor(Id) && !bHearingRuns;
 	}
 	case EUICommand::AbortStart:
 	case EUICommand::ExtraFormationLap:
@@ -130,7 +145,9 @@ FString AUIRaceDirector::CommandName(const FUICommand& Command) const
 	case EUICommand::NextReviewCamera: return TEXT("review_camera");
 	case EUICommand::SetAccused: return Command.Index == 0 ? TEXT("accused car") : TEXT("accused other");
 	case EUICommand::Verdict: return FString::Printf(TEXT("verdict %s"), PenaltyWords[static_cast<uint8>(Command.Penalty)]);
-	case EUICommand::HoldHearing: return TEXT("hearing");
+	case EUICommand::HoldHearing: return bReviewing ? FString(TEXT("hearing")) : FString::Printf(TEXT("hearing %d"), Command.Index + 1);
+	case EUICommand::NoteIncident: return FString::Printf(TEXT("note %d"), Command.Index + 1);
+	case EUICommand::DismissIncident: return FString::Printf(TEXT("dismiss %d"), Command.Index + 1);
 	case EUICommand::AbortStart: return TEXT("abort_start");
 	case EUICommand::ExtraFormationLap: return TEXT("extra_lap");
 	case EUICommand::StartSeasonRace: return TEXT("season_start");
@@ -196,7 +213,15 @@ bool AUIRaceDirector::Execute(const FUICommand& Command)
 			Car >= 0 ? *SimSession.Entries()[Car].Code : TEXT(""));
 		break;
 	}
-	case EUICommand::HoldHearing: SimSession.HoldHearing(SimSession.Incidents()[ReviewIncidentIndex].Id); break;
+	case EUICommand::HoldHearing: SimSession.HoldHearing(SimSession.Incidents()[bReviewing ? ReviewIncidentIndex : Command.Index].Id); break;
+	case EUICommand::NoteIncident: NotedIncidents.Add(SimSession.Incidents()[Command.Index].Id); break;
+	case EUICommand::DismissIncident:
+	{
+		const FUISimIncident& Incident = SimSession.Incidents()[Command.Index];
+		SimSession.IssueVerdict(Incident.Id, -1, EUISimPenalty::None);
+		UE_LOG(LogUISim, Display, TEXT("Verdict #%d: %s"), Incident.Id, *PenaltyName(EUISimPenalty::None));
+		break;
+	}
 	case EUICommand::AbortStart: SimSession.AbortStart(); break;
 	case EUICommand::ExtraFormationLap: SimSession.ExtraFormationLap(); break;
 	case EUICommand::StartSeasonRace: StartSeasonRace(); break;
@@ -211,7 +236,90 @@ bool AUIRaceDirector::Execute(const FUICommand& Command)
 		break;
 	}
 	}
+	LogDecision(Command);
 	return true;
+}
+
+void AUIRaceDirector::AddMessage(const FString& Text, const FLinearColor& Color)
+{
+	FUIMessage Message;
+	Message.Time = SimSession.Snapshot().Time;
+	Message.Text = Text;
+	Message.Color = Color;
+	MessageLog.Add(Message);
+}
+
+void AUIRaceDirector::LogDecision(const FUICommand& Command)
+{
+	// Race control messages (M12.6), worded like the design. Camera, replay and speed commands are not decisions.
+	auto About = [this](int32 Index)
+	{
+		const FUISimIncident& Incident = SimSession.Incidents()[Index];
+		const TArray<FUISimEntry>& Entries = SimSession.Entries();
+		const FString Cars = Incident.Car == Incident.OtherCar ? Entries[Incident.Car].Code.ToUpper()
+			: Entries[Incident.Car].Code.ToUpper() + TEXT(" / ") + Entries[Incident.OtherCar].Code.ToUpper();
+		return FString::Printf(TEXT("#%d %s · %s"), Incident.Id, *IncidentTypeName(Incident.Type), *Cars);
+	};
+	const FString Wet = TEXT(" · WET TYRES COMPULSORY");
+	switch (Command.Type)
+	{
+	case EUICommand::SetSectorFlag:
+		AddMessage(FString::Printf(TEXT("%s IN MARSHAL SECTOR %d"), Command.Flag == EUISimFlag::Green ? TEXT("CLEAR")
+			: Command.Flag == EUISimFlag::Yellow ? TEXT("YELLOW") : TEXT("DOUBLE YELLOW"), Command.Index + 1),
+			Command.Flag == EUISimFlag::Green ? UIStyle::Green : UIStyle::Yellow);
+		break;
+	case EUICommand::DeployVsc: AddMessage(TEXT("VIRTUAL SAFETY CAR DEPLOYED"), UIStyle::Yellow); break;
+	case EUICommand::EndVsc: AddMessage(TEXT("VIRTUAL SAFETY CAR ENDING"), UIStyle::Yellow); break;
+	case EUICommand::DeploySafetyCar: AddMessage(TEXT("SAFETY CAR DEPLOYED"), UIStyle::Yellow); break;
+	case EUICommand::RecallSafetyCar:
+		AddMessage(Command.Index == 2 ? TEXT("SAFETY CAR IN THIS LAP · STANDING START") : TEXT("SAFETY CAR IN THIS LAP"), UIStyle::Yellow);
+		break;
+	case EUICommand::RedFlag: AddMessage(TEXT("RED FLAG · SESSION SUSPENDED"), UIStyle::Red); break;
+	case EUICommand::Restart:
+		AddMessage(FString((Command.Index & 2) ? TEXT("RESTART · STANDING START") : TEXT("RESTART BEHIND THE SAFETY CAR"))
+			+ ((Command.Index & 1) ? Wet : FString()), UIStyle::Green);
+		break;
+	case EUICommand::SafetyCarStart:
+		AddMessage(FString(TEXT("START BEHIND THE SAFETY CAR")) + (Command.Index == 1 ? Wet : FString()), UIStyle::Yellow);
+		break;
+	case EUICommand::LappedCarsMayOvertake: AddMessage(TEXT("LAPPED CARS MAY NOW OVERTAKE"), UIStyle::Mute); break;
+	case EUICommand::ClosePitEntry: AddMessage(TEXT("PIT ENTRY CLOSED"), UIStyle::Red); break;
+	case EUICommand::OpenPitEntry: AddMessage(TEXT("PIT ENTRY OPEN"), UIStyle::Green); break;
+	case EUICommand::AbortStart: AddMessage(TEXT("START ABORTED"), UIStyle::Red); break;
+	case EUICommand::ExtraFormationLap: AddMessage(TEXT("EXTRA FORMATION LAP"), UIStyle::Yellow); break;
+	case EUICommand::StartReview:
+	{
+		const FUISimIncident& Incident = SimSession.Incidents()[ReviewIncidentIndex];
+		if (!InvestigatedIncidents.Contains(Incident.Id) && !SimSession.VerdictFor(Incident.Id))
+		{
+			AddMessage(About(ReviewIncidentIndex) + TEXT(" · UNDER INVESTIGATION"), UIStyle::Yellow);
+		}
+		InvestigatedIncidents.Add(Incident.Id);
+		break;
+	}
+	case EUICommand::NoteIncident: AddMessage(About(Command.Index) + TEXT(" · NOTED"), UIStyle::Mute); break;
+	case EUICommand::HoldHearing:
+		AddMessage(About(bReviewing ? ReviewIncidentIndex : Command.Index) + TEXT(" · HEARING"), UIStyle::Yellow);
+		break;
+	case EUICommand::Verdict:
+	case EUICommand::DismissIncident:
+	{
+		const int32 Index = Command.Type == EUICommand::Verdict ? ReviewIncidentIndex : Command.Index;
+		const FUISimVerdict* Verdict = SimSession.VerdictFor(SimSession.Incidents()[Index].Id);
+		if (!Verdict || Verdict->Penalty == EUISimPenalty::None)
+		{
+			AddMessage(About(Index) + TEXT(" · NO FURTHER ACTION"), UIStyle::Mute);
+		}
+		else
+		{
+			AddMessage(FString::Printf(TEXT("%s FOR %s · %s"), *PenaltyName(Verdict->Penalty).ToUpper(),
+				*SimSession.Entries()[Verdict->Car].Code.ToUpper(), *About(Index)), UIStyle::Red);
+		}
+		break;
+	}
+	default:
+		break;
+	}
 }
 
 bool AUIRaceDirector::LoadScript(const FString& File)
@@ -332,7 +440,9 @@ bool AUIRaceDirector::LoadScript(const FString& File)
 				}
 			}
 		}
-		else if (Name == TEXT("hearing")) { C.Type = EUICommand::HoldHearing; }
+		else if (Name == TEXT("hearing")) { C.Type = EUICommand::HoldHearing; C.Index = Arg.IsEmpty() ? -1 : Number - 1; }
+		else if (Name == TEXT("note")) { C.Type = EUICommand::NoteIncident; C.Index = Number - 1; }
+		else if (Name == TEXT("dismiss")) { C.Type = EUICommand::DismissIncident; C.Index = Number - 1; }
 		else if (Name == TEXT("abort_start")) { C.Type = EUICommand::AbortStart; }
 		else if (Name == TEXT("extra_lap")) { C.Type = EUICommand::ExtraFormationLap; }
 		else if (Name == TEXT("season_start")) { C.Type = EUICommand::StartSeasonRace; }

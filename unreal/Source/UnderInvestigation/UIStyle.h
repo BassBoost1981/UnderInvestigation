@@ -29,9 +29,11 @@ namespace UIStyle
 	inline const FBox2D Feed(FVector2D(784.0, 141.0), FVector2D(1393.0, 484.0)); // the 3D picture, 16:9
 	inline const FBox2D Tiles(FVector2D(784.0, 492.0), FVector2D(1393.0, 630.0)); // camera tiles
 	inline const FBox2D MapCard(FVector2D(771.0, 655.0), FVector2D(1406.0, 1066.0));
-	// Right: track status (taller than in the design: the commands it does not know), below it the incidents.
+	// Right: track status (taller than in the design: the commands it does not know), below it the incidents
+	// (three cards) and the race control messages.
 	inline const FBox2D StatusCard(FVector2D(1419.0, 98.0), FVector2D(1906.0, 590.0));
-	inline const FBox2D IncidentCard(FVector2D(1419.0, 602.0), FVector2D(1906.0, 1066.0));
+	inline const FBox2D IncidentCard(FVector2D(1419.0, 602.0), FVector2D(1906.0, 862.0));
+	inline const FBox2D MessageCard(FVector2D(1419.0, 874.0), FVector2D(1906.0, 1066.0));
 
 	// Colour from sRGB bytes, as written in the design.
 	inline FLinearColor Rgb(uint8 R, uint8 G, uint8 B, float Alpha = 1.0f)

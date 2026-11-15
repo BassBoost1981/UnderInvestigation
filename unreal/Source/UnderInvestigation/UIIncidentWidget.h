@@ -7,16 +7,12 @@
 
 class AUIRaceDirector;
 class UBorder;
-class UImage;
-class USizeBox;
-class UTextBlock;
-class UVerticalBox;
 
-// Incident list (top right). While reviewing it also shows the second camera
-// (picture-in-picture) and a speed trace of both cars around the incident.
-// Mouse (M8.7): click a row to review it; in the review a timeline (click or drag), buttons for
-// -1 s, pause, +1 s, camera and end, and the penalty dialog (accused, penalty with explanation,
-// confirm). Every action goes through AUIRaceDirector::Execute().
+// The card "Incidents" (M12.6, after the user's design): the open incidents, newest first, each with
+// its state (NEW, NOTED, UNDER INVESTIGATION, IN REVIEW, HEARING) and buttons CAM (TV camera on the
+// car), NOTED, INVESTIGATE (opens the review card), HEARING and DISMISS (no further action). Decided
+// incidents leave the list and stand in the race control messages. Three fit; the window follows the
+// incident selected by key. Every action goes through AUIRaceDirector::Execute().
 UCLASS()
 class UUIIncidentWidget : public UUserWidget
 {
@@ -27,57 +23,36 @@ public:
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
-	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 	virtual int32 NativePaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry, const FSlateRect& MyCullingRect,
 		FSlateWindowElementList& OutDrawElements, int32 LayerId, const FWidgetStyle& InWidgetStyle,
 		bool bParentEnabled) const override;
 	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
-	virtual FReply NativeOnMouseMove(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 
 private:
-	enum class EAction : uint8 { Command, ChoosePenalty, Confirm };
-	struct FControl
+	struct FButton
 	{
-		FBox2D Rect;
+		FBox2D Rect; // in card coordinates
 		FString Label;
-		EAction Action = EAction::Command;
 		FUICommand Command;
-		int32 Penalty = 0; // ChoosePenalty
+		FLinearColor Color = FLinearColor::White;
 		bool bEnabled = true;
-		bool bActive = false;
 	};
-	TArray<FControl> Controls() const; // review buttons and penalty dialog, in ControlArea coordinates
-	FBox2D TimelineRect() const;
-	bool SeekTimeline(const FVector2D& Local);
-	UTextBlock* MakeText(const FLinearColor& Color, int32 Size = 11);
+	struct FEntry
+	{
+		int32 Index = 0; // into Session().Incidents()
+		double Top = 0.0;
+		FString Title;
+		FString Detail;
+		FString State;
+		FLinearColor StateColor = FLinearColor::White;
+		TArray<FButton> Buttons;
+	};
+	TArray<FEntry> Entries(int32& OutOpen) const; // what the card shows now
 
 	TWeakObjectPtr<AUIRaceDirector> Director;
 
 	UPROPERTY()
-	TObjectPtr<UTextBlock> Title;
-	UPROPERTY()
-	TArray<TObjectPtr<UTextBlock>> Rows;
-	UPROPERTY()
-	TObjectPtr<UVerticalBox> ReviewSection;
-	UPROPERTY()
-	TObjectPtr<UTextBlock> ReviewInfo;
-	UPROPERTY()
-	TObjectPtr<UImage> PipImage;
-	UPROPERTY()
-	TObjectPtr<USizeBox> PlotArea;
-	UPROPERTY()
-	TObjectPtr<UTextBlock> PlotLegend;
-	UPROPERTY()
-	TObjectPtr<UTextBlock> ReviewControls;
-	UPROPERTY()
-	TObjectPtr<UBorder> ControlArea;
-	UPROPERTY()
-	TObjectPtr<UBorder> ListPanel; // the whole panel; moves up over the status card during a review
+	TObjectPtr<UBorder> CardArea; // takes the clicks
 
-	TArray<int32> RowIncident;       // incident index shown in each row, -1 = none
-	int32 ChosenPenalty = -1;        // penalty picked in the dialog, not yet confirmed
-	int32 ChosenForIncident = -1;    // incident id the choice belongs to
-	double LastDragOffset = 1000.0;  // last timeline position sent while dragging
-	mutable TSet<int32> LoggedRows;  // rows whose click position is in the log
-	mutable FVector2D LoggedControlsAt = FVector2D(-1.0, -1.0); // control area position last logged
+	mutable FString LoggedTargets; // click targets last written to the log
 };
