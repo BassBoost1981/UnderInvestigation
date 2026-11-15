@@ -256,6 +256,8 @@ private:
         bool tyreStop = false;      // in the pit lane for new tyres
         int plannedStopLap = 0;     // stop at the end of this lap, INT_MAX = no further stop
         int stops = 0;
+        std::vector<Stint> pastStints; // finished sets of tyres (M12.7)
+        int stintStartLap = 0;         // laps completed when the current set was fitted
         unsigned compoundsUsed = 0; // bit per Compound (B6.3.6)
         double servablePenalty = 0.0; // 5 s / 10 s still to serve at the next stop (B1.9.6 b)
         double pitSpeedExcess = 0.0;  // km/h over the limit on this pit lane visit (limiter fault)

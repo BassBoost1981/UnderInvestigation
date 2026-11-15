@@ -21,7 +21,7 @@ namespace UIStyle
 	inline const FBox2D TopSession(FVector2D(964.0, 14.0), FVector2D(1478.0, 86.0));
 	inline const FBox2D TopWeather(FVector2D(1491.0, 14.0), FVector2D(1906.0, 86.0));
 
-	// Left: live timing, below it the place of the strategy card (until M12.7: marshal radio).
+	// Left: live timing, below it the strategy card.
 	inline const FBox2D TimingCard(FVector2D(14.0, 98.0), FVector2D(758.0, 778.0));
 	inline const FBox2D LowerLeftCard(FVector2D(14.0, 790.0), FVector2D(758.0, 1066.0));
 	// Middle: video matrix with the 3D picture and the camera tiles, below it the track map.

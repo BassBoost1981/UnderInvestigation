@@ -30,7 +30,15 @@ struct HazardState {
     bool recovering = false;        // marshals at work right now
 };
 
-// Read-only state of one car after a sim step. Flat and copyable so the UE
+// One set of tyres (M12.7): fitted after startLap laps, used for laps laps (the current set: so far).
+// A stint ends at a tyre stop or at the free tyre change under the red flag (B5.14.4 a vii).
+struct Stint {
+    Compound compound = Compound::Medium;
+    int startLap = 0;
+    int laps = 0;
+};
+
+// Read-only state of one car after a sim step. Copyable so the UE
 // layer can keep two snapshots and interpolate between them.
 struct CarState {
     int entryIndex = 0;   // index into Sim::entries()
@@ -62,6 +70,8 @@ struct CarState {
     Compound compound = Compound::Medium;
     int tyreAge = 0; // laps on the current set
     int pitStops = 0;
+    std::vector<Stint> stints; // oldest first, the last one is the current set (M12.7)
+    int plannedStopLap = 0;    // the team plans to stop at the end of this lap, 0 = no further stop planned
     int compoundsUsed = 0; // number of different dry compounds so far
     int trackLimitStrikes = 0;
     bool blackWhiteFlag = false; // shown after the warning offence (track limits)

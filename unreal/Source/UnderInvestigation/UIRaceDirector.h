@@ -15,7 +15,7 @@ class UUIDeskWidget;
 class UUITimingTowerWidget;
 class UUIIncidentWidget;
 class UUIRatingWidget;
-class UUIRadioWidget;
+class UUIStrategyWidget;
 class UUITrackMapWidget;
 class UUIReviewWidget;
 class UUIMessagesWidget;
@@ -269,7 +269,7 @@ private:
 	UPROPERTY()
 	TObjectPtr<UUIRatingWidget> RatingPanel;
 	UPROPERTY()
-	TObjectPtr<UUIRadioWidget> RadioPanel;
+	TObjectPtr<UUIStrategyWidget> StrategyPanel; // below the live timing (M12.7)
 	UPROPERTY()
 	TObjectPtr<UUITrackMapWidget> TrackMap;
 	UPROPERTY()

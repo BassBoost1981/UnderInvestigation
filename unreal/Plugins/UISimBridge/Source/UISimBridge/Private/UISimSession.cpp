@@ -370,6 +370,12 @@ void FUISimSession::CopySnapshot()
 		Out.Compound = static_cast<int32>(Car.compound);
 		Out.TyreAge = Car.tyreAge;
 		Out.PitStops = Car.pitStops;
+		Out.Stints.Reset(static_cast<int32>(Car.stints.size()));
+		for (const uisim::Stint& Stint : Car.stints)
+		{
+			Out.Stints.Add(FUISimStint{static_cast<int32>(Stint.compound), Stint.startLap, Stint.laps});
+		}
+		Out.PlannedStopLap = Car.plannedStopLap;
 		Out.TrackLimitStrikes = Car.trackLimitStrikes;
 		Out.bBlackWhiteFlag = Car.blackWhiteFlag;
 	}

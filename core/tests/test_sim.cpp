@@ -174,3 +174,37 @@ TEST_CASE("50 laps simulate in under 2 seconds" * doctest::skip(!kOptimizedBuild
     INFO("simulation took ", seconds, " s");
     CHECK(seconds < 2.0);
 }
+
+TEST_CASE("Stints in the snapshot match the stops of the race") {
+    Sim sim = makeRace(1);
+    bool sawPlannedStop = false;
+    for (long steps = 0; !sim.finished() && steps < 50L * 600 * 20; ++steps) {
+        sim.step();
+        for (const CarState& car : sim.snapshot().cars) {
+            if (car.plannedStopLap > 0 && !car.finished && !car.retired) {
+                CHECK(car.plannedStopLap >= car.lapsCompleted); // planned for this lap or later
+                sawPlannedStop = true;
+            }
+        }
+    }
+    REQUIRE(sim.finished());
+    CHECK(sawPlannedStop);
+    for (const CarState& car : sim.snapshot().cars) {
+        CAPTURE(car.entryIndex);
+        REQUIRE_FALSE(car.stints.empty());
+        // A dry race without a red flag: one stint per stop plus the start set.
+        CHECK(static_cast<int>(car.stints.size()) == car.pitStops + 1);
+        CHECK(car.stints.front().startLap == 0);
+        CHECK(car.stints.back().compound == car.compound);
+        int laps = 0;
+        for (std::size_t k = 0; k < car.stints.size(); ++k) {
+            CHECK(car.stints[k].startLap == laps); // each set follows the one before
+            if (k + 1 < car.stints.size()) {
+                CHECK(car.stints[k].laps > 0);
+            }
+            laps += car.stints[k].laps;
+        }
+        CHECK(laps == car.lapsCompleted);
+        CHECK(car.plannedStopLap == 0); // nothing planned after the flag
+    }
+}

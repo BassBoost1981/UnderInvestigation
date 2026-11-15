@@ -717,6 +717,10 @@ Compound Sim::chooseCompound(int i) const {
 
 void Sim::fitTyres(int i, Compound compound) {
     Car& car = cars_[i];
+    if (car.lapsCompleted > car.stintStartLap) { // a set changed before it did a lap does not count as a stint
+        car.pastStints.push_back(Stint{car.compound, car.stintStartLap, car.lapsCompleted - car.stintStartLap});
+    }
+    car.stintStartLap = car.lapsCompleted;
     car.compound = compound;
     car.tyreWear = 0.0;
     car.compoundsUsed |= 1u << static_cast<int>(compound);
@@ -1902,6 +1906,9 @@ void Sim::buildSnapshot() {
         cs.compound = car.compound;
         cs.tyreAge = static_cast<int>(car.tyreWear);
         cs.pitStops = car.stops;
+        cs.stints = car.pastStints;
+        cs.stints.push_back(Stint{car.compound, car.stintStartLap, car.lapsCompleted - car.stintStartLap});
+        cs.plannedStopLap = car.plannedStopLap == std::numeric_limits<int>::max() || car.finished || car.retired ? 0 : car.plannedStopLap;
         cs.compoundsUsed = static_cast<int>(std::bitset<3>(car.compoundsUsed).count());
         cs.trackLimitStrikes = car.trackLimitStrikes;
         cs.unlapping = car.unlapping;

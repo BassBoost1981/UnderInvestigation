@@ -1,0 +1,7 @@
+# M12.7 check (testring, seed 1, 1600x900): the strategy card after the first stops, and a click on a row.
+# Coordinates come from the 'Strategy: row' lines in the log.
+# Run with -UISimSeed=1 -UISimTimeScale=500 -UISimScript=TestScripts/strategy.txt -UISimQuitWhenDone
+2390 timescale 20
+2400 click 165 751   # row 3: the TV camera follows that car
+2402 screenshot strategy
+2404 timescale 500

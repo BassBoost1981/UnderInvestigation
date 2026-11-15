@@ -7,6 +7,14 @@ namespace uisim { class Sim; }
 enum class EUISimPenalty : uint8 { None, Warning, FiveSeconds, TenSeconds, DriveThrough, StopAndGo, Disqualification };
 
 // Unreal-side copies of the core snapshot (see core/include/uisim/Snapshot.h).
+// One set of tyres (core Stint, M12.7): fitted after StartLap laps, used for Laps laps (current set: so far).
+struct FUISimStint
+{
+	int32 Compound = 1; // 0 soft, 1 medium, 2 hard, 3 intermediate, 4 wet
+	int32 StartLap = 0;
+	int32 Laps = 0;
+};
+
 struct FUISimCar
 {
 	double TimePenalty = 0.0;
@@ -21,6 +29,8 @@ struct FUISimCar
 	int32 Compound = 1;      // 0 soft, 1 medium, 2 hard, 3 intermediate, 4 wet
 	int32 TyreAge = 0;       // laps on the current set
 	int32 PitStops = 0;
+	TArray<FUISimStint> Stints; // oldest first, the last one is the current set (M12.7)
+	int32 PlannedStopLap = 0;   // the team plans to stop at the end of this lap, 0 = none planned
 	int32 TrackLimitStrikes = 0;
 	bool bBlackWhiteFlag = false;
 	int32 EntryIndex = 0;

@@ -19,7 +19,7 @@
 #include "UnrealClient.h"
 #include "UIIncidentWidget.h"
 #include "UIRatingWidget.h"
-#include "UIRadioWidget.h"
+#include "UIStrategyWidget.h"
 #include "UITrackMapWidget.h"
 #include "UIReviewWidget.h"
 #include "UIMessagesWidget.h"
@@ -254,7 +254,7 @@ void AUIRaceDirector::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	if (EndPlayReason == EEndPlayReason::Destroyed)
 	{
 		// Leaving a race for the season screen: its panels and cameras go with it.
-		UUserWidget* Panels[] = {Desk, TimingTower, IncidentPanel, RatingPanel, RadioPanel, TrackMap, ReviewPanel, MessagesPanel, ControlPanel,
+		UUserWidget* Panels[] = {Desk, TimingTower, IncidentPanel, RatingPanel, StrategyPanel, TrackMap, ReviewPanel, MessagesPanel, ControlPanel,
 			WeatherPanel, SeasonPanel};
 		if (UGameViewportClient* ViewportClient = GetWorld() ? GetWorld()->GetGameViewport() : nullptr)
 		{
@@ -590,9 +590,9 @@ void AUIRaceDirector::Tick(float DeltaSeconds)
 		RatingPanel = CreateWidget<UUIRatingWidget>(Player, UUIRatingWidget::StaticClass());
 		RatingPanel->SetRaceDirector(this);
 		RatingPanel->AddToViewport();
-		RadioPanel = CreateWidget<UUIRadioWidget>(Player, UUIRadioWidget::StaticClass());
-		RadioPanel->SetRaceDirector(this);
-		RadioPanel->AddToViewport();
+		StrategyPanel = CreateWidget<UUIStrategyWidget>(Player, UUIStrategyWidget::StaticClass());
+		StrategyPanel->SetRaceDirector(this);
+		StrategyPanel->AddToViewport();
 		TrackMap = CreateWidget<UUITrackMapWidget>(Player, UUITrackMapWidget::StaticClass());
 		TrackMap->SetRaceDirector(this);
 		TrackMap->AddToViewport();
