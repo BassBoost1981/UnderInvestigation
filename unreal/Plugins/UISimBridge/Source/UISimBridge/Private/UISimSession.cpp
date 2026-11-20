@@ -386,6 +386,27 @@ double FUISimSession::BoxOffset(int32 EntryIndex) const
 	return Sim ? Sim->boxOffset(EntryIndex) : 0.0;
 }
 
+FUISimVerdict FUISimSession::ExpectedVerdict(int32 IncidentId) const
+{
+	FUISimVerdict Out;
+	Out.IncidentId = IncidentId;
+	if (!Sim)
+	{
+		return Out;
+	}
+	for (const uisim::Incident& Incident : Sim->incidents())
+	{
+		if (Incident.id == IncidentId)
+		{
+			const uisim::ExpectedVerdict Expected = uisim::expectedVerdict(Incident);
+			Out.Car = Expected.car;
+			Out.Penalty = static_cast<EUISimPenalty>(Expected.penalty);
+			break;
+		}
+	}
+	return Out;
+}
+
 void FUISimSession::HoldHearing(int32 IncidentId)
 {
 	if (!Sim)

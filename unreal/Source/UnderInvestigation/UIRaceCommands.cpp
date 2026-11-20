@@ -88,6 +88,7 @@ bool AUIRaceDirector::CanExecute(const FUICommand& Command) const
 		const int32 Id = SimSession.Incidents()[Index].Id;
 		return !SimSession.VerdictFor(Id) && !SimSession.IsHeard(Id);
 	}
+	case EUICommand::StandInVerdicts: return Snapshot.bFinished && !bReviewing;
 	case EUICommand::NoteIncident:
 		return SimSession.Incidents().IsValidIndex(Command.Index) && !SimSession.VerdictFor(SimSession.Incidents()[Command.Index].Id)
 			&& !NotedIncidents.Contains(SimSession.Incidents()[Command.Index].Id);
@@ -148,6 +149,7 @@ FString AUIRaceDirector::CommandName(const FUICommand& Command) const
 	case EUICommand::HoldHearing: return bReviewing ? FString(TEXT("hearing")) : FString::Printf(TEXT("hearing %d"), Command.Index + 1);
 	case EUICommand::NoteIncident: return FString::Printf(TEXT("note %d"), Command.Index + 1);
 	case EUICommand::DismissIncident: return FString::Printf(TEXT("dismiss %d"), Command.Index + 1);
+	case EUICommand::StandInVerdicts: return TEXT("standin");
 	case EUICommand::AbortStart: return TEXT("abort_start");
 	case EUICommand::ExtraFormationLap: return TEXT("extra_lap");
 	case EUICommand::StartSeasonRace: return TEXT("season_start");
@@ -215,6 +217,21 @@ bool AUIRaceDirector::Execute(const FUICommand& Command)
 	}
 	case EUICommand::HoldHearing: SimSession.HoldHearing(SimSession.Incidents()[bReviewing ? ReviewIncidentIndex : Command.Index].Id); break;
 	case EUICommand::NoteIncident: NotedIncidents.Add(SimSession.Incidents()[Command.Index].Id); break;
+	case EUICommand::StandInVerdicts:
+		// Same steps as "uisim_runner --verdicts heard": per open incident a hearing, then the expected verdict.
+		for (const FUISimIncident& Incident : TArray<FUISimIncident>(SimSession.Incidents()))
+		{
+			if (SimSession.VerdictFor(Incident.Id))
+			{
+				continue;
+			}
+			SimSession.HoldHearing(Incident.Id);
+			const FUISimVerdict Expected = SimSession.ExpectedVerdict(Incident.Id);
+			SimSession.IssueVerdict(Incident.Id, Expected.Car, Expected.Penalty);
+			UE_LOG(LogUISim, Display, TEXT("Verdict #%d: %s %s (stand-in, after a hearing)"), Incident.Id, *PenaltyName(Expected.Penalty),
+				Expected.Car >= 0 ? *SimSession.Entries()[Expected.Car].Code : TEXT(""));
+		}
+		break;
 	case EUICommand::DismissIncident:
 	{
 		const FUISimIncident& Incident = SimSession.Incidents()[Command.Index];
@@ -442,6 +459,7 @@ bool AUIRaceDirector::LoadScript(const FString& File)
 		}
 		else if (Name == TEXT("hearing")) { C.Type = EUICommand::HoldHearing; C.Index = Arg.IsEmpty() ? -1 : Number - 1; }
 		else if (Name == TEXT("note")) { C.Type = EUICommand::NoteIncident; C.Index = Number - 1; }
+		else if (Name == TEXT("standin")) { C.Type = EUICommand::StandInVerdicts; }
 		else if (Name == TEXT("dismiss")) { C.Type = EUICommand::DismissIncident; C.Index = Number - 1; }
 		else if (Name == TEXT("abort_start")) { C.Type = EUICommand::AbortStart; }
 		else if (Name == TEXT("extra_lap")) { C.Type = EUICommand::ExtraFormationLap; }

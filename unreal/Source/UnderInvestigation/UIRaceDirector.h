@@ -60,7 +60,8 @@ enum class EUICommand : uint8
 	AbortStart,            // before the start signal: begin the procedure again (B5.8)
 	ExtraFormationLap,     // before the start signal: one more formation lap (B5.9)
 	NoteIncident,          // Index into the incident list: seen, decided later (M12.6, display only)
-	DismissIncident        // Index into the incident list: no further action, without a review (M12.6)
+	DismissIncident,       // Index into the incident list: no further action, without a review (M12.6)
+	StandInVerdicts        // after the flag: a stand-in player hears and decides every open incident (checks only, M12.9)
 };
 
 struct FUICommand

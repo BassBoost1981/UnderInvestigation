@@ -242,6 +242,8 @@ public:
 	void AbortStart();
 	void ExtraFormationLap();
 	const FUISimVerdict* VerdictFor(int32 IncidentId) const;
+	// The verdict the ground truth asks for (core expectedVerdict); for the stand-in player of automated checks only (M12.9).
+	FUISimVerdict ExpectedVerdict(int32 IncidentId) const;
 	FUISimRating Rating() const;
 
 	// Replay of the recorded race, interpolated between ticks. OutCars is indexed by entry.

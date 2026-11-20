@@ -1,7 +1,7 @@
 // Console runner: simulates a full race without graphics and prints the result.
 // Usage: uisim_runner [--laps N] [--seed S] [--track file.json] [--entries file.json] [--weather file.json]
 //        uisim_runner --season file.json [--seed S] [--entries file.json] [--career save.json] [--races N]
-//                     [--verdicts none|expected]   (M10.4/M10.5: a season, optionally continued from a save file)
+//                     [--verdicts none|expected|heard]   (M10.4/M10.5: a season, optionally continued from a save file)
 
 #include "uisim/DataDir.h"
 #include "uisim/Career.h"
@@ -10,6 +10,7 @@
 #include "uisim/Season.h"
 #include "uisim/Sim.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <exception>
@@ -62,10 +63,15 @@ void printNames(const char* title, const std::vector<int>& list, const std::vect
 
 // Runs the races of the calendar as a career and prints the championship after each one.
 // With a career file the season continues from it and is saved after every race (M10.5).
-// `expectedVerdicts`: a stand-in player gives every incident the verdict the ground truth asks for.
+// `verdicts`: a stand-in player gives every incident the verdict the ground truth asks for, at once during
+// the race ("expected"), or after the flag and after a hearing of each incident ("heard", M12.9: the same
+// steps as the Unreal script command `standin`, which steps the finished sim after every command).
+enum class VerdictMode { None, Expected, Heard };
+
 int runSeason(const std::filesystem::path& seasonPath, const std::filesystem::path& entriesPath,
               const std::filesystem::path& dataDir, std::uint64_t seed, const std::filesystem::path& careerPath,
-              int maxRaces, bool expectedVerdicts) {
+              int maxRaces, VerdictMode verdicts) {
+    const bool expectedVerdicts = verdicts == VerdictMode::Expected;
     const SeasonCalendar calendar = loadSeason(seasonPath);
     const std::vector<Entry> entries = loadEntries(entriesPath);
     const RaceRules rules = loadRules(dataDir / "rules" / "fia-f1-2026.json");
@@ -103,6 +109,28 @@ int runSeason(const std::filesystem::path& seasonPath, const std::filesystem::pa
             return 1;
         }
         judge();
+        if (verdicts == VerdictMode::Heard) {
+            for (const Incident& incident : std::vector<Incident>(sim.incidents())) {
+                const bool decided = std::any_of(sim.verdicts().begin(), sim.verdicts().end(),
+                                                 [&](const Verdict& v) { return v.incidentId == incident.id; });
+                if (decided) {
+                    continue;
+                }
+                Command hearing;
+                hearing.type = Command::Type::HoldHearing;
+                hearing.incidentId = incident.id;
+                sim.command(hearing);
+                sim.step();
+                const ExpectedVerdict expected = expectedVerdict(incident);
+                Command verdict;
+                verdict.type = Command::Type::IssueVerdict;
+                verdict.incidentId = incident.id;
+                verdict.car = expected.car;
+                verdict.penalty = expected.penalty;
+                sim.command(verdict);
+                sim.step();
+            }
+        }
         sim.step(); // verdicts on incidents raised at the flag still count
         finishCareerRace(career, calendar, sim, entries, rules);
         if (!careerPath.empty()) {
@@ -148,7 +176,7 @@ int main(int argc, char** argv) {
     std::filesystem::path seasonPath;  // empty = a single race
     std::filesystem::path careerPath;  // season only: save file to continue from and to write
     int maxRaces = 0;                  // season only: races to run now, 0 = all that are left
-    bool expectedVerdicts = false;     // season only: a stand-in player judges every incident
+    VerdictMode verdicts = VerdictMode::None; // season only: a stand-in player judges every incident
 
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
@@ -180,10 +208,10 @@ int main(int argc, char** argv) {
             } else if (arg == "--races") {
                 maxRaces = std::stoi(value);
             } else if (arg == "--verdicts") {
-                if (value != "none" && value != "expected") {
+                if (value != "none" && value != "expected" && value != "heard") {
                     throw std::invalid_argument("verdicts");
                 }
-                expectedVerdicts = value == "expected";
+                verdicts = value == "expected" ? VerdictMode::Expected : value == "heard" ? VerdictMode::Heard : VerdictMode::None;
             } else {
                 std::fprintf(stderr, "Unknown option %s\n", arg.c_str());
                 printUsage();
@@ -197,7 +225,7 @@ int main(int argc, char** argv) {
 
     try {
         if (!seasonPath.empty()) {
-            return runSeason(seasonPath, entriesPath, dataDir, config.seed, careerPath, maxRaces, expectedVerdicts);
+            return runSeason(seasonPath, entriesPath, dataDir, config.seed, careerPath, maxRaces, verdicts);
         }
         const auto start = std::chrono::steady_clock::now();
         if (!weatherPath.empty()) {

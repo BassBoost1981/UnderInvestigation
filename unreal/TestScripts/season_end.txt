@@ -1,0 +1,6 @@
+# M12.9 check (1600x900): the season screen after the last race (SEASON COMPLETE, champions, NEW SEASON).
+# Run after season_standin.txt, on its finished save file, without -UISimNewCareer:
+#   -UISimSeason=private/season-2026.json -UISimSeed=1 -UISimCareer=standin -UISimTimeScale=500
+#   -UISimScript=TestScripts/season_end.txt -UISimQuitWhenDone
+-1 screenshot season_end
+-1 screenshot season_end_again   # the first frame may come before the layout; the second one is drawn for sure

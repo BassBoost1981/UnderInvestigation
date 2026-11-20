@@ -1,0 +1,55 @@
+# M12.9 check: a whole season on the desk, twelve races per run, with a stand-in player who hears and decides every
+# incident after the flag (command standin, the same steps as "uisim_runner --verdicts heard"). Saved after every race.
+# Run twice for a season of 24 races: first with -UISimNewCareer, then without it, so the second run loads the save
+# file in the middle of the season:
+#   -UISimSeason=private/season-2026.json -UISimSeed=1 -UISimCareer=standin [-UISimNewCareer] -UISimTimeScale=500
+#   -UISimScript=TestScripts/season_standin.txt -UISimQuitWhenDone
+# The last log lines "SEASON Drivers/Teams" match "uisim_runner --season data/seasons/private/season-2026.json --seed 1
+# --verdicts heard".
+-1 season_start
+99000 standin
+99001 season_back
+---
+-1 season_start
+99000 standin
+99001 season_back
+---
+-1 season_start
+99000 standin
+99001 season_back
+---
+-1 season_start
+99000 standin
+99001 season_back
+---
+-1 season_start
+99000 standin
+99001 season_back
+---
+-1 season_start
+99000 standin
+99001 season_back
+---
+-1 season_start
+99000 standin
+99001 season_back
+---
+-1 season_start
+99000 standin
+99001 season_back
+---
+-1 season_start
+99000 standin
+99001 season_back
+---
+-1 season_start
+99000 standin
+99001 season_back
+---
+-1 season_start
+99000 standin
+99001 season_back
+---
+-1 season_start
+99000 standin
+99001 season_back
