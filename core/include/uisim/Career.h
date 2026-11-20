@@ -70,6 +70,10 @@ std::vector<int> careerRaceEntries(const Career& career);
 // a little slower, and what he scores counts for the team only.
 Entry reserveDriver(const Entry& regular);
 
+// Name of the driver in `place` (0-based) on the podium of a finished race: the reserve's name
+// when that car was driven by the reserve of a suspended driver.
+std::string podiumName(const std::vector<Entry>& entries, const CareerRace& race, std::size_t place);
+
 // The career after its last race, ready for the next season on the same calendar: fresh
 // championships and the next seed; penalty points and a pending suspension carry over.
 Career nextSeason(const Career& career, const SeasonCalendar& calendar, const std::vector<Entry>& entries);

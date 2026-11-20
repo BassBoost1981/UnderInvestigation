@@ -147,9 +147,20 @@ TArray<FUISimSeasonRace> FUISimCareer::Calendar() const
 		{
 			const uisim::CareerRace& Done = State->Career.races[Index];
 			Line.Rating = Done.overall;
-			if (!Done.podium.empty())
+			Line.Fairness = Done.fairness;
+			Line.Consistency = Done.consistency;
+			Line.RaceQuality = Done.raceQuality;
+			Line.Safety = Done.safety;
+			Line.Incidents = Done.incidents;
+			Line.Decided = Done.decided;
+			Line.Overturned = Done.overturned;
+			for (size_t Place = 0; Place < Done.podium.size(); ++Place)
 			{
-				Line.Winner = CareerText(State->Entries[Done.podium.front()].name);
+				Line.Podium.Add(CareerText(uisim::podiumName(State->Entries, Done, Place)));
+			}
+			if (Line.Podium.Num() > 0)
+			{
+				Line.Winner = Line.Podium[0];
 			}
 			for (int Entry : Done.suspended)
 			{

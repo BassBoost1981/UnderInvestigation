@@ -382,3 +382,14 @@ TEST_CASE("A save file of the old format is refused (M11.6)") {
     CHECK_THROWS(loadCareer(file, calendar, entries));
     std::filesystem::remove(file);
 }
+
+TEST_CASE("The podium names the reserve when a suspended driver's car finished (M12.8)") {
+    const std::vector<Entry> entries = grid();
+    CareerRace race;
+    race.podium = {5, 3, 7};
+    race.suspended = {3};
+    CHECK(podiumName(entries, race, 0) == entries[5].name);
+    CHECK(podiumName(entries, race, 1) == reserveDriver(entries[3]).name);
+    CHECK(podiumName(entries, race, 1) != entries[3].name);
+    CHECK(podiumName(entries, race, 2) == entries[7].name);
+}

@@ -1,7 +1,7 @@
-# M11.7 check (testring, seed 1, 1600x900): a hearing in the review, and a verdict set aside on review.
+# M11.7 check (updated M12.8; testring, seed 1, 1600x900): a hearing in the review, and a verdict set aside on review.
 # Run with -UISimSeed=1 -UISimTimeScale=500 -UISimScript=TestScripts/hearing.txt -UISimQuitWhenDone
 # After the flag: incident 1 is heard (picture of the dialog with evidence and statements) and decided;
-# incident 2 gets a disqualification without a hearing, which the review sets aside (KASSIERT on the rating).
+# incident 2 gets a disqualification without a hearing, which the review sets aside (OVERTURNED on the rating).
 99000 review 1
 99001 hearing
 99002 incident latest

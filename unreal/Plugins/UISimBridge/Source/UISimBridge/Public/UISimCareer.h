@@ -14,8 +14,17 @@ struct FUISimSeasonRace
 	bool bRain = false;  // the calendar gives this race a weather plan
 	bool bDone = false;
 	double Rating = 0.0; // the player's rating of this race (0..100), when done
-	FString Winner;
+	FString Winner;         // Podium[0]
 	TArray<FString> SatOut; // suspended drivers who missed this race
+	// The player's rating of this race as stored (0..1), when done.
+	double Fairness = 0.0;
+	double Consistency = 0.0;
+	double RaceQuality = 0.0;
+	double Safety = 0.0;
+	int32 Incidents = 0;
+	int32 Decided = 0;
+	int32 Overturned = 0; // verdicts set aside on review
+	TArray<FString> Podium; // places 1 to 3, a reserve driver under the reserve name
 };
 
 // One line of a championship, best first.

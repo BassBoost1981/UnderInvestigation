@@ -1,11 +1,14 @@
-# M8.8 check (testring, seed 1, 1600x900): pit lane camera live and in the review.
-# Incident #8 is an unsafe release at 44:37.95 (ACH/MOR; the log lists every incident). Run with -UISimTimeScale=20.
+# M8.8 check (updated M12.8; testring, seed 1, 1600x900): pit lane camera live and in the review.
+# Live: FER drives through the pit lane at 44:37 (IN FRAME: FER). Review: incident #5 is pit lane speeding
+# at 1:05:55.30 (MAR; the log lists every incident). Run with -UISimTimeScale=20.
 2600 timescale 20
 2655 camera 6           # pit lane camera
 2677 screenshot pit_live
-2700 review 8           # starts on the pit lane camera
-2701 review_at 0
-2702 pause
-2704 screenshot pit_review
-2706 review_end
-2707 timescale 500
+2678 timescale 500
+3940 timescale 20
+3962 review 5           # starts on the pit lane camera
+3963 review_at 0
+3964 pause
+3966 screenshot pit_review
+3968 review_end
+3969 timescale 500

@@ -1,4 +1,4 @@
-# M12.6 check (testring, seed 1, 1600x900): review and verdict by synthetic clicks.
+# M12.6 check (updated M12.8; testring, seed 1, 1600x900): review and verdict by synthetic clicks.
 # Same steps as incident_review_commands.txt; both races must end identically, with the same verdict.
 # Run with -UISimTimeScale=20 so frames are drawn between the clicks.
 300 click 1312 579   # card of the newest incident (#2, collision KEL/OKA): INVESTIGATE
@@ -11,11 +11,9 @@
 307 click 1119 700   # CONFIRM
 308 click 1141 621   # END
 309 timescale 500   # clicks need drawn frames in between: run with -UISimTimeScale=20 up to here
-# After the flag: every incident gets no action (17 incidents, two pages), then page through the rating.
+# After the flag: every other incident gets no action (10 incidents; #2 is decided already), then the rating's NEXT button.
 99000 review 1
 99001 verdict none
-99002 review 2
-99003 verdict none
 99004 review 3
 99005 verdict none
 99006 review 4
@@ -32,24 +30,11 @@
 99017 verdict none
 99018 review 10
 99019 verdict none
-99020 review 11
-99021 verdict none
-99022 review 12
-99023 verdict none
-99024 review 13
-99025 verdict none
-99026 review 14
-99027 verdict none
-99028 review 15
-99029 verdict none
-99029.2 review 16
-99029.4 verdict none
-99029.6 review 17
-99029.8 verdict none
 99030 review_end
 99031 incident latest  # wait two frames: the rating is laid out again after the review
 99032 incident latest
-99033 click 595 688   # rating: WEITER > (page 2)
+99033 click 1211 746  # rating: NEXT; the log names it ("Rating: 'PREV' at .., 'NEXT' at ..").
+                      # With 10 incidents the rating has one page only (PAGE 1/1), so the click changes nothing.
 99034 incident latest
-99035 screenshot      # rating screen, page 2
+99035 screenshot      # rating screen
 99036 incident latest  # the screenshot is written before the game quits

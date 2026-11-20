@@ -589,7 +589,7 @@ void AUIRaceDirector::Tick(float DeltaSeconds)
 		IncidentPanel->AddToViewport();
 		RatingPanel = CreateWidget<UUIRatingWidget>(Player, UUIRatingWidget::StaticClass());
 		RatingPanel->SetRaceDirector(this);
-		RatingPanel->AddToViewport();
+		RatingPanel->AddToViewport(5); // above the whole desk: dims it and takes the clicks
 		StrategyPanel = CreateWidget<UUIStrategyWidget>(Player, UUIStrategyWidget::StaticClass());
 		StrategyPanel->SetRaceDirector(this);
 		StrategyPanel->AddToViewport();

@@ -101,6 +101,12 @@ Entry reserveDriver(const Entry& regular) {
     return reserve;
 }
 
+std::string podiumName(const std::vector<Entry>& entries, const CareerRace& race, std::size_t place) {
+    const int entry = race.podium.at(place);
+    const Entry& regular = entries.at(entry);
+    return contains(race.suspended, entry) ? reserveDriver(regular).name : regular.name;
+}
+
 Career nextSeason(const Career& career, const SeasonCalendar& calendar, const std::vector<Entry>& entries) {
     Career next = newCareer(calendar, entries, career.seed + 1);
     next.penaltyPoints = career.penaltyPoints;

@@ -112,7 +112,7 @@ int runSeason(const std::filesystem::path& seasonPath, const std::filesystem::pa
         std::printf("\nRace %d: %s (%s, %d laps, %.1f km)\n", k + 1, race.name.c_str(), sim.track().name().c_str(), laps,
                     laps * sim.track().length() / 1000.0);
         for (std::size_t p = 0; p < race.podium.size(); ++p) {
-            std::printf("  %zu. %-18s %s\n", p + 1, entries[race.podium[p]].name.c_str(), entries[race.podium[p]].team.c_str());
+            std::printf("  %zu. %-18s %s\n", p + 1, uisim::podiumName(entries, race, p).c_str(), entries[race.podium[p]].team.c_str());
         }
         std::printf("  Rating %.1f (incidents %d, decided %d, set aside on review %d)\n", race.overall, race.incidents,
                     race.decided, race.overturned);

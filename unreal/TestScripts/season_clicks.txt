@@ -1,9 +1,9 @@
-# M10.6 check (1600x900): the two season buttons by mouse click. A fresh career of the example season:
+# M10.6 check (updated M12.8; 1600x900): the two season buttons by mouse click. A fresh career of the example season:
 # run with -UISimSeason=example.json -UISimSeed=4 -UISimCareer=check_clicks -UISimNewCareer -UISimTimeScale=500
 #          -UISimScript=TestScripts/season_clicks.txt -UISimQuitWhenDone
-# The log names the button positions ("Season: 'RENNEN STARTEN' at", "Rating: 'ZUR SAISON' at").
+# The log names the button positions ("Season: 'START RACE' at", "Rating: 'TO SEASON' at").
 # Same race and same standings as the first part of season_two_races.txt.
--1 click 122 111
-99001 click 716 583
+-1 click 1415 42       # season: START RACE
+99001 click 1192 746   # rating: TO SEASON
 ---
 -1 screenshot season_clicks_after

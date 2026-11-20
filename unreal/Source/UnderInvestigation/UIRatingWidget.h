@@ -6,11 +6,10 @@
 
 class AUIRaceDirector;
 class UBorder;
-class UTextBlock;
 
 // Rating screen after the flag: score per category and, for every incident,
 // the verdict given next to what really happened (ground truth revealed).
-// Buttons page through the incidents (M8.7).
+// Buttons page through the incidents (M8.7). Drawn as a card in the style of the desk (M12.8).
 UCLASS()
 class UUIRatingWidget : public UUserWidget
 {
@@ -32,12 +31,8 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UBorder> Panel;
-	UPROPERTY()
-	TObjectPtr<UTextBlock> Body;
-	UPROPERTY()
-	TObjectPtr<UBorder> ButtonArea;
 
 	int32 Page = 0;
 	int32 PageCount = 1;
-	mutable FVector2D LoggedAt = FVector2D(-1.0, -1.0); // button area position last logged
+	mutable FVector2D LoggedAt = FVector2D(-1.0, -1.0); // viewport pixels of the NEXT button last logged
 };

@@ -2,38 +2,40 @@
 
 #include "UIRaceDirector.h"
 #include "UISimCareer.h"
+#include "UIStyle.h"
 
 #include "Blueprint/WidgetTree.h"
+#include "Brushes/SlateRoundedBoxBrush.h"
 #include "Components/Border.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
-#include "Components/HorizontalBox.h"
-#include "Components/HorizontalBoxSlot.h"
-#include "Components/SizeBox.h"
-#include "Components/TextBlock.h"
-#include "Components/VerticalBox.h"
-#include "Components/VerticalBoxSlot.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
+#include "Fonts/FontMeasure.h"
+#include "Framework/Application/SlateApplication.h"
 #include "Rendering/DrawElements.h"
-#include "Styling/CoreStyle.h"
 #include "Widgets/SViewport.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogUISim, Log, All); // same category name as UIRaceDirector.cpp
 
 namespace
 {
-	// The one button (in ButtonArea coordinates): start the next race, or a new season after the last one.
-	const FBox2D StartButton(FVector2D(0.0, 4.0), FVector2D(220.0, 34.0));
-}
+	// The one button, in the right card of the top bar: start the next race, or a new season after the last one.
+	const FBox2D StartButton(UIStyle::TopWeather.Min + FVector2D(16.0, 16.0), UIStyle::TopWeather.Max - FVector2D(16.0, 16.0));
 
-UTextBlock* UUISeasonWidget::MakeText(int32 Size, const FLinearColor& Color)
-{
-	UTextBlock* Text = WidgetTree->ConstructWidget<UTextBlock>();
-	Text->SetFont(FCoreStyle::GetDefaultFontStyle("Mono", Size));
-	Text->SetColorAndOpacity(FSlateColor(Color));
-	Text->SetVisibility(ESlateVisibility::HitTestInvisible);
-	return Text;
+	// The three cards below the top bar, on the columns of the desk.
+	const FBox2D CalendarCard(UIStyle::TimingCard.Min, FVector2D(UIStyle::TimingCard.Max.X, 1066.0));
+	const FBox2D DriversCard(FVector2D(771.0, 98.0), FVector2D(1406.0, 1066.0));
+	const FBox2D TeamsCard(FVector2D(1419.0, 98.0), FVector2D(1906.0, 1066.0));
+	constexpr double BottomMargin = 12.0; // below the last row of a card
+
+	const FLinearColor Separator = UIStyle::Rgb(29, 30, 34);
+	const FLinearColor RainBlue = UIStyle::Rgb(80, 150, 255);
+
+	FLinearColor Threshold(double Percent)
+	{
+		return Percent >= 75.0 ? UIStyle::Green : Percent >= 50.0 ? UIStyle::Yellow : UIStyle::Red;
+	}
 }
 
 TSharedRef<SWidget> UUISeasonWidget::RebuildWidget()
@@ -44,154 +46,287 @@ TSharedRef<SWidget> UUISeasonWidget::RebuildWidget()
 		WidgetTree->RootWidget = Canvas;
 
 		// Covers the whole view: there is no race to look at between the races.
-		UBorder* Panel = WidgetTree->ConstructWidget<UBorder>();
-		Panel->SetBrushColor(FLinearColor(0.01f, 0.012f, 0.02f, 0.97f));
-		Panel->SetPadding(FMargin(36.0f, 28.0f));
+		Panel = WidgetTree->ConstructWidget<UBorder>();
+		Panel->SetBrushColor(UIStyle::Background);
 		UCanvasPanelSlot* PanelSlot = Canvas->AddChildToCanvas(Panel);
 		PanelSlot->SetAnchors(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
 		PanelSlot->SetOffsets(FMargin(0.0f));
-
-		UVerticalBox* Column = WidgetTree->ConstructWidget<UVerticalBox>();
-		Panel->SetContent(Column);
-		Header = MakeText(15, FLinearColor::White);
-		Column->AddChildToVerticalBox(Header)->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 14.0f));
-
-		USizeBox* Box = WidgetTree->ConstructWidget<USizeBox>();
-		Box->SetWidthOverride(StartButton.Max.X);
-		Box->SetHeightOverride(StartButton.Max.Y + 4.0);
-		ButtonArea = WidgetTree->ConstructWidget<UBorder>();
-		ButtonArea->SetBrushColor(FLinearColor(0.0f, 0.0f, 0.0f, 0.01f)); // visible, so it takes the clicks
-		Box->SetContent(ButtonArea);
-		UVerticalBoxSlot* BoxSlot = Column->AddChildToVerticalBox(Box);
-		BoxSlot->SetHorizontalAlignment(HAlign_Left);
-		BoxSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 16.0f));
-
-		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
-		Column->AddChildToVerticalBox(Row);
-		CalendarText = MakeText(10, FLinearColor(0.85f, 0.88f, 0.95f));
-		Row->AddChildToHorizontalBox(CalendarText)->SetPadding(FMargin(0.0f, 0.0f, 36.0f, 0.0f));
-		DriversText = MakeText(10, FLinearColor(0.85f, 0.88f, 0.95f));
-		Row->AddChildToHorizontalBox(DriversText)->SetPadding(FMargin(0.0f, 0.0f, 36.0f, 0.0f));
-		TeamsText = MakeText(10, FLinearColor(0.85f, 0.88f, 0.95f));
-		Row->AddChildToHorizontalBox(TeamsText);
 	}
 	return Super::RebuildWidget();
-}
-
-void UUISeasonWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
-{
-	Super::NativeTick(MyGeometry, InDeltaTime);
-	const FUISimCareer& Career = FUISimCareer::Get();
-	if (!Career.IsOpen() || !Header)
-	{
-		return;
-	}
-	const TArray<FUISimSeasonRace> Calendar = Career.Calendar();
-	const TArray<FUISimStanding> Drivers = Career.Drivers();
-	const TArray<FUISimStanding> Teams = Career.Teams();
-	const int32 Next = Career.NextRace();
-
-	FString Head = FString::Printf(TEXT("SAISON  %s\n"), *Career.SeasonName());
-	if (Next > 0)
-	{
-		Head += FString::Printf(TEXT("Rennen gefahren: %d von %d     Deine Saisonwertung: %.1f von 100\n"), Next, Calendar.Num(),
-			Career.Rating());
-	}
-	else
-	{
-		Head += FString::Printf(TEXT("Rennen gefahren: 0 von %d     Noch keine Wertung\n"), Calendar.Num());
-	}
-	if (Calendar.IsValidIndex(Next))
-	{
-		const FUISimSeasonRace& Race = Calendar[Next];
-		const FString Where = Race.Name == Race.Circuit ? Race.Name : Race.Name + TEXT(", ") + Race.Circuit;
-		Head += FString::Printf(TEXT("Naechstes Rennen: %s, %d Runden%s"), *Where, Race.Laps, Race.bRain ? TEXT(", Regen moeglich") : TEXT(""));
-		FString Suspended;
-		for (const FUISimStanding& Driver : Drivers)
-		{
-			if (Driver.bSuspended)
-			{
-				Suspended += (Suspended.IsEmpty() ? TEXT("") : TEXT(", ")) + Driver.Name;
-			}
-		}
-		if (!Suspended.IsEmpty())
-		{
-			Head += TEXT("\nGesperrt in diesem Rennen: ") + Suspended;
-		}
-	}
-	else if (Drivers.Num() > 0 && Teams.Num() > 0)
-	{
-		Head += FString::Printf(TEXT("Die Saison ist zu Ende. Weltmeister: %s, Konstrukteurs-Weltmeister: %s"), *Drivers[0].Name,
-			*Teams[0].Name);
-	}
-	Header->SetText(FText::FromString(Head));
-
-	FString Races = TEXT("KALENDER                                      Runden        Wertung  Sieger\n");
-	for (int32 Index = 0; Index < Calendar.Num(); ++Index)
-	{
-		const FUISimSeasonRace& Race = Calendar[Index];
-		Races += FString::Printf(TEXT("%s%2d  %-38s %4d  %-5s"), Index == Next ? TEXT(">") : TEXT(" "), Index + 1, *Race.Name.Left(38),
-			Race.Laps, Race.bRain ? TEXT("REGEN") : TEXT(""));
-		if (Race.bDone)
-		{
-			Races += FString::Printf(TEXT("  %5.1f    %s"), Race.Rating, *Race.Winner);
-			if (Race.SatOut.Num() > 0)
-			{
-				Races += TEXT("  (gesperrt: ") + FString::Join(Race.SatOut, TEXT(", ")) + TEXT(")");
-			}
-		}
-		Races += TEXT("\n");
-	}
-	CalendarText->SetText(FText::FromString(Races));
-
-	FString DriverLines = TEXT("FAHRER-WM                                   Punkte Siege  Strafpunkte\n");
-	for (int32 Index = 0; Index < Drivers.Num(); ++Index)
-	{
-		const FUISimStanding& Driver = Drivers[Index];
-		DriverLines += FString::Printf(TEXT("%2d. %-18s %-20s %5d %5d  %5d%s\n"), Index + 1, *Driver.Name.Left(18), *Driver.Team.Left(20),
-			Driver.Points, Driver.Wins, Driver.PenaltyPoints, Driver.bSuspended ? TEXT("  GESPERRT") : TEXT(""));
-	}
-	DriversText->SetText(FText::FromString(DriverLines));
-
-	FString TeamLines = TEXT("TEAM-WM                    Punkte Siege\n");
-	for (int32 Index = 0; Index < Teams.Num(); ++Index)
-	{
-		TeamLines += FString::Printf(TEXT("%2d. %-22s %5d %5d\n"), Index + 1, *Teams[Index].Name.Left(22), Teams[Index].Points,
-			Teams[Index].Wins);
-	}
-	TeamsText->SetText(FText::FromString(TeamLines));
 }
 
 int32 UUISeasonWidget::NativePaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry, const FSlateRect& MyCullingRect,
 	FSlateWindowElementList& OutDrawElements, int32 LayerId, const FWidgetStyle& InWidgetStyle, bool bParentEnabled) const
 {
 	int32 Layer = Super::NativePaint(Args, AllottedGeometry, MyCullingRect, OutDrawElements, LayerId, InWidgetStyle, bParentEnabled);
-	if (!ButtonArea || ButtonArea->GetCachedGeometry().GetLocalSize().X <= 0.0)
+	const FUISimCareer& Career = FUISimCareer::Get();
+	if (!Career.IsOpen() || !Panel || Panel->GetCachedGeometry().GetLocalSize().X <= 0.0)
 	{
 		return Layer;
 	}
-	const FGeometry& Area = ButtonArea->GetCachedGeometry();
-	const bool bFinished = FUISimCareer::Get().IsFinished();
-	const TCHAR* Label = bFinished ? TEXT("NEUE SAISON") : TEXT("RENNEN STARTEN");
+	static const FSlateRoundedBoxBrush Round16(FLinearColor::White, 16.0f);
+	static const FSlateRoundedBoxBrush Round15(FLinearColor::White, 15.0f);
+	static const FSlateRoundedBoxBrush Capsule(FLinearColor::White, 36.0f); // radius of half the height
+	static const FSlateRoundedBoxBrush ButtonCapsule(FLinearColor::White, StartButton.GetSize().Y / 2.0);
+	const FSlateBrush* White = FCoreStyle::Get().GetBrush("WhiteBrush");
+	const TSharedRef<FSlateFontMeasure> Measure = FSlateApplication::Get().GetRenderer()->GetFontMeasureService();
+	const FGeometry& Area = Panel->GetCachedGeometry(); // design units of the screen
 	++Layer;
-	FSlateDrawElement::MakeBox(OutDrawElements, Layer, Area.ToPaintGeometry(StartButton.GetSize(), FSlateLayoutTransform(1.0f, StartButton.Min)),
-		FCoreStyle::Get().GetBrush("WhiteBrush"), ESlateDrawEffect::None, FLinearColor(0.1f, 0.42f, 0.16f, 0.95f));
-	FSlateDrawElement::MakeText(OutDrawElements, Layer + 1, Area.ToPaintGeometry(StartButton.GetSize(),
-		FSlateLayoutTransform(1.0f, StartButton.Min + FVector2D(14.0, 6.0))), Label, FCoreStyle::GetDefaultFontStyle("Mono", 13),
-		ESlateDrawEffect::None, FLinearColor::White);
+	auto Box = [&](const FVector2D& Min, const FVector2D& Max, const FSlateBrush* Brush, const FLinearColor& Color)
+	{
+		FSlateDrawElement::MakeBox(OutDrawElements, Layer, Area.ToPaintGeometry(Max - Min, FSlateLayoutTransform(1.0f, Min)), Brush,
+			ESlateDrawEffect::None, Color);
+	};
+	// A card of the design: fill with a border one unit wide.
+	auto CardBox = [&](const FBox2D& Rect, const FLinearColor& Fill, bool bCapsule = false)
+	{
+		Box(Rect.Min, Rect.Max, bCapsule ? &Capsule : &Round16, UIStyle::CardBorder);
+		Box(Rect.Min + FVector2D(1.0, 1.0), Rect.Max - FVector2D(1.0, 1.0), bCapsule ? &Capsule : &Round15, Fill);
+	};
+	auto Text = [&](const FVector2D& At, const FString& String, const FSlateFontInfo& Font, const FLinearColor& Color)
+	{
+		FSlateDrawElement::MakeText(OutDrawElements, Layer + 1, Area.ToPaintGeometry(FVector2D(900.0, 40.0), FSlateLayoutTransform(1.0f, At)),
+			String, Font, ESlateDrawEffect::None, Color);
+	};
+	auto Width = [&](const FString& String, const FSlateFontInfo& Font) { return Measure->Measure(String, Font).X; };
+	auto TextRight = [&](double RightEdge, double Y, const FString& String, const FSlateFontInfo& Font, const FLinearColor& Color)
+	{
+		Text(FVector2D(RightEdge - Width(String, Font), Y), String, Font, Color);
+	};
+	// Cut to MaxWidth, with "…" when something is cut.
+	auto Fit = [&](const FString& String, const FSlateFontInfo& Font, double MaxWidth)
+	{
+		if (Width(String, Font) <= MaxWidth)
+		{
+			return String;
+		}
+		FString Cut = String;
+		while (Cut.Len() > 0 && Width(Cut + TEXT("…"), Font) > MaxWidth)
+		{
+			Cut.LeftChopInline(1);
+		}
+		return Cut.TrimEnd() + TEXT("…");
+	};
+	const FSlateFontInfo LabelFont = UIStyle::Font(TEXT("Regular"), 7);
+	const FSlateFontInfo TagFont = UIStyle::Font(TEXT("Bold"), 7);
+	const FSlateFontInfo SubFont = UIStyle::Font(TEXT("Regular"), 8);
+	const FSlateFontInfo RowFont = UIStyle::Font(TEXT("Regular"), 9);
+	const FSlateFontInfo RowBold = UIStyle::Font(TEXT("Bold"), 9);
+	const FSlateFontInfo CardTitleFont = UIStyle::Font(TEXT("Bold"), 11);
+	const FSlateFontInfo ValueFont = UIStyle::Font(TEXT("Bold"), 16);
+	const FSlateFontInfo UnitFont = UIStyle::Font(TEXT("Regular"), 16);
+
+	const TArray<FUISimSeasonRace> Calendar = Career.Calendar();
+	const TArray<FUISimStanding> Drivers = Career.Drivers();
+	const TArray<FUISimStanding> Teams = Career.Teams();
+	const int32 Next = Career.NextRace();
+	const bool bFinished = Career.IsFinished();
+	TArray<FString> Suspended;
+	for (const FUISimStanding& Driver : Drivers)
+	{
+		if (Driver.bSuspended)
+		{
+			Suspended.Add(Driver.Name);
+		}
+	}
+
+	// Cards.
+	for (const FBox2D* Card : {&UIStyle::TopTitle, &UIStyle::TopSession, &UIStyle::TopWeather, &CalendarCard, &DriversCard, &TeamsCard})
+	{
+		CardBox(*Card, UIStyle::Card);
+	}
+	CardBox(UIStyle::TopBanner, UIStyle::Card, true);
+	Layer += 2; // what follows lies on the cards (a layer of its own: Slate does not keep the order within one layer)
+
+	// Title.
+	const FSlateFontInfo TitleFont = UIStyle::Font(TEXT("Bold"), 13, 40);
+	const FVector2D TitleAt = UIStyle::TopTitle.Min + FVector2D(15.0, 19.0);
+	Text(TitleAt, TEXT("RACE CONTROL"), TitleFont, UIStyle::Text);
+	Text(TitleAt + FVector2D(Width(TEXT("RACE CONTROL"), TitleFont) + 8.0, 0.0), TEXT("/ SIM"), UIStyle::Font(TEXT("Regular"), 13, 40), UIStyle::Mute);
+	Text(TitleAt + FVector2D(0.0, 21.0), Fit(TEXT("SEASON · ") + Career.SeasonName().ToUpper(), SubFont, UIStyle::TopTitle.GetSize().X - 30.0),
+		SubFont, UIStyle::Mute);
+
+	// Banner: the next race, or the champions after the last one; label and sub line centred as one group.
+	FString BannerLabel, BannerSub;
+	FLinearColor BannerInk = UIStyle::Text;
+	if (Calendar.IsValidIndex(Next))
+	{
+		BannerLabel = FString::Printf(TEXT("RACE %d OF %d"), Next + 1, Calendar.Num());
+		BannerSub = Calendar[Next].Name;
+	}
+	else
+	{
+		BannerLabel = TEXT("SEASON COMPLETE");
+		BannerInk = UIStyle::Green;
+		if (Drivers.Num() > 0 && Teams.Num() > 0)
+		{
+			BannerSub = FString::Printf(TEXT("Champion: %s · %s"), *Drivers[0].Name, *Teams[0].Name);
+		}
+	}
+	const FSlateFontInfo BannerFont = UIStyle::Font(TEXT("Bold"), 21, 60);
+	const double LabelWidth = Width(BannerLabel, BannerFont);
+	BannerSub = Fit(BannerSub, SubFont, UIStyle::TopBanner.GetSize().X - 72.0 - LabelWidth - 12.0);
+	const double GroupLeft = UIStyle::TopBanner.GetCenter().X - (LabelWidth + 12.0 + Width(BannerSub, SubFont)) / 2.0;
+	Text(FVector2D(GroupLeft, UIStyle::TopBanner.Min.Y + 20.0), BannerLabel, BannerFont, BannerInk);
+	Text(FVector2D(GroupLeft + LabelWidth + 12.0, UIStyle::TopBanner.Min.Y + 30.0), BannerSub, SubFont, UIStyle::Text);
+
+	// Season rating and races run, as the lap and session fields of the desk.
+	const FVector2D RatingAt = UIStyle::TopSession.Min + FVector2D(16.0, 16.0);
+	const FString RatingValue = Next > 0 ? FString::Printf(TEXT("%.1f"), Career.Rating()) : FString(TEXT("—"));
+	const FString Hundred = TEXT(" / 100");
+	Text(RatingAt, TEXT("SEASON RATING"), LabelFont, UIStyle::Mute);
+	Text(RatingAt + FVector2D(0.0, 16.0), RatingValue, ValueFont, Next > 0 ? Threshold(Career.Rating()) : UIStyle::Mute);
+	Text(RatingAt + FVector2D(Width(RatingValue, ValueFont), 16.0), Hundred, UnitFont, UIStyle::Mute);
+	const double RatingWidth = FMath::Max(Width(RatingValue, ValueFont) + Width(Hundred, UnitFont), Width(TEXT("SEASON RATING"), LabelFont));
+	const FVector2D RacesAt = RatingAt + FVector2D(RatingWidth + 22.0, 0.0);
+	const FString Done = FString::FromInt(Next);
+	Text(RacesAt, TEXT("RACES"), LabelFont, UIStyle::Mute);
+	Text(RacesAt + FVector2D(0.0, 16.0), Done, ValueFont, UIStyle::Text);
+	Text(RacesAt + FVector2D(Width(Done, ValueFont), 16.0), FString::Printf(TEXT(" / %d"), Calendar.Num()), UnitFont, UIStyle::Mute);
+
+	// The button: primary, a yellow capsule.
+	const TCHAR* Label = bFinished ? TEXT("NEW SEASON") : TEXT("START RACE");
+	const FSlateFontInfo ButtonFont = UIStyle::Font(TEXT("Bold"), 10);
+	Box(StartButton.Min, StartButton.Max, &ButtonCapsule, UIStyle::Yellow);
+	Text(StartButton.GetCenter() - Measure->Measure(Label, ButtonFont) / 2.0, Label, ButtonFont, UIStyle::Ink);
+
+	// Calendar: two lines per race, the second one with the rating details once the race is run.
+	{
+		const FBox2D& Card = CalendarCard;
+		const double X = Card.Min.X;
+		Text(Card.Min + FVector2D(16.0, 13.0), TEXT("Calendar"), CardTitleFont, UIStyle::Text);
+		const double RowsTop = Card.Min.Y + 44.0;
+		const double RowHeight = FMath::Min(40.0, (Card.Max.Y - BottomMargin - RowsTop) / FMath::Max(1, Calendar.Num()));
+		for (int32 Index = 0; Index < Calendar.Num(); ++Index)
+		{
+			const FUISimSeasonRace& Race = Calendar[Index];
+			const double Top = RowsTop + Index * RowHeight;
+			const double Y = Top + 5.0;
+			if (Index == Next)
+			{
+				Box(FVector2D(X + 1.0, Top), FVector2D(Card.Max.X - 1.0, Top + RowHeight), White, FLinearColor(1.0f, 1.0f, 1.0f, 0.06f));
+				// After the RAIN tag when it reaches that far.
+				const double NextLeft = Race.bRain ? FMath::Max(600.0, 572.0 + Width(TEXT("RAIN"), TagFont) + 8.0) : 600.0;
+				Text(FVector2D(X + NextLeft, Y + 2.0), TEXT("NEXT"), TagFont, UIStyle::Yellow);
+			}
+			Text(FVector2D(X + 16.0, Y), FString::FromInt(Index + 1), RowBold, UIStyle::Text);
+			const FString Laps = FString::Printf(TEXT("%d L"), Race.Laps);
+			const double NameRight = X + 560.0 - Width(Laps, RowFont) - 12.0;
+			const FString Name = Fit(Race.Name, RowFont, NameRight - (X + 44.0));
+			Text(FVector2D(X + 44.0, Y), Name, RowFont, UIStyle::Text);
+			if (Race.Circuit != Race.Name && Name == Race.Name)
+			{
+				const double CircuitLeft = X + 44.0 + Width(Name, RowFont);
+				Text(FVector2D(CircuitLeft, Y), Fit(TEXT(" · ") + Race.Circuit, RowFont, NameRight - CircuitLeft), RowFont, UIStyle::Mute);
+			}
+			TextRight(X + 560.0, Y, Laps, RowFont, UIStyle::Mute);
+			if (Race.bRain)
+			{
+				Text(FVector2D(X + 572.0, Y + 2.0), TEXT("RAIN"), TagFont, RainBlue);
+			}
+			if (Race.bDone)
+			{
+				TextRight(X + 728.0, Y, FString::Printf(TEXT("%.1f"), Race.Rating), RowBold, Threshold(Race.Rating));
+				FString Details = FString::Printf(TEXT("F %.0f · C %.0f · Q %.0f · S %.0f · %d incidents, %d decided"), Race.Fairness * 100.0,
+					Race.Consistency * 100.0, Race.RaceQuality * 100.0, Race.Safety * 100.0, Race.Incidents, Race.Decided);
+				if (Race.Overturned > 0)
+				{
+					Details += FString::Printf(TEXT(", %d overturned"), Race.Overturned);
+				}
+				TArray<FString> Podium;
+				for (int32 Place = 0; Place < Race.Podium.Num(); ++Place)
+				{
+					Podium.Add(FString::Printf(TEXT("P%d %s"), Place + 1, *Race.Podium[Place]));
+				}
+				if (Podium.Num() > 0)
+				{
+					Details += TEXT(" · ") + FString::Join(Podium, TEXT(", "));
+				}
+				if (Race.SatOut.Num() > 0)
+				{
+					Details += TEXT(" · sat out: ") + FString::Join(Race.SatOut, TEXT(", "));
+				}
+				Text(FVector2D(X + 44.0, Y + 16.0), Fit(Details, LabelFont, Card.Max.X - 16.0 - (X + 44.0)), LabelFont, UIStyle::Mute);
+			}
+			else if (Index == Next && Suspended.Num() > 0)
+			{
+				Text(FVector2D(X + 44.0, Y + 16.0), Fit(TEXT("suspended: ") + FString::Join(Suspended, TEXT(", ")), LabelFont,
+					Card.Max.X - 16.0 - (X + 44.0)), LabelFont, UIStyle::Red);
+			}
+			if (Index + 1 < Calendar.Num())
+			{
+				Box(FVector2D(X + 16.0, Top + RowHeight - 1.0), FVector2D(Card.Max.X - 16.0, Top + RowHeight), White, Separator);
+			}
+		}
+	}
+
+	// Championships: a header line, then one row per driver or team.
+	auto Table = [&](const FBox2D& Card, const TCHAR* Title, const TArray<FUISimStanding>& Rows, bool bDrivers)
+	{
+		const double X = Card.Min.X;
+		const double PtsRight = X + (bDrivers ? 500.0 : 380.0);
+		const double WinsRight = X + (bDrivers ? 550.0 : 440.0);
+		const double PenRight = X + 600.0;
+		Text(Card.Min + FVector2D(16.0, 13.0), Title, CardTitleFont, UIStyle::Text);
+		const double HeadY = Card.Min.Y + 44.0;
+		Text(FVector2D(X + 16.0, HeadY), TEXT("#"), LabelFont, UIStyle::Mute);
+		Text(FVector2D(X + 40.0, HeadY), bDrivers ? TEXT("DRIVER") : TEXT("TEAM"), LabelFont, UIStyle::Mute);
+		TextRight(PtsRight, HeadY, TEXT("PTS"), LabelFont, UIStyle::Mute);
+		TextRight(WinsRight, HeadY, TEXT("WINS"), LabelFont, UIStyle::Mute);
+		if (bDrivers)
+		{
+			Text(FVector2D(X + 250.0, HeadY), TEXT("TEAM"), LabelFont, UIStyle::Mute);
+			TextRight(PenRight, HeadY, TEXT("PEN"), LabelFont, UIStyle::Mute);
+		}
+		const double RowsTop = Card.Min.Y + 62.0;
+		const double RowHeight = FMath::Min(30.0, (Card.Max.Y - BottomMargin - RowsTop) / FMath::Max(1, Rows.Num()));
+		for (int32 Index = 0; Index < Rows.Num(); ++Index)
+		{
+			const FUISimStanding& Row = Rows[Index];
+			const double Top = RowsTop + Index * RowHeight;
+			const double Y = Top + (RowHeight - 15.0) / 2.0;
+			Text(FVector2D(X + 16.0, Y), FString::FromInt(Index + 1), RowFont, UIStyle::Mute);
+			const double NameRight = bDrivers ? X + 240.0 : PtsRight - 50.0;
+			if (bDrivers && Row.bSuspended)
+			{
+				// The tag does not fit after PEN within the card: it follows the name.
+				const double TagWidth = Width(TEXT("SUSPENDED"), TagFont);
+				const FString Name = Fit(Row.Name, RowFont, NameRight - TagWidth - 8.0 - (X + 40.0));
+				Text(FVector2D(X + 40.0, Y), Name, RowFont, UIStyle::Text);
+				Text(FVector2D(X + 40.0 + Width(Name, RowFont) + 8.0, Y + 2.0), TEXT("SUSPENDED"), TagFont, UIStyle::Red);
+			}
+			else
+			{
+				Text(FVector2D(X + 40.0, Y), Fit(Row.Name, RowFont, NameRight - (X + 40.0)), RowFont, UIStyle::Text);
+			}
+			TextRight(PtsRight, Y, FString::FromInt(Row.Points), RowBold, UIStyle::Text);
+			TextRight(WinsRight, Y, FString::FromInt(Row.Wins), RowFont, UIStyle::Text);
+			if (bDrivers)
+			{
+				Text(FVector2D(X + 250.0, Y), Fit(Row.Team, RowFont, PtsRight - 50.0 - (X + 250.0)), RowFont, UIStyle::Mute);
+				TextRight(PenRight, Y, FString::FromInt(Row.PenaltyPoints), RowFont, Row.PenaltyPoints > 0 ? UIStyle::Text : UIStyle::Mute);
+			}
+			if (Index + 1 < Rows.Num())
+			{
+				Box(FVector2D(X + 16.0, Top + RowHeight - 1.0), FVector2D(Card.Max.X - 16.0, Top + RowHeight), White, Separator);
+			}
+		}
+	};
+	Table(DriversCard, TEXT("Drivers' championship"), Drivers, true);
+	Table(TeamsCard, TEXT("Constructors' championship"), Teams, false);
 	Layer += 2;
 
-	if (FVector2D(Area.GetAbsolutePosition()) != LoggedAt)
+	// Viewport pixel of the button, for -UISimScript checks (click x y); logged again when it moves.
+	const UWorld* World = GetWorld();
+	UGameViewportClient* Viewport = World ? World->GetGameViewport() : nullptr;
+	const TSharedPtr<SViewport> ViewportWidget = Viewport ? Viewport->GetGameViewportWidget() : nullptr;
+	if (ViewportWidget.IsValid())
 	{
-		// Viewport pixel of the button, for -UISimScript checks (click x y); logged again when it moves.
-		LoggedAt = FVector2D(Area.GetAbsolutePosition());
-		const UWorld* World = GetWorld();
-		UGameViewportClient* Viewport = World ? World->GetGameViewport() : nullptr;
-		const TSharedPtr<SViewport> ViewportWidget = Viewport ? Viewport->GetGameViewportWidget() : nullptr;
-		if (ViewportWidget.IsValid())
+		const FVector2D At = FVector2D(Area.LocalToAbsolute(StartButton.GetCenter())) -
+			FVector2D(ViewportWidget->GetCachedGeometry().GetAbsolutePosition());
+		if (At != LoggedAt)
 		{
-			const FVector2D At = FVector2D(Area.LocalToAbsolute(StartButton.GetCenter())) -
-				FVector2D(ViewportWidget->GetCachedGeometry().GetAbsolutePosition());
+			LoggedAt = At;
 			UE_LOG(LogUISim, Display, TEXT("Season: '%s' at %.0f %.0f"), Label, At.X, At.Y);
 		}
 	}
@@ -201,11 +336,11 @@ int32 UUISeasonWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Allo
 FReply UUISeasonWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
 	AUIRaceDirector* Race = Director.Get();
-	if (!ButtonArea || !Race || InMouseEvent.GetEffectingButton() != EKeys::LeftMouseButton)
+	if (!Panel || !Race || InMouseEvent.GetEffectingButton() != EKeys::LeftMouseButton)
 	{
 		return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
 	}
-	const FVector2D Local = FVector2D(ButtonArea->GetCachedGeometry().AbsoluteToLocal(InMouseEvent.GetScreenSpacePosition()));
+	const FVector2D Local = FVector2D(Panel->GetCachedGeometry().AbsoluteToLocal(InMouseEvent.GetScreenSpacePosition()));
 	if (StartButton.IsInside(Local))
 	{
 		FUICommand Command;
