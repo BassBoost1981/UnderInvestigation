@@ -1,6 +1,7 @@
 // Console runner: simulates a full race without graphics and prints the result.
 // Usage: uisim_runner [--laps N] [--seed S] [--track file.json] [--entries file.json] [--weather file.json]
 //                     [--grid CODE,CODE,...]   (M13.2: starting grid by driver code, pole first)
+//                     [--qualifying]           (M13.3: a qualifying session first; its result is the grid)
 //        uisim_runner --season file.json [--seed S] [--entries file.json] [--career save.json] [--races N]
 //                     [--verdicts none|expected|heard]   (M10.4/M10.5: a season, optionally continued from a save file)
 
@@ -38,6 +39,7 @@ std::string formatTime(double seconds) {
 void printUsage() {
     std::printf("Usage: uisim_runner [--laps N] [--seed S] [--track file.json] [--entries file.json] [--weather file.json]\n");
     std::printf("                    [--grid CODE,CODE,...]   (starting grid by driver code, pole first, every entry once)\n");
+    std::printf("                    [--qualifying]           (a qualifying session first; its result is the grid)\n");
     std::printf("       uisim_runner --season file.json [--seed S] [--entries file.json] [--career save.json] [--races N]\n");
     std::printf("                    [--verdicts none|expected|heard]\n");
 }
@@ -167,6 +169,49 @@ int runSeason(const std::filesystem::path& seasonPath, const std::filesystem::pa
     return 0;
 }
 
+// Runs a qualifying session (M13.3), prints its classification and returns it as the grid of the race.
+std::vector<int> runQualifying(const Track& track, const std::vector<Entry>& entries, RaceConfig config) {
+    config.qualifying = true;
+    config.grid.clear();
+    Sim sim(track, entries, config);
+    double seconds = 0.0;
+    for (int minutes : config.rules.qualifyingSegmentMinutes) {
+        seconds += minutes * 60.0 + 600.0; // the clock plus the laps completed after it and the break
+    }
+    const long maxSteps = static_cast<long>(seconds / Sim::kDt);
+    for (long steps = 0; !sim.finished() && steps < maxSteps; ++steps) {
+        sim.step();
+    }
+    if (!sim.finished()) {
+        throw std::runtime_error("Qualifying did not finish within the step limit");
+    }
+    const std::size_t segments = config.rules.qualifyingSegmentMinutes.size();
+    std::printf("Qualifying - %s, seed %llu\n\n", sim.track().name().c_str(), static_cast<unsigned long long>(config.seed));
+    std::printf("%-4s %-4s %-4s %-18s %-20s", "Pos", "No", "Code", "Driver", "Team");
+    for (std::size_t segment = 0; segment < segments; ++segment) {
+        std::printf(" Q%-9zu", segment + 1);
+    }
+    std::printf("\n");
+    for (const CarState& car : sim.snapshot().cars) {
+        const Entry& entry = entries[car.entryIndex];
+        std::printf("%-4d %-4d %-4s %-18s %-20s", car.position, entry.number, entry.code.c_str(), entry.name.c_str(),
+                    entry.team.c_str());
+        for (std::size_t segment = 0; segment < segments; ++segment) {
+            double best = 0.0;
+            for (const QualifyingLap& lap : sim.qualifyingLaps()) {
+                if (lap.car == car.entryIndex && lap.segment == static_cast<int>(segment) && lap.valid &&
+                    (best == 0.0 || lap.time < best)) {
+                    best = lap.time;
+                }
+            }
+            std::printf(" %-10s", best > 0.0 ? formatTime(best).c_str() : "");
+        }
+        std::printf("\n");
+    }
+    std::printf("Timed laps: %zu, session time %s\n\n", sim.qualifyingLaps().size(), formatTime(sim.snapshot().time).c_str());
+    return sim.qualifyingOrder();
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -180,12 +225,17 @@ int main(int argc, char** argv) {
     std::filesystem::path careerPath;  // season only: save file to continue from and to write
     int maxRaces = 0;                  // season only: races to run now, 0 = all that are left
     VerdictMode verdicts = VerdictMode::None; // season only: a stand-in player judges every incident
+    bool qualifying = false;           // single race only: a qualifying session sets the grid
 
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--help" || arg == "-h") {
             printUsage();
             return 0;
+        }
+        if (arg == "--qualifying") {
+            qualifying = true;
+            continue;
         }
         if (i + 1 >= argc) {
             std::fprintf(stderr, "Missing value for %s\n", arg.c_str());
@@ -248,7 +298,14 @@ int main(int argc, char** argv) {
             config.grid.push_back(static_cast<int>(it - raceEntries.begin()));
             from = comma + 1;
         }
-        Sim sim(loadTrack(trackPath), raceEntries, config);
+        const Track track = loadTrack(trackPath);
+        if (qualifying) {
+            if (!gridCodes.empty()) {
+                throw std::invalid_argument("--qualifying and --grid exclude each other");
+            }
+            config.grid = runQualifying(track, raceEntries, config);
+        }
+        Sim sim(track, raceEntries, config);
         const long maxSteps = static_cast<long>(config.laps) * 600 * 20;
         long steps = 0;
         while (!sim.finished() && steps < maxSteps) {

@@ -16,6 +16,9 @@ enum class Penalty { None, Warning, FiveSeconds, TenSeconds, DriveThrough, StopA
 // Crash: stopped on the track with debris, retired.
 enum class AccidentType { Spin, OffTrack, Crash };
 
+// What a car is doing in a qualifying session (M13.3). FlyingLap: a timed lap at full pace.
+enum class QualifyingPhase { Garage, OutLap, FlyingLap, InLap };
+
 // A stranded car (and its debris) that the marshals have to recover.
 struct HazardState {
     int id = 0;               // = accident id
@@ -79,6 +82,11 @@ struct CarState {
     bool stalled = false;        // immobilised on the grid before the start (B5.7, M11.3)
     double detectionGap = 0.0;   // seconds behind the car ahead at the last Detection Line crossing
     bool finished = false;
+    // Qualifying (M13.3); unused in a race. There, position is the classification so far, bestLapTime the
+    // best timed lap of the session and gapToLeader the gap to the fastest time of the same segment.
+    QualifyingPhase qualifyingPhase = QualifyingPhase::Garage;
+    double qualifyingTime = 0.0; // best timed lap in the segment that counts for the car (the current one, or the one it went out in), 0 = none
+    int eliminatedIn = 0;        // 1-based segment after which the car was eliminated, 0 = still in
 };
 
 struct SimSnapshot {
@@ -106,6 +114,11 @@ struct SimSnapshot {
     std::vector<HazardState> hazards; // not yet recovered
     bool overtakeEnabled = false;     // Overtake mode enabled by race control rules (B7.2.2)
     std::vector<CarState> cars; // sorted by position
+    // Qualifying (M13.3). `finished` then means: the last segment is over and every car is back in its garage;
+    // totalLaps and leaderLap are 0.
+    bool qualifying = false;
+    int qualifyingSegment = 0;     // 1-based (Q1 = 1), 0 in a race
+    double segmentTimeLeft = 0.0;  // seconds on the clock of the segment, 0 once the time is up and between segments
 };
 
 } // namespace uisim

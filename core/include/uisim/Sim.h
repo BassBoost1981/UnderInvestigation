@@ -48,6 +48,9 @@ struct RaceConfig {
     // Starting grid (M13.2): entry indices, pole first, every entry exactly once. Empty = the grid by
     // expected pace with a little noise, as before; the race is then unchanged.
     std::vector<int> grid{};
+    // A qualifying session instead of a race (M13.3): three segments with elimination (B2.4.2), always dry,
+    // `laps` and `grid` unused. Its result, qualifyingOrder(), is the `grid` of the race. On its own random stream.
+    bool qualifying = false;
 };
 
 struct RaceStats {
@@ -159,6 +162,15 @@ struct Incident {
     double defenderPush = 0.0; // 0..1, how hard the defender closed the door
 };
 
+// A timed lap of a qualifying session (M13.3): begun and completed on the track (B2.4.3).
+struct QualifyingLap {
+    int car = 0;         // entry index
+    int segment = 0;     // 0-based
+    double time = 0.0;   // lap time
+    double setAt = 0.0;  // session time at the end of the lap; with equal times the earlier one is ahead (B2.4.3)
+    bool valid = true;   // false: deleted
+};
+
 // Marshal radio to race control (M6.5). Structured; the presentation layer words it.
 struct RadioMessage {
     enum class Type {
@@ -206,6 +218,9 @@ public:
     const std::vector<Verdict>& verdicts() const { return verdicts_; }
     const std::vector<Accident>& accidents() const { return accidents_; }
     const std::vector<RadioMessage>& radio() const { return radio_; } // marshal radio log, oldest first
+    // Qualifying (M13.3): every timed lap in the order set, and the classification as entry indices, first place first.
+    const std::vector<QualifyingLap>& qualifyingLaps() const { return qualifyingLaps_; }
+    std::vector<int> qualifyingOrder() const;
     double neutralisedTime() const { return neutralisedTime_; } // seconds under VSC, SC or red flag
     // Rain at a race time as this race's weather will bring it (forecast, M9.7); 0 in a dry race.
     double forecastRain(double time) const { return rainAt(config_.weather, time, weatherShift_, weatherScale_); }
@@ -302,6 +317,13 @@ private:
         double lastLapTime = 0.0;
         double bestLapTime = 0.0;
         bool finished = false;
+        // Qualifying (M13.3).
+        QualifyingPhase quali = QualifyingPhase::Garage;
+        int eliminatedIn = 0;           // 1-based segment after which the car was eliminated, 0 = still in
+        std::array<double, 2> runAt{};  // segment clock (seconds left) at which the car leaves for its runs
+        std::array<int, 2> runLaps{};   // flying laps planned for each run
+        int nextRun = 0;
+        int flyingLapsLeft = 0;
     };
 
     struct SafetyCar {
@@ -363,6 +385,18 @@ private:
     void onSegmentEntered(int car);
     void buildSnapshot();
     double rollForm();
+    // Qualifying (M13.3, Qualifying.cpp).
+    void startQualifying();
+    void beginQualifyingSegment();
+    void endQualifyingSegment();
+    void updateQualifying();
+    void onQualifyingLine(int car, double time);
+    bool qualifyingWantsPit(int car) const;
+    bool qualifyingYields(int slow, int fast) const;
+    bool qualifyingPushing(int car) const; // at full pace: on a flying lap or winding up for one
+    std::vector<double> qualifyingBestTimes(std::vector<double>* setAt = nullptr) const; // [car * segments + segment], 0 = none
+    void rankQualifying(std::vector<int>& rank) const;
+    void fillQualifyingSnapshot();
 
     Track track_;
     std::vector<Entry> entries_;
@@ -418,6 +452,15 @@ private:
     std::vector<ReplayCar> replayCars_;
     RaceStats stats_;
     SimSnapshot snapshot_;
+    // Qualifying (M13.3).
+    enum class QualifyingState { Running, TimeUp, Break, Over };
+    QualifyingState qualifyingState_ = QualifyingState::Running;
+    int qualifyingSegment_ = 0;     // 0-based
+    double segmentClock_ = 0.0;     // seconds left, counted down per tick: a red flag can stop it (13.4)
+    double breakLeft_ = 0.0;
+    double lastReleaseClock_ = 0.0; // segment clock when the last car left its garage
+    double outLapEstimate_ = 0.0;   // seconds from the garage to the line; later than this no lap can be begun
+    std::vector<QualifyingLap> qualifyingLaps_;
 };
 
 } // namespace uisim

@@ -25,6 +25,7 @@ add_library(uisim STATIC
     src/Track.cpp
     src/DataLoader.cpp
     src/Sim.cpp
+    src/Qualifying.cpp
     src/Rating.cpp
     src/Season.cpp
     src/Career.cpp
@@ -67,7 +68,8 @@ if(UISIM_BUILD_TESTS)
         tests/test_standing_start.cpp
         tests/test_season.cpp
         tests/test_career.cpp
-        tests/test_hearing.cpp)
+        tests/test_hearing.cpp
+        tests/test_qualifying.cpp)
     target_link_libraries(uisim_tests PRIVATE uisim uisim_datadir doctest::doctest)
 
     enable_testing()

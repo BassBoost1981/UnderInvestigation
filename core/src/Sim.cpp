@@ -1,5 +1,7 @@
 #include "uisim/Sim.h"
 
+#include "SimInternal.h"
+
 #include <algorithm>
 #include <bitset>
 #include <cmath>
@@ -9,6 +11,9 @@
 
 namespace uisim {
 namespace {
+
+using detail::kPitExitAfterLine;
+using detail::kPitLateral;
 
 // Car model (kinematic, see docs/DESIGN.md 5.2). Tuned for ~1:30 laps on a 5.6 km track.
 constexpr double kBrake = 38.0;       // m/s^2
@@ -97,8 +102,6 @@ constexpr double kRedFlagStopOffset = 2.0;    // red flag: cars stop this far be
 
 // Penalties (M5). Pit lane runs alongside the main straight, from the pit entry
 // (kPitEntryBeforeLine before the line) to the exit after the line.
-constexpr double kPitLateral = -5.0;          // snapshot lateral units: 20 m right of the racing line
-constexpr double kPitExitAfterLine = 300.0;
 
 // Pit stops (M7.4).
 constexpr double kStopTime = 2.4;          // stationary time of a good stop, seconds
@@ -161,7 +164,8 @@ constexpr double kFormSpread = 0.002;
 } // namespace
 
 Sim::Sim(Track track, std::vector<Entry> entries, RaceConfig config)
-    : track_(std::move(track)), entries_(std::move(entries)), config_(config), rng_(config.seed), startRng_(config.seed, 101u) {
+    : track_(std::move(track)), entries_(std::move(entries)), config_(config), rng_(config.seed, config.qualifying ? 131u : 54u),
+      startRng_(config.seed, 101u) {
     if (entries_.empty()) {
         throw std::invalid_argument("Sim needs at least one entry");
     }
@@ -169,6 +173,9 @@ Sim::Sim(Track track, std::vector<Entry> entries, RaceConfig config)
         throw std::invalid_argument("Race needs at least one lap");
     }
     boundaries_ = {track_.sectorStart(1), track_.sectorStart(2), track_.length()};
+    if (config_.qualifying) {
+        config_.weather = WeatherPlan{}; // M13: qualifying is always dry
+    }
 
     // Grid by expected pace with a little noise (stand-in for qualifying).
     const int n = static_cast<int>(entries_.size());
@@ -252,7 +259,9 @@ Sim::Sim(Track track, std::vector<Entry> entries, RaceConfig config)
         planNextStop(i);
     }
     sectorFlags_.assign(track_.marshalSectorCount(), Flag::Green);
-    if (config_.formationLap && config_.rules.formationLapBeforeStart) {
+    if (config_.qualifying) {
+        startQualifying(); // M13.3: the cars wait in their garages, there is no grid and no start
+    } else if (config_.formationLap && config_.rules.formationLapBeforeStart) {
         startFormationLap(); // B5.6
     } else {
         beginStartLights(false); // B5.7.1: the race starts with the lights going out
@@ -443,6 +452,9 @@ void Sim::applyVerdict(const Command& c) {
 }
 
 void Sim::maybeAccident(int i, double crashChance, double offTrackChance, double spinChance, bool fromCollision) {
+    if (config_.qualifying) {
+        return; // accidents in the session come with the flags (13.4)
+    }
     if (outOfRace(i) || cars_[i].spinTimer > 0.0 || cars_[i].inPit) {
         return;
     }
@@ -621,8 +633,8 @@ void Sim::updateOvertakeMode(const std::vector<int>& racing, const std::vector<i
                              const std::vector<double>& previous) {
     const double detection = track_.overtakeDetectionLine();
     const double activation = track_.overtakeActivationLine();
-    if (detection < 0.0 || activation < 0.0) {
-        return; // track without Overtake lines
+    if (detection < 0.0 || activation < 0.0 || config_.qualifying) {
+        return; // track without Overtake lines; no Overtake mode in qualifying (sim)
     }
     // B7.2.2 c: after the Safety Car, enabled once every car has crossed the Control Line.
     if (overtakeAfterSafetyCar_ && state_ == RaceState::Green &&
@@ -668,11 +680,17 @@ void Sim::updateOvertakeMode(const std::vector<int>& racing, const std::vector<i
 }
 
 bool Sim::yieldsTo(int lapped, int lapper) const {
+    if (config_.qualifying) {
+        return qualifyingYields(lapped, lapper);
+    }
     const Car& car = cars_[lapped];
     return car.blueLapper == lapper && !car.blueIgnoring;
 }
 
 void Sim::updateBlueFlags(const std::vector<int>& order) {
+    if (config_.qualifying) {
+        return; // nobody is lapped in qualifying
+    }
     const int m = static_cast<int>(order.size());
     const double lapLength = track_.length();
     for (int k = 0; k < m; ++k) {
@@ -766,6 +784,9 @@ void Sim::planNextStop(int i) {
 
 bool Sim::wantsTyreStop(int i) const {
     const Car& car = cars_[i];
+    if (config_.qualifying) {
+        return qualifyingWantsPit(i);
+    }
     if (state_ == RaceState::RedFlag || chequered_ || car.finished || car.inPit) {
         return false;
     }
@@ -803,7 +824,7 @@ void Sim::releaseFromBox(int i) {
     if (traffic < 0) {
         return;
     }
-    if (!car.releaseChecked && rng_.uniform() < kUnsafeReleaseChance) {
+    if (!car.releaseChecked && !config_.qualifying && rng_.uniform() < kUnsafeReleaseChance) { // qualifying: from 13.5
         car.releaseChecked = true;
         addIncident(Incident::Type::UnsafeRelease, i, traffic, 1.0); // B1.6.2 a: the team's responsibility
         incidents_.back().measure = gap;
@@ -818,6 +839,10 @@ void Sim::movePitCar(int i) {
     const double lapLength = track_.length();
     const double pitSpeed = (config_.rules.pitLaneSpeedKmh + car.pitSpeedExcess) / 3.6;
     const double before = track_.wrap(car.distance);
+    if (config_.qualifying && car.quali == QualifyingPhase::Garage) {
+        car.speed = 0.0; // parked until its next run (M13.3)
+        return;
+    }
     if (car.stopTimer > 0.0) {
         car.stopTimer = std::max(0.0, car.stopTimer - kDt);
         if (car.stopTimer == 0.0) {
@@ -841,6 +866,11 @@ void Sim::movePitCar(int i) {
     if (car.pendingPenalty == Penalty::StopAndGo && !car.stopDone && atBox) {
         car.stopDone = true;
         car.stopTimer = config_.rules.stopAndGoSeconds;
+        car.speed = 0.0;
+    }
+    if (config_.qualifying && car.tyreStop && atBox) {
+        car.tyreStop = false; // end of a run: back in the garage (M13.3)
+        car.quali = QualifyingPhase::Garage;
         car.speed = 0.0;
     }
     // Tyre stop: the box is at the line too; a 5 s / 10 s penalty is served before any work.
@@ -1331,16 +1361,22 @@ double Sim::paceFactor(int i) const {
     case RaceState::Green:
         break;
     }
+    if (config_.qualifying && !qualifyingPushing(i)) {
+        return detail::kQualifyingSlowLapFraction; // the same for everyone: the gaps between the cars hold
+    }
     return performance(i);
 }
 
-double Sim::rollForm() { return 1.0 + rng_.uniform(-kFormSpread, kFormSpread); }
+double Sim::rollForm() {
+    const double spread = config_.qualifying ? detail::kQualifyingFormSpread : kFormSpread;
+    return 1.0 + rng_.uniform(-spread, spread);
+}
 
 double Sim::performance(int i) const {
     const Car& car = cars_[i];
     const Entry& entry = entries_[i];
-    const double fuel = kFuelStartFactor +
-        (1.0 - kFuelStartFactor) * std::min(1.0, car.lapsCompleted / static_cast<double>(config_.laps));
+    const double fuel = config_.qualifying ? 1.0 // little fuel on board
+        : kFuelStartFactor + (1.0 - kFuelStartFactor) * std::min(1.0, car.lapsCompleted / static_cast<double>(config_.laps));
     const double tyres = tyreFactor(track_.compounds(), car.compound, car.tyreWear);
     return entry.teamPace * entry.skill * car.form * tyres * fuel;
 }
@@ -1439,6 +1475,9 @@ void Sim::step() {
         return;
     }
     applyCommands();
+    if (config_.qualifying) {
+        updateQualifying();
+    }
     updateStandingStart();
     if (state_ != RaceState::Green && raceStarted_) { // the formation lap is no neutralisation
         neutralisedTime_ += kDt;
@@ -1546,7 +1585,7 @@ void Sim::step() {
         // The chance depends on the speed potential (pace + slipstream), not on the
         // current speed: a follower held up behind a car is at that car's speed.
         const double advantage = cap[i] - cap[a];
-        if (advantage > 0.0 && time_ >= car.startDelay) {
+        if (advantage > 0.0 && time_ >= car.startDelay && !config_.qualifying) { // nobody races for position in qualifying
             const double chancePerSecond = (1.0 - kWetOvertakePenalty * lineWetness_) * segments[car.segment].overtakeChance *
                 entries_[i].aggression * std::min(1.0, advantage / kOvertakeAdvantageScale);
             // Where overtaking is not allowed, only a rule-breaker still goes for it.
@@ -1603,7 +1642,8 @@ void Sim::step() {
             car.inPit = true;
             car.stopDone = false;
             car.releaseChecked = false;
-            car.pitSpeedExcess = rng_.uniform() < kSpeedingChance ? rng_.uniform(kSpeedingMinKmh, kSpeedingMaxKmh) : 0.0;
+            car.pitSpeedExcess = config_.qualifying ? 0.0 // qualifying: from 13.5
+                : rng_.uniform() < kSpeedingChance ? rng_.uniform(kSpeedingMinKmh, kSpeedingMaxKmh) : 0.0;
             car.overtakeTarget = -1;
             car.unlapping = false;
             car.rejoining = false;
@@ -1725,7 +1765,7 @@ void Sim::onSegmentEntered(int i) {
 
     // Track limits (B1.8.6): every offence deletes the lap and counts; the warning offence brings
     // the black-and-white flag, every one after it is an incident for the stewards.
-    if (seg.trackLimits && state_ == RaceState::Green && !outOfRace(i) && car.spinTimer <= 0.0 &&
+    if (seg.trackLimits && !config_.qualifying && state_ == RaceState::Green && !outOfRace(i) && car.spinTimer <= 0.0 && // qualifying: from 13.5
         rng_.uniform() < kTrackLimitsChance * std::pow(entries_[i].aggression, 4.0) * (1.0 + kTrackLimitsTyreWear * car.tyreWear)) {
         ++stats_.trackLimitOffences;
         ++car.trackLimitStrikes;
@@ -1737,7 +1777,7 @@ void Sim::onSegmentEntered(int i) {
 
     // An attack is decided at corner entry: alongside = contest the corner, else give up.
     // A contested corner can end in contact.
-    if (car.overtakeTarget >= 0 && seg.speed < kFastSegment && !yieldsTo(car.overtakeTarget, i)) {
+    if (car.overtakeTarget >= 0 && seg.speed < kFastSegment && !config_.qualifying && !yieldsTo(car.overtakeTarget, i)) {
         const int target = car.overtakeTarget;
         Car& defender = cars_[target];
         const double gap = track_.wrap(defender.distance - car.distance);
@@ -1805,6 +1845,10 @@ void Sim::processTimingLines(int i, double previousDistance) {
         car.holdUntilLine = false;
         car.tyreWear += 1.0 + track_.compounds()[static_cast<int>(car.compound)].dryWearFactor * (1.0 - lineWetness_);
         car.form = rollForm();
+        if (config_.qualifying) {
+            onQualifyingLine(i, t); // no chequered flag: the session ends by the clock
+            continue;
+        }
         if (chequered_ || car.lapsCompleted >= config_.laps) {
             chequered_ = true;
             car.finished = true;
@@ -1952,6 +1996,9 @@ void Sim::buildSnapshot() {
             cs.gapToLeader = car.boundaryTimes[last] - leader.boundaryTimes[last];
             cs.interval = car.boundaryTimes[last] - cars_[rank[r - 1]].boundaryTimes[last];
         }
+    }
+    if (config_.qualifying) {
+        fillQualifyingSnapshot(); // the classification of the session replaces the race order
     }
 }
 
