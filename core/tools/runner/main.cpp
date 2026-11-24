@@ -208,7 +208,12 @@ std::vector<int> runQualifying(const Track& track, const std::vector<Entry>& ent
         }
         std::printf("\n");
     }
-    std::printf("Timed laps: %zu, session time %s\n\n", sim.qualifyingLaps().size(), formatTime(sim.snapshot().time).c_str());
+    const auto deleted = std::count_if(sim.qualifyingLaps().begin(), sim.qualifyingLaps().end(),
+                                       [](const QualifyingLap& lap) { return !lap.valid; });
+    std::printf("Timed laps: %zu (deleted %lld), session time %s\n", sim.qualifyingLaps().size(),
+                static_cast<long long>(deleted), formatTime(sim.snapshot().time).c_str());
+    std::printf("Accidents in the session: %d (spins %d, follow-ups %d)\n\n", sim.stats().accidents, sim.stats().spins,
+                sim.stats().followUpAccidents);
     return sim.qualifyingOrder();
 }
 

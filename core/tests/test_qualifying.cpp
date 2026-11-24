@@ -16,10 +16,14 @@ namespace {
 
 std::filesystem::path dataDir() { return std::filesystem::path(UISIM_DATA_DIR); }
 
-Sim makeQualifying(std::uint64_t seed, const std::filesystem::path& track = dataDir() / "tracks" / "testring.json") {
+// Without random accidents unless asked for (M13.4): the 13.3 tests check a session in which every car can run.
+Sim makeQualifying(std::uint64_t seed, const std::filesystem::path& track = dataDir() / "tracks" / "testring.json",
+                   double accidents = 0.0) {
     RaceConfig config;
     config.seed = seed;
     config.qualifying = true;
+    config.accidentChanceScale = accidents;
+    config.followUpChanceScale = accidents;
     return Sim(loadTrack(track), loadEntries(dataDir() / "entries" / "fictional-grid.json"), config);
 }
 
@@ -242,7 +246,7 @@ TEST_CASE("Flying laps are free: slow cars move over, nobody races, nothing from
         CHECK(sim.stats().blueFlagsIgnored == 0);
         CHECK(sim.stats().flagViolations == 0);
         CHECK(sim.stats().trackLimitOffences == 0);
-        CHECK(sim.incidents().empty()); // incidents in qualifying come with 13.5
+        CHECK(sim.incidents().empty()); // no accidents here; incidents in qualifying come with 13.5
         for (const CarState& car : sim.snapshot().cars) {
             CHECK_FALSE(car.overtakeActive);
             CHECK_FALSE(car.blueFlag);
@@ -284,4 +288,260 @@ TEST_CASE("Qualifying runs on every track") {
         }
         CHECK(sim.qualifyingLaps().size() >= 2 * 45 - 5); // nearly every car gets both runs in
     }
+}
+
+// ---- Flags in the session (M13.4) ----
+
+namespace {
+
+void runSeconds(Sim& sim, double seconds) {
+    const double until = sim.snapshot().time + seconds;
+    while (sim.snapshot().time < until && !sim.finished()) {
+        sim.step();
+    }
+}
+
+void send(Sim& sim, Command::Type type) {
+    Command c;
+    c.type = type;
+    sim.command(c);
+    sim.step();
+}
+
+// A car on a flying lap out on the track, -1 = none.
+int flyingCar(const Sim& sim) {
+    for (const CarState& car : sim.snapshot().cars) {
+        if (car.qualifyingPhase == QualifyingPhase::FlyingLap && !car.inPitLane && !car.spinning) {
+            return car.entryIndex;
+        }
+    }
+    return -1;
+}
+
+// Runs until a car is on a flying lap and crashes it there; returns the car.
+int crashFlyingCar(Sim& sim, AccidentType type = AccidentType::Crash) {
+    int car = -1;
+    for (int k = 0; k < 20 * 600 && car < 0; ++k) {
+        sim.step();
+        car = flyingCar(sim);
+    }
+    REQUIRE(car >= 0);
+    Command c;
+    c.type = Command::Type::InjectAccident;
+    c.car = car;
+    c.accident = type;
+    sim.command(c);
+    sim.step();
+    return car;
+}
+
+const CarState& stateOf(const Sim& sim, int entry) {
+    for (const CarState& car : sim.snapshot().cars) {
+        if (car.entryIndex == entry) {
+            return car;
+        }
+    }
+    FAIL("no such entry");
+    return sim.snapshot().cars.front();
+}
+
+} // namespace
+
+TEST_CASE("Under the red flag the clock stops, everyone returns, nobody begins a flying lap") {
+    Sim sim = makeQualifying(2);
+    runSeconds(sim, 240.0);
+    const int victim = crashFlyingCar(sim);
+    send(sim, Command::Type::RedFlag);
+    const double clock = sim.snapshot().segmentTimeLeft;
+    const double redAt = sim.snapshot().time;
+    CHECK(clock > 0.0);
+    CHECK(sim.snapshot().state == RaceState::RedFlag);
+    const std::size_t lapsBefore = sim.qualifyingLaps().size();
+    for (int k = 0; k < 20 * 400; ++k) { // 400 s: every car is back
+        sim.step();
+        CHECK(sim.snapshot().segmentTimeLeft == clock);
+        for (const CarState& car : sim.snapshot().cars) {
+            CHECK(car.qualifyingPhase != QualifyingPhase::FlyingLap);
+        }
+    }
+    CHECK(sim.qualifyingLaps().size() == lapsBefore); // the laps under way did not count
+    for (const CarState& car : sim.snapshot().cars) {
+        if (car.retired) {
+            continue;
+        }
+        CHECK(car.inPitLane);
+        CHECK(car.speed == 0.0); // in the garage or at the closed pit exit
+    }
+    CHECK(stateOf(sim, victim).retired);
+
+    // The restart: the segment goes on with the time that was left, and the cars go out again.
+    send(sim, Command::Type::Restart);
+    CHECK(sim.snapshot().state == RaceState::Green);
+    CHECK(sim.snapshot().segmentTimeLeft == doctest::Approx(clock - Sim::kDt));
+    runSeconds(sim, clock + 300.0);
+    CHECK(sim.snapshot().qualifyingSegment == 2);
+    bool lapAfterRestart = false;
+    for (const QualifyingLap& lap : sim.qualifyingLaps()) {
+        if (lap.segment == 0 && lap.setAt > redAt) {
+            lapAfterRestart = true;
+            CHECK(lap.setAt - lap.time > redAt + 400.0); // begun after the restart
+        }
+        const bool beforeTheCrash = lap.car != victim || lap.setAt < redAt;
+        CHECK(beforeTheCrash); // B4.3.2: the crashed car takes no further part
+    }
+    CHECK(lapAfterRestart);
+    runSession(sim);
+    CHECK(stateOf(sim, victim).eliminatedIn == 1); // no time: out after Q1
+}
+
+TEST_CASE("A run cut short by the red flag is given back") {
+    // Red flag early in Q1, while most cars are on their first run: after the restart everyone still gets
+    // two runs' worth of timed laps into Q1.
+    Sim sim = makeQualifying(4);
+    runSeconds(sim, 200.0);
+    send(sim, Command::Type::RedFlag);
+    runSeconds(sim, 300.0);
+    send(sim, Command::Type::Restart);
+    runSession(sim);
+    std::vector<int> runsInQ1(20, 0);
+    for (const QualifyingLap& lap : sim.qualifyingLaps()) {
+        if (lap.segment == 0) {
+            ++runsInQ1[static_cast<std::size_t>(lap.car)];
+        }
+    }
+    for (int entry = 0; entry < 20; ++entry) {
+        CAPTURE(entry);
+        CHECK(runsInQ1[static_cast<std::size_t>(entry)] >= 2);
+    }
+}
+
+TEST_CASE("The break waits for the restart when the red flag is out") {
+    Sim sim = makeQualifying(1);
+    while (sim.snapshot().qualifyingSegment == 1 && sim.snapshot().segmentTimeLeft > 0.0) {
+        sim.step();
+    }
+    runSeconds(sim, 200.0); // the laps under way are completed, the break begins
+    send(sim, Command::Type::RedFlag);
+    runSeconds(sim, 300.0);
+    CHECK(sim.snapshot().qualifyingSegment == 1);
+    send(sim, Command::Type::Restart);
+    runSeconds(sim, 120.0);
+    CHECK(sim.snapshot().qualifyingSegment == 2);
+    runSession(sim);
+}
+
+TEST_CASE("A lap through double yellow is deleted, through single yellow it counts and is marked") {
+    for (const Flag flag : {Flag::DoubleYellow, Flag::Yellow}) {
+        CAPTURE(static_cast<int>(flag));
+        Sim sim = makeQualifying(3);
+        runSeconds(sim, 300.0);
+        const double from = sim.snapshot().time;
+        for (int sector = 0; sector < sim.track().marshalSectorCount(); sector += 5) {
+            Command c;
+            c.type = Command::Type::SetSectorFlag;
+            c.sector = sector;
+            c.flag = flag;
+            sim.command(c);
+        }
+        runSeconds(sim, 240.0);
+        const double to = sim.snapshot().time;
+        for (int sector = 0; sector < sim.track().marshalSectorCount(); sector += 5) {
+            Command c;
+            c.type = Command::Type::SetSectorFlag;
+            c.sector = sector;
+            c.flag = Flag::Green;
+            sim.command(c);
+        }
+        runSeconds(sim, 400.0);
+        int flagged = 0;
+        int clean = 0;
+        for (const QualifyingLap& lap : sim.qualifyingLaps()) {
+            const bool throughFlag = lap.setAt - lap.time > from && lap.setAt < to; // the whole lap under the flags
+            const bool afterFlag = lap.setAt - lap.time > to + 1.0;
+            if (throughFlag) {
+                ++flagged;
+                CHECK(lap.valid == (flag == Flag::Yellow));
+                CHECK(lap.throughYellow == (flag == Flag::Yellow));
+            } else if (afterFlag || lap.setAt < from) {
+                ++clean;
+                CHECK(lap.valid);
+                CHECK_FALSE(lap.throughYellow);
+            }
+        }
+        CHECK(flagged > 0);
+        CHECK(clean > 0);
+        runSession(sim);
+    }
+}
+
+TEST_CASE("An accident site without a flag raises the risk as in the race") {
+    auto followUps = [](bool doubleYellow) {
+        int total = 0;
+        for (std::uint64_t seed = 1; seed <= 30; ++seed) {
+            RaceConfig config;
+            config.seed = seed;
+            config.qualifying = true;
+            config.accidentChanceScale = 0.0; // only the follow-ups of the one placed crash
+            Sim sim(loadTrack(dataDir() / "tracks" / "testring.json"), loadEntries(dataDir() / "entries" / "fictional-grid.json"),
+                    config);
+            runSeconds(sim, 300.0);
+            crashFlyingCar(sim);
+            if (doubleYellow) {
+                Command c;
+                c.type = Command::Type::SetSectorFlag;
+                c.sector = sim.snapshot().hazards.front().marshalSector;
+                c.flag = Flag::DoubleYellow;
+                sim.command(c);
+            }
+            runSeconds(sim, 600.0);
+            total += sim.stats().followUpAccidents;
+        }
+        return total;
+    };
+    const int none = followUps(false);
+    const int doubleYellow = followUps(true);
+    MESSAGE("follow-up accidents in 30 sessions: no flag " << none << ", double yellow " << doubleYellow);
+    CHECK(none >= 3);
+    CHECK(doubleYellow * 3 < none);
+}
+
+TEST_CASE("Sessions with accidents and nobody at the flags still finish") {
+    int accidents = 0;
+    int sessionsWithAccident = 0;
+    for (std::uint64_t seed = 1; seed <= 20; ++seed) {
+        CAPTURE(seed);
+        Sim sim = makeQualifying(seed, dataDir() / "tracks" / "testring.json", 1.0);
+        runSession(sim);
+        accidents += sim.stats().accidents;
+        sessionsWithAccident += sim.stats().accidents > 0 ? 1 : 0;
+        CHECK(sim.snapshot().qualifyingSegment == 3); // every break ended: the track was cleared in it
+        CHECK(sim.qualifyingOrder().size() == 20);
+    }
+    MESSAGE(accidents << " cars out by accidents in 20 sessions, " << sessionsWithAccident << " sessions with one");
+    CHECK(sessionsWithAccident >= 4);
+    CHECK(sessionsWithAccident <= 16);
+}
+
+TEST_CASE("No Safety Car, VSC or closed pit entry in a session") {
+    Sim sim = makeQualifying(1);
+    runSeconds(sim, 120.0);
+    send(sim, Command::Type::DeploySafetyCar);
+    CHECK_FALSE(sim.snapshot().safetyCarOnTrack);
+    send(sim, Command::Type::DeployVirtualSafetyCar);
+    CHECK(sim.snapshot().state == RaceState::Green);
+    send(sim, Command::Type::ClosePitEntry);
+    CHECK_FALSE(sim.snapshot().pitEntryClosed);
+    send(sim, Command::Type::SafetyCarStart);
+    CHECK(sim.snapshot().state == RaceState::Green);
+    Command garage; // an accident in the garage is not possible
+    garage.type = Command::Type::InjectAccident;
+    garage.car = sim.snapshot().cars.back().entryIndex;
+    for (const CarState& car : sim.snapshot().cars) {
+        if (car.qualifyingPhase == QualifyingPhase::Garage) {
+            garage.car = car.entryIndex;
+        }
+    }
+    sim.command(garage);
+    sim.step();
+    CHECK(sim.accidents().empty());
 }

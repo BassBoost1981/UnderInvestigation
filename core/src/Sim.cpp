@@ -14,6 +14,7 @@ namespace {
 
 using detail::kPitExitAfterLine;
 using detail::kPitLateral;
+using detail::kQualifyingExitHold;
 
 // Car model (kinematic, see docs/DESIGN.md 5.2). Tuned for ~1:30 laps on a 5.6 km track.
 constexpr double kBrake = 38.0;       // m/s^2
@@ -281,6 +282,9 @@ void Sim::command(const Command& command) {
 void Sim::applyCommands() {
     using Type = Command::Type;
     for (const Command& c : pending_) {
+        if (config_.qualifying && !qualifyingAccepts(c.type)) {
+            continue; // no Safety Car, VSC, start procedure or closed pit entry in a session (M13.4)
+        }
         switch (c.type) {
         case Type::SetSectorFlag:
             sectorFlags_[c.sector] = c.flag;
@@ -323,7 +327,9 @@ void Sim::applyCommands() {
                     car.overtakeActive = false;
                 }
                 cancelAttacks();
-                if (config_.rules.redFlagFreeTyreChange) { // B5.14.4 a vii
+                if (config_.qualifying) {
+                    qualifyingRedFlag(); // M13.4: the clock stops, everyone back to the pits
+                } else if (config_.rules.redFlagFreeTyreChange) { // B5.14.4 a vii
                     for (int k = 0; k < static_cast<int>(cars_.size()); ++k) {
                         if (!outOfRace(k)) {
                             fitTyres(k, chooseCompound(k));
@@ -334,7 +340,9 @@ void Sim::applyCommands() {
             }
             break;
         case Type::Restart:
-            if (state_ == RaceState::RedFlag) {
+            if (state_ == RaceState::RedFlag && config_.qualifying) {
+                qualifyingRestart(); // the pit exit opens again, no Safety Car (M13.4)
+            } else if (state_ == RaceState::RedFlag) {
                 if (c.wetTyres) {
                     mandateWetTyres(); // B5.15.2 a
                 }
@@ -397,7 +405,8 @@ void Sim::applyCommands() {
             }
             break;
         case Type::InjectAccident:
-            if (c.car >= 0 && c.car < static_cast<int>(cars_.size()) && !outOfRace(c.car) && cars_[c.car].spinTimer <= 0.0) {
+            if (c.car >= 0 && c.car < static_cast<int>(cars_.size()) && !outOfRace(c.car) && cars_[c.car].spinTimer <= 0.0 &&
+                !(config_.qualifying && cars_[c.car].inPit)) { // in a session: only on the track
                 startAccident(c.car, c.accident, false);
             }
             break;
@@ -452,9 +461,6 @@ void Sim::applyVerdict(const Command& c) {
 }
 
 void Sim::maybeAccident(int i, double crashChance, double offTrackChance, double spinChance, bool fromCollision) {
-    if (config_.qualifying) {
-        return; // accidents in the session come with the flags (13.4)
-    }
     if (outOfRace(i) || cars_[i].spinTimer > 0.0 || cars_[i].inPit) {
         return;
     }
@@ -552,6 +558,9 @@ void Sim::startAccident(int i, AccidentType type, bool fromCollision, int caused
     }
 
     car.retired = true;
+    if (config_.qualifying) {
+        car.quali = QualifyingPhase::Garage; // B4.3.2: no further part in the session
+    }
     ++stats_.accidents;
     HazardState hazard;
     hazard.id = accident.id;
@@ -595,7 +604,7 @@ void Sim::deliverRadio() {
 }
 
 bool Sim::recoveryAllowed(const HazardState& hazard) const {
-    if (state_ != RaceState::Green) {
+    if (state_ != RaceState::Green || (config_.qualifying && qualifyingBreak())) { // M13.4: nobody on the track
         return true; // VSC, Safety Car or red flag
     }
     const Flag flag = sectorFlags_[hazard.marshalSector];
@@ -841,6 +850,11 @@ void Sim::movePitCar(int i) {
     const double before = track_.wrap(car.distance);
     if (config_.qualifying && car.quali == QualifyingPhase::Garage) {
         car.speed = 0.0; // parked until its next run (M13.3)
+        return;
+    }
+    if (config_.qualifying && state_ == RaceState::RedFlag && car.quali == QualifyingPhase::OutLap &&
+        before + car.speed * kDt >= kPitExitAfterLine - kQualifyingExitHold && before < kPitExitAfterLine) {
+        car.speed = 0.0; // the pit exit is closed under the red flag (M13.4)
         return;
     }
     if (car.stopTimer > 0.0) {
@@ -1440,8 +1454,9 @@ double Sim::desiredSpeed(int i, double cap) const {
         distanceToNext += next.length;
     }
 
-    // Red flag: stop in order just before the line (stand-in for the pit lane).
-    if (state_ == RaceState::RedFlag) {
+    // Red flag: stop in order just before the line (stand-in for the pit lane). In a session the cars drive
+    // on into the pit lane (M13.4).
+    if (state_ == RaceState::RedFlag && !config_.qualifying) {
         const double stopAt = (car.lapsCompleted + 1) * track_.length() - kRedFlagStopOffset;
         const double remaining = stopAt - car.distance;
         if (remaining <= 0.1) {
@@ -1802,10 +1817,10 @@ void Sim::onSegmentEntered(int i) {
         }
     }
 
-    if (seg.speed >= kSlowCorner) {
-        return;
+    if (seg.speed >= kSlowCorner || (config_.qualifying && !qualifyingPushing(i))) {
+        return; // in a session mistakes happen at the limit, on the flying lap (M13.4)
     }
-    const double chance = kErrorChance * (2.0 - entries_[i].skill) * (1.0 + 0.02 * car.tyreWear) *
+    const double chance = (config_.qualifying ? detail::kQualifyingErrorFactor : 1.0) * kErrorChance * (2.0 - entries_[i].skill) * (1.0 + 0.02 * car.tyreWear) *
                           (1.0 + kWetErrorFactor * lineWetness_ * (state_ == RaceState::Green ? 1.0 : kWetErrorNeutralised));
     if (rng_.uniform() < chance) {
         car.errorTimer = kErrorDuration;

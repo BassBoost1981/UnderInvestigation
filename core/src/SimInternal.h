@@ -10,5 +10,7 @@ inline constexpr double kPitExitAfterLine = 300.0;
 // Qualifying (M13.3).
 inline constexpr double kQualifyingSlowLapFraction = 0.75; // out and in laps: this share of the reference speed
 inline constexpr double kQualifyingFormSpread = 0.004;     // a driver hits a lap or does not: more spread than in a race stint
+inline constexpr double kQualifyingErrorFactor = 5.0;      // mistakes per slow corner on a flying lap, times the race rate (M13.4)
+inline constexpr double kQualifyingExitHold = 2.0;         // metres before the pit exit where cars wait under the red flag (M13.4)
 
 } // namespace uisim::detail

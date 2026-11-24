@@ -15,6 +15,7 @@ namespace {
 
 using detail::kPitExitAfterLine;
 using detail::kPitLateral;
+using detail::kQualifyingExitHold;
 using detail::kQualifyingSlowLapFraction;
 
 constexpr double kReleaseSpacing = 8.0;        // seconds between two cars leaving their garages: room on the flying lap
@@ -103,6 +104,16 @@ void Sim::endQualifyingSegment() {
 void Sim::updateQualifying() {
     switch (qualifyingState_) {
     case QualifyingState::Running:
+        if (state_ == RaceState::RedFlag) {
+            if (config_.rules.qualifyingRedFlagStopsClock) {
+                break; // B4.3.1 a: the segment is extended by the time lost, nobody leaves the pits
+            }
+            segmentClock_ = std::max(0.0, segmentClock_ - kDt);
+            if (segmentClock_ <= 0.0) {
+                qualifyingState_ = QualifyingState::TimeUp;
+            }
+            break;
+        }
         segmentClock_ = std::max(0.0, segmentClock_ - kDt);
         for (Car& car : cars_) {
             if (car.eliminatedIn != 0 || car.retired || car.quali != QualifyingPhase::Garage || car.nextRun >= 2 ||
@@ -137,8 +148,11 @@ void Sim::updateQualifying() {
         }
         break;
     case QualifyingState::Break:
-        breakLeft_ -= kDt;
-        if (breakLeft_ <= 0.0) {
+        if (state_ == RaceState::RedFlag) {
+            break; // the break waits for the restart
+        }
+        breakLeft_ = std::max(0.0, breakLeft_ - kDt);
+        if (breakLeft_ <= 0.0 && hazards_.empty()) { // the marshals clear the track in the break (M13.4)
             ++qualifyingSegment_;
             beginQualifyingSegment();
         }
@@ -146,6 +160,80 @@ void Sim::updateQualifying() {
     case QualifyingState::Over:
         break;
     }
+    // Flags on the lap under way (M13.4): double yellow deletes it (B1.8.4), single yellow is for the stewards.
+    for (int i = 0; i < static_cast<int>(cars_.size()); ++i) {
+        Car& car = cars_[i];
+        if (outOfRace(i) || car.inPit) {
+            continue;
+        }
+        const Flag flag = flagAt(car.distance);
+        car.lapYellow = car.lapYellow || flag == Flag::Yellow;
+        car.lapDoubleYellow = car.lapDoubleYellow || flag == Flag::DoubleYellow;
+    }
+}
+
+// Red flag in a session (B4.3.1): the cars on the track stop pushing and drive slowly into the pits; the
+// lap under way does not count. A run cut short this way is given back for after the restart.
+void Sim::qualifyingRedFlag() {
+    for (int i = 0; i < static_cast<int>(cars_.size()); ++i) {
+        Car& car = cars_[i];
+        if (outOfRace(i) || car.inPit || (car.quali != QualifyingPhase::OutLap && car.quali != QualifyingPhase::FlyingLap)) {
+            continue;
+        }
+        car.quali = QualifyingPhase::InLap;
+        car.runInterrupted = true;
+    }
+}
+
+// The pit exit opens again (sim: on the player's command, B4.3.1 leaves the moment open). The cars waiting at
+// the exit go first, then everyone due to go out, in a drawn order and kReleaseSpacing apart.
+void Sim::qualifyingRestart() {
+    state_ = RaceState::Green;
+    if (qualifyingState_ != QualifyingState::Running) {
+        return;
+    }
+    std::vector<int> waiting;
+    std::vector<int> due;
+    for (int i = 0; i < static_cast<int>(cars_.size()); ++i) {
+        Car& car = cars_[i];
+        if (outOfRace(i) || car.eliminatedIn != 0) {
+            continue;
+        }
+        if (car.inPit && car.quali == QualifyingPhase::OutLap &&
+            track_.wrap(car.distance) >= kPitExitAfterLine - kQualifyingExitHold - 5.0 &&
+            track_.wrap(car.distance) < kPitExitAfterLine) {
+            waiting.push_back(i);
+            continue;
+        }
+        if (car.runInterrupted && car.nextRun > 0) {
+            --car.nextRun; // the run cut short by the red flag
+        }
+        car.runInterrupted = false;
+        if (car.nextRun < 2 && car.runAt[static_cast<std::size_t>(car.nextRun)] >= segmentClock_) {
+            due.push_back(i);
+        }
+    }
+    for (std::size_t k = 0; k < waiting.size(); ++k) {
+        cars_[waiting[k]].stopTimer = kReleaseSpacing * static_cast<double>(k) + kDt;
+    }
+    for (std::size_t k = due.size(); k > 1; --k) { // shuffle
+        std::swap(due[k - 1], due[static_cast<std::size_t>(rng_.uniform() * static_cast<double>(k))]);
+    }
+    for (std::size_t k = 0; k < due.size(); ++k) {
+        Car& car = cars_[due[k]];
+        car.runAt[static_cast<std::size_t>(car.nextRun)] = segmentClock_ - kReleaseSpacing * static_cast<double>(waiting.size() + k);
+    }
+    lastReleaseClock_ = segmentClock_ + kReleaseSpacing; // the first one may go at once
+}
+
+bool Sim::qualifyingAccepts(Command::Type type) const {
+    using Type = Command::Type;
+    return type == Type::SetSectorFlag || type == Type::RedFlag || type == Type::Restart || type == Type::InjectAccident ||
+           type == Type::IssueVerdict || type == Type::HoldHearing;
+}
+
+bool Sim::qualifyingBreak() const {
+    return qualifyingState_ == QualifyingState::Break || qualifyingState_ == QualifyingState::Over;
 }
 
 // A car crossed the line and completed a lap. Only laps begun and completed on the track count (B2.4.3);
@@ -155,15 +243,19 @@ void Sim::onQualifyingLine(int i, double time) {
     if (car.inPit) {
         return; // through the pit lane
     }
-    const bool open = qualifyingState_ == QualifyingState::Running;
+    const bool open = qualifyingState_ == QualifyingState::Running && state_ != RaceState::RedFlag;
     if (car.quali == QualifyingPhase::FlyingLap) {
-        qualifyingLaps_.push_back(QualifyingLap{i, qualifyingSegment_, car.lastLapTime, time, true});
+        const bool deleted = config_.rules.qualifyingDoubleYellowDeletesLap && car.lapDoubleYellow;
+        qualifyingLaps_.push_back(QualifyingLap{i, qualifyingSegment_, car.lastLapTime, time, !deleted, car.lapYellow});
         if (--car.flyingLapsLeft <= 0 || !open) {
             car.quali = QualifyingPhase::InLap;
+            car.runInterrupted = false; // the run is over
         }
     } else if (car.quali == QualifyingPhase::OutLap) {
         car.quali = open ? QualifyingPhase::FlyingLap : QualifyingPhase::InLap;
     }
+    car.lapYellow = false; // a new lap begins
+    car.lapDoubleYellow = false;
 }
 
 bool Sim::qualifyingWantsPit(int i) const {

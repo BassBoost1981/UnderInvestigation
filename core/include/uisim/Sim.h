@@ -168,7 +168,8 @@ struct QualifyingLap {
     int segment = 0;     // 0-based
     double time = 0.0;   // lap time
     double setAt = 0.0;  // session time at the end of the lap; with equal times the earlier one is ahead (B2.4.3)
-    bool valid = true;   // false: deleted
+    bool valid = true;   // false: deleted (through double yellow, B1.8.4, M13.4)
+    bool throughYellow = false; // passed a single yellow sector: the stewards may judge it (13.5)
 };
 
 // Marshal radio to race control (M6.5). Structured; the presentation layer words it.
@@ -324,6 +325,9 @@ private:
         std::array<int, 2> runLaps{};   // flying laps planned for each run
         int nextRun = 0;
         int flyingLapsLeft = 0;
+        bool lapYellow = false;         // the lap under way passed a single / double yellow sector (M13.4)
+        bool lapDoubleYellow = false;
+        bool runInterrupted = false;    // called in by the red flag before the run was over: it gets the run back
     };
 
     struct SafetyCar {
@@ -394,6 +398,10 @@ private:
     bool qualifyingWantsPit(int car) const;
     bool qualifyingYields(int slow, int fast) const;
     bool qualifyingPushing(int car) const; // at full pace: on a flying lap or winding up for one
+    void qualifyingRedFlag();
+    void qualifyingRestart();
+    bool qualifyingAccepts(Command::Type type) const;
+    bool qualifyingBreak() const; // between segments or after the last: no car on the track
     std::vector<double> qualifyingBestTimes(std::vector<double>* setAt = nullptr) const; // [car * segments + segment], 0 = none
     void rankQualifying(std::vector<int>& rank) const;
     void fillQualifyingSnapshot();
