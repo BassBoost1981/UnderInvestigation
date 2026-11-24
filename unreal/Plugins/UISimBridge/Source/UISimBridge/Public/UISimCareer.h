@@ -66,6 +66,7 @@ public:
 	TArray<FUISimSeasonRace> Calendar() const;
 	TArray<FUISimStanding> Drivers() const;
 	TArray<FUISimStanding> Teams() const;
+	TArray<FString> TeamOrder() const; // team names in the order of the entry list, as the cars get their colours
 	// The standings as the console runner prints them ("Drivers: 1. Name 25, 2. ..."), to compare both.
 	FString StandingsLine(bool bTeams) const;
 

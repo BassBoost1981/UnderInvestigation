@@ -67,6 +67,7 @@ int32 UUISeasonWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Allo
 	static const FSlateRoundedBoxBrush Round16(FLinearColor::White, 16.0f);
 	static const FSlateRoundedBoxBrush Round15(FLinearColor::White, 15.0f);
 	static const FSlateRoundedBoxBrush Capsule(FLinearColor::White, 36.0f); // radius of half the height
+	static const FSlateRoundedBoxBrush Dot(FLinearColor::White, 3.5f);
 	static const FSlateRoundedBoxBrush ButtonCapsule(FLinearColor::White, StartButton.GetSize().Y / 2.0);
 	const FSlateBrush* White = FCoreStyle::Get().GetBrush("WhiteBrush");
 	const TSharedRef<FSlateFontMeasure> Measure = FSlateApplication::Get().GetRenderer()->GetFontMeasureService();
@@ -147,7 +148,7 @@ int32 UUISeasonWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Allo
 		SubFont, UIStyle::Mute);
 
 	// Banner: the next race, or the champions after the last one; label and sub line centred as one group.
-	FString BannerLabel, BannerSub;
+	FString BannerLabel, BannerSub, BannerSub2;
 	FLinearColor BannerInk = UIStyle::Text;
 	if (Calendar.IsValidIndex(Next))
 	{
@@ -160,15 +161,21 @@ int32 UUISeasonWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Allo
 		BannerInk = UIStyle::Green;
 		if (Drivers.Num() > 0 && Teams.Num() > 0)
 		{
-			BannerSub = FString::Printf(TEXT("Champion: %s · %s"), *Drivers[0].Name, *Teams[0].Name);
+			// Two lines beside the label: both names are too long for one.
+			BannerSub = FString::Printf(TEXT("Champion: %s"), *Drivers[0].Name);
+			BannerSub2 = FString::Printf(TEXT("Constructors: %s"), *Teams[0].Name);
 		}
 	}
 	const FSlateFontInfo BannerFont = UIStyle::Font(TEXT("Bold"), 21, 60);
 	const double LabelWidth = Width(BannerLabel, BannerFont);
-	BannerSub = Fit(BannerSub, SubFont, UIStyle::TopBanner.GetSize().X - 72.0 - LabelWidth - 12.0);
-	const double GroupLeft = UIStyle::TopBanner.GetCenter().X - (LabelWidth + 12.0 + Width(BannerSub, SubFont)) / 2.0;
+	const double SubRoom = UIStyle::TopBanner.GetSize().X - 72.0 - LabelWidth - 12.0;
+	BannerSub = Fit(BannerSub, SubFont, SubRoom);
+	BannerSub2 = Fit(BannerSub2, SubFont, SubRoom);
+	const double SubWidth = FMath::Max(Width(BannerSub, SubFont), Width(BannerSub2, SubFont));
+	const double GroupLeft = UIStyle::TopBanner.GetCenter().X - (LabelWidth + 12.0 + SubWidth) / 2.0;
 	Text(FVector2D(GroupLeft, UIStyle::TopBanner.Min.Y + 20.0), BannerLabel, BannerFont, BannerInk);
-	Text(FVector2D(GroupLeft + LabelWidth + 12.0, UIStyle::TopBanner.Min.Y + 30.0), BannerSub, SubFont, UIStyle::Text);
+	Text(FVector2D(GroupLeft + LabelWidth + 12.0, UIStyle::TopBanner.Min.Y + (BannerSub2.IsEmpty() ? 30.0 : 22.0)), BannerSub, SubFont, UIStyle::Text);
+	Text(FVector2D(GroupLeft + LabelWidth + 12.0, UIStyle::TopBanner.Min.Y + 38.0), BannerSub2, SubFont, UIStyle::Text);
 
 	// Season rating and races run, as the lap and session fields of the desk.
 	const FVector2D RatingAt = UIStyle::TopSession.Min + FVector2D(16.0, 16.0);
@@ -261,16 +268,18 @@ int32 UUISeasonWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Allo
 	}
 
 	// Championships: a header line, then one row per driver or team.
+	const TArray<FString> TeamOrder = Career.TeamOrder();
 	auto Table = [&](const FBox2D& Card, const TCHAR* Title, const TArray<FUISimStanding>& Rows, bool bDrivers)
 	{
 		const double X = Card.Min.X;
 		const double PtsRight = X + (bDrivers ? 500.0 : 380.0);
 		const double WinsRight = X + (bDrivers ? 550.0 : 440.0);
 		const double PenRight = X + 600.0;
+		const double NameLeft = X + 50.0;
 		Text(Card.Min + FVector2D(16.0, 13.0), Title, CardTitleFont, UIStyle::Text);
 		const double HeadY = Card.Min.Y + 44.0;
 		Text(FVector2D(X + 16.0, HeadY), TEXT("#"), LabelFont, UIStyle::Mute);
-		Text(FVector2D(X + 40.0, HeadY), bDrivers ? TEXT("DRIVER") : TEXT("TEAM"), LabelFont, UIStyle::Mute);
+		Text(FVector2D(NameLeft, HeadY), bDrivers ? TEXT("DRIVER") : TEXT("TEAM"), LabelFont, UIStyle::Mute);
 		TextRight(PtsRight, HeadY, TEXT("PTS"), LabelFont, UIStyle::Mute);
 		TextRight(WinsRight, HeadY, TEXT("WINS"), LabelFont, UIStyle::Mute);
 		if (bDrivers)
@@ -286,18 +295,24 @@ int32 UUISeasonWidget::NativePaint(const FPaintArgs& Args, const FGeometry& Allo
 			const double Top = RowsTop + Index * RowHeight;
 			const double Y = Top + (RowHeight - 15.0) / 2.0;
 			Text(FVector2D(X + 16.0, Y), FString::FromInt(Index + 1), RowFont, UIStyle::Mute);
+			const int32 Team = TeamOrder.IndexOfByKey(bDrivers ? Row.Team : Row.Name);
+			if (Team >= 0)
+			{
+				Box(FVector2D(X + 37.0, Top + RowHeight / 2.0 - 3.5), FVector2D(X + 44.0, Top + RowHeight / 2.0 + 3.5), &Dot,
+					UIStyle::TeamColor(Team, TeamOrder.Num()));
+			}
 			const double NameRight = bDrivers ? X + 240.0 : PtsRight - 50.0;
 			if (bDrivers && Row.bSuspended)
 			{
 				// The tag does not fit after PEN within the card: it follows the name.
 				const double TagWidth = Width(TEXT("SUSPENDED"), TagFont);
-				const FString Name = Fit(Row.Name, RowFont, NameRight - TagWidth - 8.0 - (X + 40.0));
-				Text(FVector2D(X + 40.0, Y), Name, RowFont, UIStyle::Text);
-				Text(FVector2D(X + 40.0 + Width(Name, RowFont) + 8.0, Y + 2.0), TEXT("SUSPENDED"), TagFont, UIStyle::Red);
+				const FString Name = Fit(Row.Name, RowFont, NameRight - TagWidth - 8.0 - (NameLeft));
+				Text(FVector2D(NameLeft, Y), Name, RowFont, UIStyle::Text);
+				Text(FVector2D(NameLeft + Width(Name, RowFont) + 8.0, Y + 2.0), TEXT("SUSPENDED"), TagFont, UIStyle::Red);
 			}
 			else
 			{
-				Text(FVector2D(X + 40.0, Y), Fit(Row.Name, RowFont, NameRight - (X + 40.0)), RowFont, UIStyle::Text);
+				Text(FVector2D(NameLeft, Y), Fit(Row.Name, RowFont, NameRight - (NameLeft)), RowFont, UIStyle::Text);
 			}
 			TextRight(PtsRight, Y, FString::FromInt(Row.Points), RowBold, UIStyle::Text);
 			TextRight(WinsRight, Y, FString::FromInt(Row.Wins), RowFont, UIStyle::Text);

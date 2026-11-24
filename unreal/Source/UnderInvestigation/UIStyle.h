@@ -52,7 +52,12 @@ namespace UIStyle
 	inline const FLinearColor Red = Rgb(229, 56, 59);
 	inline const FLinearColor Green = Rgb(47, 191, 113);
 
-	// Same colours as the cars (UIRaceDirector.cpp): one hue per team.
+	// Same colours as the cars (UIRaceDirector.cpp): one hue per team, teams in the order of the entry list.
+	inline FLinearColor TeamColor(int32 TeamIndex, int32 TeamCount)
+	{
+		const float Hue = 360.0f * TeamIndex / FMath::Max(1, TeamCount);
+		return FLinearColor::MakeFromHSV8(static_cast<uint8>(Hue / 360.0f * 255.0f), 200, 230);
+	}
 	inline FLinearColor TeamColor(const TArray<FUISimEntry>& Entries, int32 EntryIndex)
 	{
 		TArray<FString> Teams;
@@ -60,8 +65,7 @@ namespace UIStyle
 		{
 			Teams.AddUnique(Entry.Team);
 		}
-		const float Hue = 360.0f * Teams.IndexOfByKey(Entries[EntryIndex].Team) / FMath::Max(1, Teams.Num());
-		return FLinearColor::MakeFromHSV8(static_cast<uint8>(Hue / 360.0f * 255.0f), 200, 230);
+		return TeamColor(Teams.IndexOfByKey(Entries[EntryIndex].Team), Teams.Num());
 	}
 
 	// Lexend (OFL, Content/Fonts) for text; the engine font stays for "Mono" columns of numbers.

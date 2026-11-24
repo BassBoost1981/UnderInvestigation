@@ -102,6 +102,19 @@ bool FUISimCareer::IsFinished() const
 	return State && uisim::careerFinished(State->Career, State->Calendar);
 }
 
+TArray<FString> FUISimCareer::TeamOrder() const
+{
+	TArray<FString> Order;
+	if (State)
+	{
+		for (const uisim::Entry& Entry : State->Entries)
+		{
+			Order.AddUnique(CareerText(Entry.team));
+		}
+	}
+	return Order;
+}
+
 FString FUISimCareer::SeasonName() const
 {
 	return State ? CareerText(State->Calendar.name) : FString();

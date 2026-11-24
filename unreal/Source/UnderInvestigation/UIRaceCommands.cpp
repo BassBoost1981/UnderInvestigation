@@ -264,6 +264,71 @@ void AUIRaceDirector::AddMessage(const FString& Text, const FLinearColor& Color)
 	Message.Text = Text;
 	Message.Color = Color;
 	MessageLog.Add(Message);
+	UE_LOG(LogUISim, Display, TEXT("Message at %s: %s"), *FormatRaceTime(Message.Time), *Text);
+}
+
+void AUIRaceDirector::RememberRaceState()
+{
+	const FUISimSnapshot& Snapshot = SimSession.Snapshot();
+	EventState.State = Snapshot.State;
+	EventState.bChequered = Snapshot.bChequered;
+	EventState.bRaceStarted = Snapshot.bRaceStarted;
+	EventState.bGridStart = Snapshot.bGridStart;
+	EventState.TimePenalty.SetNumZeroed(SimSession.Entries().Num());
+	EventState.Pending.SetNumZeroed(SimSession.Entries().Num());
+	for (const FUISimCar& Car : Snapshot.Cars)
+	{
+		EventState.TimePenalty[Car.EntryIndex] = Car.TimePenalty;
+		EventState.Pending[Car.EntryIndex] = Car.PendingPenalty;
+	}
+}
+
+void AUIRaceDirector::LogRaceEvents()
+{
+	// Compared per sim step, so the race time of each message is right at any time scale.
+	const FUISimSnapshot& Snapshot = SimSession.Snapshot();
+	if (Snapshot.bFormationLap && !bFormationAnnounced) // also when the race begins with it, before the first step
+	{
+		AddMessage(TEXT("FORMATION LAP STARTED"), UIStyle::Mute);
+	}
+	bFormationAnnounced = Snapshot.bFormationLap;
+	// A start behind the Safety Car is the player's command and has its own message: the race then begins in the SC state.
+	if (Snapshot.bRaceStarted && !EventState.bRaceStarted && EventState.bGridStart && Snapshot.State != EUISimRaceState::SafetyCar)
+	{
+		AddMessage(TEXT("LIGHTS OUT · RACE STARTED"), UIStyle::Green);
+	}
+	// The formation lap runs in the Safety Car state too: only a Safety Car period of the race counts.
+	if (EventState.State == EUISimRaceState::SafetyCar && Snapshot.State == EUISimRaceState::Green && EventState.bRaceStarted)
+	{
+		// From the grid it is a standing start (after the Safety Car or a red flag), otherwise the Safety Car came in.
+		AddMessage(EventState.bGridStart ? TEXT("LIGHTS OUT · RACE RESUMED") : TEXT("SAFETY CAR IN · TRACK CLEAR"), UIStyle::Green);
+	}
+	if (Snapshot.bChequered && !EventState.bChequered)
+	{
+		AddMessage(TEXT("CHEQUERED FLAG"), UIStyle::Text);
+	}
+	for (const FUISimCar& Car : Snapshot.Cars)
+	{
+		const FString Code = SimSession.Entries()[Car.EntryIndex].Code.ToUpper();
+		const double Change = Car.TimePenalty - EventState.TimePenalty[Car.EntryIndex];
+		const EUISimPenalty Was = EventState.Pending[Car.EntryIndex];
+		if (Was != EUISimPenalty::None && Car.PendingPenalty == EUISimPenalty::None)
+		{
+			// Served in the pit lane, or not served in time and turned into race time (B1.9.6 c).
+			if (Change > 0.5)
+			{
+				AddMessage(FString::Printf(TEXT("%s NOT SERVED · +%.0f S FOR %s"), *PenaltyName(Was).ToUpper(), Change, *Code), UIStyle::Red);
+			}
+			else
+			{
+				AddMessage(FString::Printf(TEXT("%s SERVED · %s"), *PenaltyName(Was).ToUpper(), *Code), UIStyle::Mute);
+			}
+		}
+		else if (Change < -0.5)
+		{
+			AddMessage(FString::Printf(TEXT("%.0f S TIME PENALTY SERVED AT THE STOP · %s"), -Change, *Code), UIStyle::Mute);
+		}
+	}
 }
 
 void AUIRaceDirector::LogDecision(const FUICommand& Command)
@@ -321,16 +386,18 @@ void AUIRaceDirector::LogDecision(const FUICommand& Command)
 	case EUICommand::Verdict:
 	case EUICommand::DismissIncident:
 	{
+		// From the command itself: the sim takes the verdict over with its next step, so it is not in the session yet.
 		const int32 Index = Command.Type == EUICommand::Verdict ? ReviewIncidentIndex : Command.Index;
-		const FUISimVerdict* Verdict = SimSession.VerdictFor(SimSession.Incidents()[Index].Id);
-		if (!Verdict || Verdict->Penalty == EUISimPenalty::None)
+		const FUISimIncident& Incident = SimSession.Incidents()[Index];
+		const EUISimPenalty Penalty = Command.Type == EUICommand::Verdict ? Command.Penalty : EUISimPenalty::None;
+		if (Penalty == EUISimPenalty::None)
 		{
 			AddMessage(About(Index) + TEXT(" · NO FURTHER ACTION"), UIStyle::Mute);
 		}
 		else
 		{
-			AddMessage(FString::Printf(TEXT("%s FOR %s · %s"), *PenaltyName(Verdict->Penalty).ToUpper(),
-				*SimSession.Entries()[Verdict->Car].Code.ToUpper(), *About(Index)), UIStyle::Red);
+			AddMessage(FString::Printf(TEXT("%s FOR %s · %s"), *PenaltyName(Penalty).ToUpper(),
+				*SimSession.Entries()[Accused == 0 ? Incident.Car : Incident.OtherCar].Code.ToUpper(), *About(Index)), UIStyle::Red);
 		}
 		break;
 	}
@@ -504,7 +571,7 @@ void AUIRaceDirector::RunScript()
 		RunScriptLine(Script[ScriptNext++]);
 		return;
 	}
-	while (ScriptNext < Script.Num() && Snapshot.Time >= Script[ScriptNext].Time)
+	while (ScriptNext < Script.Num() && Snapshot.Time >= Script[ScriptNext].Time && !bShotThisFrame)
 	{
 		RunScriptLine(Script[ScriptNext++]);
 	}
@@ -516,6 +583,7 @@ void AUIRaceDirector::RunScriptLine(const FScriptLine& Line)
 	{
 		const FString File = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Screenshots"), Line.ShotName + TEXT(".png"));
 		FScreenshotRequest::RequestScreenshot(File, true, false); // with UI
+		bShotThisFrame = true;
 		UE_LOG(LogUISim, Display, TEXT("Screenshot requested: %s"), *File);
 	}
 	else if (Line.bClick)

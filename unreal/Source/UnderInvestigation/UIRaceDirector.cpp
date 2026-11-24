@@ -526,8 +526,11 @@ void AUIRaceDirector::SpawnCameras()
 		Spawn(Camera.Name, Location, FRotator::ZeroRotator);
 	}
 	const FBox Bounds(SimSession.CenterlineWorld());
-	Spawn(TEXT("OVERVIEW"), Bounds.GetCenter() + FVector(0, 0, Bounds.GetSize().GetMax() * 0.95), FRotator(-90.0, 0.0, 0.0),
-		TNumericLimits<double>::Max());
+	// Straight down, world +X up in the picture. High enough for the whole track in the 16:9 picture of the
+	// video card: the field of view is horizontal, so the vertical half-angle is the smaller one.
+	const double TanX = FMath::Tan(FMath::DegreesToRadians(30.0)), TanY = TanX * 9.0 / 16.0;
+	const double OverviewHeight = 1.15 * FMath::Max(Bounds.GetSize().Y / 2.0 / TanX, Bounds.GetSize().X / 2.0 / TanY);
+	Spawn(TEXT("OVERVIEW"), Bounds.GetCenter() + FVector(0, 0, OverviewHeight), FRotator(-90.0, 0.0, 0.0), TNumericLimits<double>::Max());
 	Cameras.Last()->GetCameraComponent()->SetFieldOfView(60.0f);
 
 	// Pit lane (M8.8): fixed, on the far side of the straight, looking across the lane at the boxes.
@@ -553,6 +556,7 @@ FVector AUIRaceDirector::CarLocation(int32 EntryIndex) const
 void AUIRaceDirector::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	bShotThisFrame = false;
 	if (bSeasonScreen)
 	{
 		TickSeasonScreen();
@@ -736,6 +740,13 @@ void AUIRaceDirector::Tick(float DeltaSeconds)
 		bSafetyCarWasOnTrack = SimSession.Snapshot().bSafetyCarOnTrack;
 		// Scripted commands at the exact race time, independent of the frame rate and time scale.
 		RunScript();
+		if (bShotThisFrame)
+		{
+			// The picture is taken at the end of this frame: stop here, so it shows this moment and the next
+			// script line (maybe another screenshot, which would replace this request) waits for the next frame.
+			Accumulator = 0.0;
+			break;
+		}
 		if (SafetyCarAtSeconds > 0.0 && SimSession.Snapshot().Time >= SafetyCarAtSeconds)
 		{
 			SafetyCarAtSeconds = 0.0;
@@ -743,7 +754,9 @@ void AUIRaceDirector::Tick(float DeltaSeconds)
 			Command.Type = EUICommand::DeploySafetyCar;
 			Execute(Command);
 		}
+		RememberRaceState();
 		SimSession.Step();
+		LogRaceEvents();
 		if (!bSafetyCarWasOnTrack)
 		{
 			PreviousSafetyCarDistance = SimSession.Snapshot().SafetyCarDistance; // just deployed: no lerp from 0

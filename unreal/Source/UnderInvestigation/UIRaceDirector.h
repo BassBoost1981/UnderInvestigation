@@ -246,6 +246,21 @@ private:
 	TArray<FUIMessage> MessageLog;
 	void AddMessage(const FString& Text, const FLinearColor& Color);
 	void LogDecision(const FUICommand& Command); // the message for a race control command, after it ran
+	// Messages for what happens without a command (M12 clean-up): start, Safety Car in, chequered flag, penalties
+	// served or converted. RememberRaceState() before a sim step, LogRaceEvents() after it.
+	void RememberRaceState();
+	void LogRaceEvents();
+	struct FRaceEventState
+	{
+		EUISimRaceState State = EUISimRaceState::Green;
+		bool bChequered = false;
+		bool bRaceStarted = false;
+		bool bGridStart = false;
+		TArray<double> TimePenalty;       // by entry index
+		TArray<EUISimPenalty> Pending;    // by entry index
+	};
+	FRaceEventState EventState;
+	bool bFormationAnnounced = false;
 	int32 ActiveCamera = 0;
 
 	UPROPERTY()
@@ -305,6 +320,7 @@ private:
 	TArray<FScriptLine> Script; // -UISimScript, sorted by time
 	void RunScriptLine(const FScriptLine& Line);
 	int32 ScriptNext = 0;
+	bool bShotThisFrame = false; // a script screenshot was requested in this frame: the engine keeps only one request per frame
 	double FinishedAt = 0.0; // real time of the finish, for script lines after the flag
 	TSharedPtr<FSlateVirtualUserHandle> ClickUser;
 
