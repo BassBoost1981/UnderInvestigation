@@ -172,6 +172,16 @@ RaceRules loadRules(const std::filesystem::path& path) {
         rules.rightOfReviewHours = integer("right_of_review_hours");
         rules.maxDriversPerTeam = integer("max_drivers_per_team");
         rules.formationLapBeforeStart = flag("formation_lap_before_start");
+        rules.qualifyingSegmentMinutes = integers("qualifying_segment_minutes");
+        rules.qualifyingBreakMinutes = integer("qualifying_break_minutes");
+        rules.qualifyingFinalSegmentCars = integer("qualifying_final_segment_cars");
+        rules.qualifyingLapMayFinishAfterTime = flag("qualifying_lap_may_finish_after_time");
+        rules.qualifyingRedFlagStopsClock = flag("qualifying_red_flag_stops_clock");
+        rules.qualifyingStoppedCarTakesNoFurtherPart = flag("qualifying_stopped_car_takes_no_further_part");
+        rules.qualifyingDoubleYellowDeletesLap = flag("qualifying_double_yellow_deletes_lap");
+        rules.qualifyingMinTimePercent = number("qualifying_min_time_percent");
+        rules.qualifyingImpedingGridDrop = integer("qualifying_impeding_grid_drop");
+        rules.gridPenaltyBackOfGridAbove = integer("grid_penalty_back_of_grid_above");
         return rules;
     } catch (const json::exception& e) {
         throw std::runtime_error("Bad rules data in " + displayName(path) + ": " + e.what());

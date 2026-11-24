@@ -130,6 +130,18 @@ TEST_CASE("Rules file loads with the documented defaults") {
     CHECK(rules.rightOfReviewHours == 96);         // ISC 14.4.1
     CHECK(rules.maxDriversPerTeam == 4);           // B1, Changes of Driver
     CHECK(rules.formationLapBeforeStart);          // B5.6
+    // M13.1: qualifying
+    CHECK(rules.qualifyingSegmentMinutes == std::vector<int>{18, 15, 13}); // B2.4.2
+    CHECK(rules.qualifyingSegmentMinutes == defaults.qualifyingSegmentMinutes);
+    CHECK(rules.qualifyingBreakMinutes == 7);               // B2.4.2
+    CHECK(rules.qualifyingFinalSegmentCars == 10);          // B2.4.2
+    CHECK(rules.qualifyingLapMayFinishAfterTime);           // B4.1.2 c
+    CHECK(rules.qualifyingRedFlagStopsClock);               // B4.3.1 a
+    CHECK(rules.qualifyingStoppedCarTakesNoFurtherPart);    // B4.3.2
+    CHECK(rules.qualifyingDoubleYellowDeletesLap);          // B1.8.4
+    CHECK(rules.qualifyingMinTimePercent == 107.0);         // B2.4.3 b i
+    CHECK(rules.qualifyingImpedingGridDrop == 3);           // stewards' practice
+    CHECK(rules.gridPenaltyBackOfGridAbove == 15);          // B2.5.4 b
 }
 
 TEST_CASE("Invalid marshal sector is rejected") {

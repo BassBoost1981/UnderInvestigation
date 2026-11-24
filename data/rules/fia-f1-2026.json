@@ -340,6 +340,66 @@
       "source": "F1 SR 2026 Section B, B5.6 (formation lap), B5.7 (start procedure, car immobilised on the grid)",
       "verified": true,
       "note": "Before a standing start the cars do a formation lap in grid order; overtaking only to re-establish the order. A car immobilised on the grid is shown with yellow flags, pushed to the pit lane and may join from there after the start. Aborted start and extra formation lap: see start_repeat_laps_deducted."
+    },
+    "qualifying_segment_minutes": {
+      "value": [18, 15, 13],
+      "source": "F1 SR 2026 Section B (Iss 09, 2026-10-01), B2.4.2",
+      "verified": true,
+      "note": "Three segments Q1, Q2, Q3 of 18, 15 and 13 minutes. The lap times of a finished segment are deleted for the cars that go on. Checked again on 2026-11-24: Issue 09 is still the newest 2026 issue."
+    },
+    "qualifying_break_minutes": {
+      "value": 7,
+      "source": "F1 SR 2026 Section B (Iss 09, 2026-10-01), B2.4.2",
+      "verified": true,
+      "note": "Break between Q1 and Q2 and between Q2 and Q3. Sim: the break is skipped or shortened, nothing happens in it."
+    },
+    "qualifying_final_segment_cars": {
+      "value": 10,
+      "source": "F1 SR 2026 Section B (Iss 09, 2026-10-01), B2.4.2 and the closing paragraph of B2.4.3",
+      "verified": true,
+      "note": "Ten cars run in Q3 whatever the size of the field. The rule is written for 22 cars (6 eliminated after Q1 and after Q2); with 20 cars 5 are eliminated each time, with 24 cars 7. Sim: eliminated per segment = (cars - 10) / 2."
+    },
+    "qualifying_lap_may_finish_after_time": {
+      "value": true,
+      "source": "F1 SR 2026 Section B (Iss 09, 2026-10-01), B4.1.2 c, B2.4.3",
+      "verified": true,
+      "note": "At the end of a segment no driver may cross the control line more than once, and only laps started and completed on the track count. Read together: a lap begun before the time ran out may be completed, no further lap may be started. The article does not say this in one sentence; the mechanic is inferred."
+    },
+    "qualifying_red_flag_stops_clock": {
+      "value": true,
+      "source": "F1 SR 2026 Section B (Iss 09, 2026-10-01), B4.1.2, B4.1.3, B4.3.1",
+      "verified": true,
+      "note": "Red flag in a session: all cars slow down and return to the pit lane; the interrupted segment is extended so that the permitted track time is kept, which amounts to a stopped clock. If no car could still start a timed lap, the race director need not resume the segment. Lap times already set stay valid. When the pit exit reopens is not in Section B; sim: on the player's command."
+    },
+    "qualifying_stopped_car_takes_no_further_part": {
+      "value": true,
+      "source": "F1 SR 2026 Section B (Iss 09, 2026-10-01), B4.3.2",
+      "verified": true,
+      "note": "A driver whose car stops outside the pit lane and receives physical assistance takes no further part in that session."
+    },
+    "qualifying_double_yellow_deletes_lap": {
+      "value": true,
+      "source": "F1 SR 2026 Section B (Iss 09, 2026-10-01), B1.8.4",
+      "verified": true,
+      "note": "A lap through a sector with double waved yellow flags in a lap-time session is deleted; this follows from the wording, not from a stewards' decision. Under a single waved yellow the stewards judge whether the driver slowed down. Sim: double yellow deletes the lap automatically; a fast lap through a single yellow becomes an incident for the player."
+    },
+    "qualifying_min_time_percent": {
+      "value": 107,
+      "source": "F1 SR 2026 Section B (Iss 09, 2026-10-01), B2.4.3 b i",
+      "verified": true,
+      "note": "A driver eliminated in Q1 whose best lap is above 107 % of the fastest Q1 lap is unclassified, unless the track was declared wet; so is a driver without a lap time. Unclassified drivers start only with the stewards' permission and then behind all classified drivers (B2.5.4 b v). Sim: they are admitted and start at the back."
+    },
+    "qualifying_impeding_grid_drop": {
+      "value": 3,
+      "source": "F1 SR 2026 Section B (Iss 09, 2026-10-01), B4.1.1, B1.9.4, B1.8.5",
+      "verified": false,
+      "note": "Unnecessarily impeding another driver or stopping on the circuit in a lap-time session: the stewards may delete lap times or drop the driver as many grid positions as they consider appropriate; normally investigated after the session. The regulations give no number. Three places is recent stewards' practice and could not be checked against the Penalty Guidelines on 2026-11-24."
+    },
+    "grid_penalty_back_of_grid_above": {
+      "value": 15,
+      "source": "F1 SR 2026 Section B (Iss 09, 2026-10-01), B2.5.4 b",
+      "verified": true,
+      "note": "Grid penalties are added up. Up to 15 places: temporary slot = qualifying position plus places; two cars on one slot: the slower qualifier keeps it, the other goes directly ahead; cars without a penalty fill the free slots in qualifying order and penalised cars move up into gaps. More than 15 places: behind all other classified drivers. Track limits in qualifying have no automatic rule: the stewards may delete the lap time (B1.9.4, B1.8.6)."
     }
   }
 }

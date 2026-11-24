@@ -71,6 +71,17 @@ struct RaceRules {
     int rightOfReviewHours = 96;            // ISC 14.4.1: petition for review; needs a new element (ISC 14.1.1)
     int maxDriversPerTeam = 4;              // B1, Changes of Driver: reserve drivers may score
     bool formationLapBeforeStart = true;    // B5.6
+    // M13 (from package 13.1): qualifying
+    std::vector<int> qualifyingSegmentMinutes = {18, 15, 13}; // B2.4.2: Q1, Q2, Q3
+    int qualifyingBreakMinutes = 7;                  // B2.4.2
+    int qualifyingFinalSegmentCars = 10;             // B2.4.2: eliminated per segment = (cars - 10) / 2
+    bool qualifyingLapMayFinishAfterTime = true;     // B4.1.2 c: a lap begun in time may be completed
+    bool qualifyingRedFlagStopsClock = true;         // B4.3.1 a
+    bool qualifyingStoppedCarTakesNoFurtherPart = true; // B4.3.2
+    bool qualifyingDoubleYellowDeletesLap = true;    // B1.8.4
+    double qualifyingMinTimePercent = 107.0;         // B2.4.3 b i: Q1 only
+    int qualifyingImpedingGridDrop = 3;              // B4.1.1, B1.9.4: no number in the rule; stewards' practice
+    int gridPenaltyBackOfGridAbove = 15;             // B2.5.4 b
 };
 
 } // namespace uisim
