@@ -208,3 +208,70 @@ TEST_CASE("Stints in the snapshot match the stops of the race") {
         CHECK(car.plannedStopLap == 0); // nothing planned after the flag
     }
 }
+
+namespace {
+
+Sim makeRaceWithGrid(std::uint64_t seed, std::vector<int> grid, int laps = 50) {
+    RaceConfig config{laps, seed};
+    config.grid = std::move(grid);
+    return Sim(loadTrack(dataDir() / "tracks" / "testring.json"), loadEntries(dataDir() / "entries" / "fictional-grid.json"),
+               config);
+}
+
+// Entry indices in grid order, pole first.
+std::vector<int> gridOf(const Sim& sim) {
+    std::vector<int> grid(sim.snapshot().cars.size());
+    for (const CarState& car : sim.snapshot().cars) {
+        grid[car.gridPosition - 1] = car.entryIndex;
+    }
+    return grid;
+}
+
+} // namespace
+
+TEST_CASE("A given grid puts every car on its place (M13.2)") {
+    Sim byPace = makeRace(1);
+    std::vector<int> reversed = gridOf(byPace);
+    std::reverse(reversed.begin(), reversed.end());
+    Sim sim = makeRaceWithGrid(1, reversed);
+    CHECK(gridOf(sim) == reversed);
+    // Further back on the grid means further behind the line.
+    std::vector<double> distance(reversed.size());
+    for (const CarState& car : sim.snapshot().cars) {
+        distance[car.gridPosition - 1] = car.distance;
+    }
+    for (std::size_t slot = 1; slot < distance.size(); ++slot) {
+        CHECK(distance[slot] < distance[slot - 1]);
+    }
+}
+
+TEST_CASE("The grid by pace, given explicitly, is the same race (M13.2)") {
+    Sim reference = makeRace(1);
+    Sim sim = makeRaceWithGrid(1, gridOf(reference));
+    runToEnd(reference);
+    runToEnd(sim);
+    REQUIRE(sim.snapshot().cars.size() == reference.snapshot().cars.size());
+    CHECK(sim.snapshot().time == reference.snapshot().time);
+    for (std::size_t k = 0; k < sim.snapshot().cars.size(); ++k) {
+        const CarState& a = sim.snapshot().cars[k];
+        const CarState& b = reference.snapshot().cars[k];
+        CHECK(a.entryIndex == b.entryIndex);
+        CHECK(a.lastLineTime == b.lastLineTime);
+        CHECK(a.bestLapTime == b.bestLapTime);
+        CHECK(a.pitStops == b.pitStops);
+    }
+    CHECK(sim.incidents().size() == reference.incidents().size());
+}
+
+TEST_CASE("A grid that does not name every entry once is rejected (M13.2)") {
+    Sim byPace = makeRace(1);
+    std::vector<int> grid = gridOf(byPace);
+    std::vector<int> tooShort(grid.begin(), grid.end() - 1);
+    CHECK_THROWS_AS(makeRaceWithGrid(1, tooShort), std::invalid_argument);
+    std::vector<int> twice = grid;
+    twice[1] = twice[0];
+    CHECK_THROWS_AS(makeRaceWithGrid(1, twice), std::invalid_argument);
+    std::vector<int> unknown = grid;
+    unknown[0] = static_cast<int>(grid.size());
+    CHECK_THROWS_AS(makeRaceWithGrid(1, unknown), std::invalid_argument);
+}

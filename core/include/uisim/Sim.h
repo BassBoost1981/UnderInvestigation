@@ -45,6 +45,9 @@ struct RaceConfig {
     double followUpChanceScale = 1.0;
     // Rain over the race (M9.2, data/weather); empty = dry, the race is then unchanged.
     WeatherPlan weather{};
+    // Starting grid (M13.2): entry indices, pole first, every entry exactly once. Empty = the grid by
+    // expected pace with a little noise, as before; the race is then unchanged.
+    std::vector<int> grid{};
 };
 
 struct RaceStats {

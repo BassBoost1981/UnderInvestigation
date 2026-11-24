@@ -1,5 +1,6 @@
 // Console runner: simulates a full race without graphics and prints the result.
 // Usage: uisim_runner [--laps N] [--seed S] [--track file.json] [--entries file.json] [--weather file.json]
+//                     [--grid CODE,CODE,...]   (M13.2: starting grid by driver code, pole first)
 //        uisim_runner --season file.json [--seed S] [--entries file.json] [--career save.json] [--races N]
 //                     [--verdicts none|expected|heard]   (M10.4/M10.5: a season, optionally continued from a save file)
 
@@ -36,8 +37,9 @@ std::string formatTime(double seconds) {
 
 void printUsage() {
     std::printf("Usage: uisim_runner [--laps N] [--seed S] [--track file.json] [--entries file.json] [--weather file.json]\n");
+    std::printf("                    [--grid CODE,CODE,...]   (starting grid by driver code, pole first, every entry once)\n");
     std::printf("       uisim_runner --season file.json [--seed S] [--entries file.json] [--career save.json] [--races N]\n");
-    std::printf("                    [--verdicts none|expected]\n");
+    std::printf("                    [--verdicts none|expected|heard]\n");
 }
 
 void printStandings(const char* title, const std::vector<ChampionshipLine>& lines, std::size_t count) {
@@ -173,6 +175,7 @@ int main(int argc, char** argv) {
     std::filesystem::path trackPath = dataDir / "tracks" / "testring.json";
     std::filesystem::path entriesPath = dataDir / "entries" / "fictional-grid.json";
     std::filesystem::path weatherPath; // empty = dry
+    std::string gridCodes;             // single race only: driver codes, pole first; empty = grid by pace
     std::filesystem::path seasonPath;  // empty = a single race
     std::filesystem::path careerPath;  // season only: save file to continue from and to write
     int maxRaces = 0;                  // season only: races to run now, 0 = all that are left
@@ -201,6 +204,8 @@ int main(int argc, char** argv) {
                 entriesPath = value;
             } else if (arg == "--weather") {
                 weatherPath = value;
+            } else if (arg == "--grid") {
+                gridCodes = value;
             } else if (arg == "--season") {
                 seasonPath = value;
             } else if (arg == "--career") {
@@ -231,7 +236,19 @@ int main(int argc, char** argv) {
         if (!weatherPath.empty()) {
             config.weather = loadWeather(weatherPath);
         }
-        Sim sim(loadTrack(trackPath), loadEntries(entriesPath), config);
+        const std::vector<Entry> raceEntries = loadEntries(entriesPath);
+        for (std::size_t from = 0; !gridCodes.empty() && from <= gridCodes.size();) {
+            // The Sim checks that every entry is named exactly once.
+            const std::size_t comma = std::min(gridCodes.find(',', from), gridCodes.size());
+            const std::string code = gridCodes.substr(from, comma - from);
+            const auto it = std::find_if(raceEntries.begin(), raceEntries.end(), [&](const Entry& e) { return e.code == code; });
+            if (it == raceEntries.end()) {
+                throw std::invalid_argument("--grid: no entry with the code " + code);
+            }
+            config.grid.push_back(static_cast<int>(it - raceEntries.begin()));
+            from = comma + 1;
+        }
+        Sim sim(loadTrack(trackPath), raceEntries, config);
         const long maxSteps = static_cast<long>(config.laps) * 600 * 20;
         long steps = 0;
         while (!sim.finished() && steps < maxSteps) {

@@ -180,6 +180,25 @@ Sim::Sim(Track track, std::vector<Entry> entries, RaceConfig config)
     std::sort(rating.begin(), rating.end(), [](const auto& a, const auto& b) {
         return a.first != b.first ? a.first > b.first : a.second < b.second;
     });
+    if (!config_.grid.empty()) {
+        // A given grid (M13.2) replaces the order. The noise above is still drawn, so the random
+        // sequence of the race does not depend on where the grid comes from.
+        std::vector<bool> seen(n, false);
+        bool valid = static_cast<int>(config_.grid.size()) == n;
+        for (std::size_t slot = 0; valid && slot < config_.grid.size(); ++slot) {
+            const int entry = config_.grid[slot];
+            valid = entry >= 0 && entry < n && !seen[entry];
+            if (valid) {
+                seen[entry] = true;
+            }
+        }
+        if (!valid) {
+            throw std::invalid_argument("The grid must name every entry exactly once");
+        }
+        for (int slot = 0; slot < n; ++slot) {
+            rating[slot].second = config_.grid[slot];
+        }
+    }
 
     cars_.resize(n);
     std::vector<std::string> teams; // in order of appearance; one pit box each
