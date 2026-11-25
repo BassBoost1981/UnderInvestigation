@@ -9,8 +9,9 @@ namespace uisim {
 
 enum class Flag { Green, Yellow, DoubleYellow }; // per marshal sector
 enum class RaceState { Green, VirtualSafetyCar, SafetyCar, RedFlag };
-// Steward penalties, ordered by severity.
-enum class Penalty { None, Warning, FiveSeconds, TenSeconds, DriveThrough, StopAndGo, Disqualification };
+// Steward penalties. The race penalties are ordered by severity. DeleteLap and GridDrop (M13.5) are the
+// verdicts of a qualifying session: delete the incident's timed lap, drop the car places on the grid.
+enum class Penalty { None, Warning, FiveSeconds, TenSeconds, DriveThrough, StopAndGo, Disqualification, DeleteLap, GridDrop };
 
 // Spin: stops briefly and rejoins. OffTrack: stranded beside the track, retired.
 // Crash: stopped on the track with debris, retired.

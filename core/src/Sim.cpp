@@ -12,6 +12,7 @@
 namespace uisim {
 namespace {
 
+using detail::kFollowGap;
 using detail::kPitExitAfterLine;
 using detail::kPitLateral;
 using detail::kQualifyingExitHold;
@@ -51,7 +52,6 @@ double acceleration(double v, double topSpeed) {
 }
 
 // Car interaction.
-constexpr double kFollowGap = 12.0;   // closer than this: blocked unless overtaking
 constexpr double kMinGap = 3.0;       // hard separation
 constexpr double kSlipstreamGap = 40.0;
 constexpr double kSlipstreamBonus = 0.02; // top-speed gain right behind another car
@@ -425,13 +425,32 @@ void Sim::applyVerdict(const Command& c) {
     if (incidents_[c.incidentId - 1].heard && !snapshot_.finished && time_ < incidents_[c.incidentId - 1].hearingUntil) {
         return; // the hearing is still going on
     }
+    // A session knows only its own verdicts, a race only its own (M13.5); once the race has started, the
+    // session takes none.
+    const bool sessionPenalty = c.penalty == Penalty::DeleteLap || c.penalty == Penalty::GridDrop;
+    const bool neutral = c.penalty == Penalty::None || c.penalty == Penalty::Warning;
+    if ((config_.qualifying && (gridLocked_ || !(neutral || sessionPenalty))) || (!config_.qualifying && sessionPenalty) ||
+        (c.penalty == Penalty::GridDrop && c.places < 1)) {
+        return;
+    }
     const bool raceOver = snapshot_.finished;
-    verdicts_.push_back({c.incidentId, c.car, c.penalty, time_, raceOver});
+    verdicts_.push_back({c.incidentId, c.car, c.penalty, time_, raceOver, c.penalty == Penalty::GridDrop ? c.places : 0});
     if (c.car < 0) {
         return;
     }
     Car& car = cars_[c.car];
     switch (c.penalty) {
+    case Penalty::DeleteLap: {
+        // The incident's timed lap, if it has one and it is the penalised car's; the classification follows
+        // from the laps. An elimination already made stands (sim simplification, DESIGN.md 8.8).
+        const int lap = incidents_[c.incidentId - 1].lap;
+        if (lap >= 0 && lap < static_cast<int>(qualifyingLaps_.size()) && qualifyingLaps_[lap].car == c.car) {
+            qualifyingLaps_[lap].valid = false;
+        }
+        break;
+    }
+    case Penalty::GridDrop: // applied when the grid is formed (startingGrid)
+        break;
     case Penalty::FiveSeconds:
     case Penalty::TenSeconds: {
         const double seconds = c.penalty == Penalty::FiveSeconds ? 5.0 : 10.0;
@@ -833,7 +852,7 @@ void Sim::releaseFromBox(int i) {
     if (traffic < 0) {
         return;
     }
-    if (!car.releaseChecked && !config_.qualifying && rng_.uniform() < kUnsafeReleaseChance) { // qualifying: from 13.5
+    if (!car.releaseChecked && !config_.qualifying && rng_.uniform() < kUnsafeReleaseChance) { // qualifying: not in M13 (DESIGN.md 8.8)
         car.releaseChecked = true;
         addIncident(Incident::Type::UnsafeRelease, i, traffic, 1.0); // B1.6.2 a: the team's responsibility
         incidents_.back().measure = gap;
@@ -1411,7 +1430,7 @@ double Sim::speedCap(int i, double gapAhead) const {
     }
     const Flag flag = flagAt(car.distance);
     if (flag == Flag::Yellow) {
-        cap *= config_.rules.yellowSpeedFactor;
+        cap *= config_.qualifying && car.yellowLift > 0.0 ? car.yellowLift : config_.rules.yellowSpeedFactor;
     } else if (flag == Flag::DoubleYellow) {
         cap *= config_.rules.doubleYellowSpeedFactor;
     }
@@ -1586,6 +1605,9 @@ void Sim::step() {
             }
             continue;
         }
+        if (config_.qualifying && a >= 0 && car.overtakeTarget != a && gap[i] < kFollowGap) {
+            qualifyingTraffic(a, i); // M13.5: the slow car may not move over at once
+        }
         if (a >= 0 && car.overtakeTarget != a && gap[i] < kFollowGap && yieldsTo(a, i)) {
             car.overtakeTarget = a; // the lapped car moves over: a free pass, no contest
             car.overtakeTimer = kOvertakeTimeout;
@@ -1657,7 +1679,7 @@ void Sim::step() {
             car.inPit = true;
             car.stopDone = false;
             car.releaseChecked = false;
-            car.pitSpeedExcess = config_.qualifying ? 0.0 // qualifying: from 13.5
+            car.pitSpeedExcess = config_.qualifying ? 0.0 // qualifying: not in M13 (DESIGN.md 8.8)
                 : rng_.uniform() < kSpeedingChance ? rng_.uniform(kSpeedingMinKmh, kSpeedingMaxKmh) : 0.0;
             car.overtakeTarget = -1;
             car.unlapping = false;
@@ -1709,7 +1731,8 @@ void Sim::step() {
         if (car.overtakeTarget >= 0) {
             const Car& target = cars_[car.overtakeTarget];
             const bool passed = track_.wrap(target.distance - car.distance) > lapLength / 2.0;
-            if (passed && std::abs(target.distance - car.distance) < lapLength / 2.0) {
+            // In a session every pass is a slow car moving over (B4.1.1), no overtake to judge (M13.5).
+            if (passed && !config_.qualifying && std::abs(target.distance - car.distance) < lapLength / 2.0) {
                 ++stats_.overtakes; // same lap: a real position change
                 if (!overtakingAllowed(i)) {
                     recordViolation(i, car.overtakeTarget);
@@ -1780,7 +1803,9 @@ void Sim::onSegmentEntered(int i) {
 
     // Track limits (B1.8.6): every offence deletes the lap and counts; the warning offence brings
     // the black-and-white flag, every one after it is an incident for the stewards.
-    if (seg.trackLimits && !config_.qualifying && state_ == RaceState::Green && !outOfRace(i) && car.spinTimer <= 0.0 && // qualifying: from 13.5
+    if (seg.trackLimits && config_.qualifying) {
+        qualifyingTrackLimits(i); // only on a timed lap, the stewards decide about the lap (M13.5)
+    } else if (seg.trackLimits && state_ == RaceState::Green && !outOfRace(i) && car.spinTimer <= 0.0 &&
         rng_.uniform() < kTrackLimitsChance * std::pow(entries_[i].aggression, 4.0) * (1.0 + kTrackLimitsTyreWear * car.tyreWear)) {
         ++stats_.trackLimitOffences;
         ++car.trackLimitStrikes;

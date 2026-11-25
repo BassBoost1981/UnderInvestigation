@@ -17,6 +17,7 @@ namespace {
 std::filesystem::path dataDir() { return std::filesystem::path(UISIM_DATA_DIR); }
 
 // Without random accidents unless asked for (M13.4): the 13.3 tests check a session in which every car can run.
+// Without the incidents of 13.5 (impeding, track limits, not lifting under yellow): those tests check free laps.
 Sim makeQualifying(std::uint64_t seed, const std::filesystem::path& track = dataDir() / "tracks" / "testring.json",
                    double accidents = 0.0) {
     RaceConfig config;
@@ -24,6 +25,9 @@ Sim makeQualifying(std::uint64_t seed, const std::filesystem::path& track = data
     config.qualifying = true;
     config.accidentChanceScale = accidents;
     config.followUpChanceScale = accidents;
+    config.impedingChance = 0.0;
+    config.yellowIgnoreChance = 0.0;
+    config.lapTrackLimitsScale = 0.0;
     return Sim(loadTrack(track), loadEntries(dataDir() / "entries" / "fictional-grid.json"), config);
 }
 
@@ -482,6 +486,9 @@ TEST_CASE("An accident site without a flag raises the risk as in the race") {
             config.seed = seed;
             config.qualifying = true;
             config.accidentChanceScale = 0.0; // only the follow-ups of the one placed crash
+            config.impedingChance = 0.0;      // the session of 13.4, without the incidents of 13.5
+            config.yellowIgnoreChance = 0.0;
+            config.lapTrackLimitsScale = 0.0;
             Sim sim(loadTrack(dataDir() / "tracks" / "testring.json"), loadEntries(dataDir() / "entries" / "fictional-grid.json"),
                     config);
             runSeconds(sim, 300.0);

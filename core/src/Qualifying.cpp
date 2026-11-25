@@ -7,12 +7,14 @@
 #include "SimInternal.h"
 
 #include <algorithm>
+#include <cmath>
 #include <numeric>
 #include <stdexcept>
 
 namespace uisim {
 namespace {
 
+using detail::kFollowGap;
 using detail::kPitExitAfterLine;
 using detail::kPitLateral;
 using detail::kQualifyingExitHold;
@@ -24,6 +26,13 @@ constexpr double kSecondFlyingLapChance = 0.3; // a run of two flying laps inste
 constexpr double kBreakSeconds = 30.0;         // between segments, once every car is back (B2.4.2: 7 minutes; compressed)
 constexpr double kOutLapLoss = 1.05;           // accelerating and braking on the out lap, on top of the reference time
 constexpr double kPitLaneExtraSeconds = 6.0;   // pulling out of the garage
+// Incidents (M13.5).
+constexpr double kImpedeMinSeconds = 0.5;      // a slow car that does not move over at once does so after this long ...
+constexpr double kImpedeMaxSeconds = 4.0;      // ... at most
+constexpr double kImpedingNoticed = 0.3;       // held up for less than this: nobody notices
+constexpr double kImpedeRange = 1.5;           // the encounter lasts while the pushing car is within this many follow gaps
+constexpr double kYellowIgnoreMin = 0.96;      // a driver who does not lift enough keeps this share of his pace or more
+constexpr double kLapTrackLimitsChance = 0.04; // per pass of a track-limits corner on a timed lap, times aggression^4 (at the limit: twice the race)
 
 } // namespace
 
@@ -160,6 +169,7 @@ void Sim::updateQualifying() {
     case QualifyingState::Over:
         break;
     }
+    updateImpeding();
     // Flags on the lap under way (M13.4): double yellow deletes it (B1.8.4), single yellow is for the stewards.
     for (int i = 0; i < static_cast<int>(cars_.size()); ++i) {
         Car& car = cars_[i];
@@ -167,6 +177,9 @@ void Sim::updateQualifying() {
             continue;
         }
         const Flag flag = flagAt(car.distance);
+        if (flag == Flag::Yellow && car.quali == QualifyingPhase::FlyingLap && car.yellowLift <= 0.0) {
+            qualifyingYellow(i);
+        }
         car.lapYellow = car.lapYellow || flag == Flag::Yellow;
         car.lapDoubleYellow = car.lapDoubleYellow || flag == Flag::DoubleYellow;
     }
@@ -246,7 +259,22 @@ void Sim::onQualifyingLine(int i, double time) {
     const bool open = qualifyingState_ == QualifyingState::Running && state_ != RaceState::RedFlag;
     if (car.quali == QualifyingPhase::FlyingLap) {
         const bool deleted = config_.rules.qualifyingDoubleYellowDeletesLap && car.lapDoubleYellow;
-        qualifyingLaps_.push_back(QualifyingLap{i, qualifyingSegment_, car.lastLapTime, time, !deleted, car.lapYellow});
+        qualifyingLaps_.push_back(
+            QualifyingLap{i, qualifyingSegment_, car.lastLapTime, time, !deleted, car.lapYellow, car.lapTrackLimits});
+        // M13.5: a lap the stewards may delete is an incident when it counts, i.e. it is the car's best in the segment.
+        const int lap = static_cast<int>(qualifyingLaps_.size()) - 1;
+        const bool best = !deleted && std::none_of(qualifyingLaps_.begin(), qualifyingLaps_.end() - 1, [&](const QualifyingLap& l) {
+            return l.car == i && l.segment == qualifyingSegment_ && l.valid && l.time <= car.lastLapTime;
+        });
+        if (best && car.lapTrackLimits) {
+            addIncident(Incident::Type::LapTrackLimits, i, i, 1.0);
+            incidents_.back().lap = lap;
+        }
+        if (best && car.lapYellow) {
+            addIncident(Incident::Type::YellowFlagLap, i, i, 1.0);
+            incidents_.back().lap = lap;
+            incidents_.back().measure = 100.0 * (car.yellowLift > 0.0 ? car.yellowLift : config_.rules.yellowSpeedFactor);
+        }
         if (--car.flyingLapsLeft <= 0 || !open) {
             car.quali = QualifyingPhase::InLap;
             car.runInterrupted = false; // the run is over
@@ -256,6 +284,11 @@ void Sim::onQualifyingLine(int i, double time) {
     }
     car.lapYellow = false; // a new lap begins
     car.lapDoubleYellow = false;
+    car.yellowLift = 0.0;
+    car.lapTrackLimits = false;
+    if (car.impedeLeft <= 0.0) {
+        car.impedeFor = -1; // a new encounter next time
+    }
 }
 
 bool Sim::qualifyingWantsPit(int i) const {
@@ -275,7 +308,73 @@ bool Sim::qualifyingPushing(int i) const {
 
 // A car on a slow lap moves over for one that is pushing (B4.1.1: no unnecessary impeding).
 bool Sim::qualifyingYields(int slow, int fast) const {
-    return !qualifyingPushing(slow) && qualifyingPushing(fast);
+    const Car& car = cars_[slow];
+    return !qualifyingPushing(slow) && qualifyingPushing(fast) && !(car.impedeFor == fast && car.impedeLeft > 0.0);
+}
+
+// M13.5: a pushing car closed up behind a car on a slow lap. Once per encounter it is drawn whether the slow
+// car fails to move over at once, and for how long (bounded: there is no overtaking in a session).
+void Sim::qualifyingTraffic(int slow, int fast) {
+    Car& car = cars_[slow];
+    if (car.impedeFor == fast || car.impedeLeft > 0.0 || qualifyingPushing(slow) || !qualifyingPushing(fast)) {
+        return;
+    }
+    car.impedeFor = fast;
+    car.impedeHeld = 0.0;
+    car.impedeLeft = 0.0;
+    if (config_.impedingChance > 0.0 && rng_.uniform() < config_.impedingChance) {
+        car.impedeLeft = rng_.uniform(kImpedeMinSeconds, kImpedeMaxSeconds);
+    }
+}
+
+// An encounter ends when the slow car moves over or the pushing car is no longer held up (lap over, dropped
+// back). Then it is an incident (B4.1.1); the time held up is the measure.
+void Sim::updateImpeding() {
+    for (int i = 0; i < static_cast<int>(cars_.size()); ++i) {
+        Car& car = cars_[i];
+        if (car.impedeLeft <= 0.0) {
+            continue;
+        }
+        const int fast = car.impedeFor;
+        const Car& other = cars_[fast];
+        const bool held = !outOfRace(i) && !outOfRace(fast) && !car.inPit && !other.inPit && other.spinTimer <= 0.0 &&
+                          qualifyingPushing(fast) && !qualifyingPushing(i) &&
+                          track_.wrap(car.distance - other.distance) < kImpedeRange * kFollowGap;
+        if (held) {
+            car.impedeHeld += kDt;
+            car.impedeLeft = std::max(0.0, car.impedeLeft - kDt);
+        } else {
+            car.impedeLeft = 0.0;
+        }
+        if (car.impedeLeft <= 0.0 && car.impedeHeld >= kImpedingNoticed) {
+            addIncident(Incident::Type::Impeding, i, fast, 1.0);
+            incidents_.back().measure = car.impedeHeld;
+        }
+    }
+}
+
+// M13.5: on a timed lap a driver lifts for a single yellow as the rules value says, or (drawn once per lap)
+// keeps nearly all of his pace.
+void Sim::qualifyingYellow(int i) {
+    Car& car = cars_[i];
+    car.yellowLift = config_.rules.yellowSpeedFactor;
+    if (config_.yellowIgnoreChance > 0.0 && rng_.uniform() < config_.yellowIgnoreChance) {
+        car.yellowLift = rng_.uniform(kYellowIgnoreMin, 1.0);
+    }
+}
+
+// M13.5: running wide on a timed lap. No automatic deletion in qualifying (B1.9.4): the lap is marked and
+// becomes an incident at the line.
+void Sim::qualifyingTrackLimits(int i) {
+    Car& car = cars_[i];
+    if (config_.lapTrackLimitsScale <= 0.0 || car.quali != QualifyingPhase::FlyingLap || car.inPit || outOfRace(i) ||
+        car.spinTimer > 0.0 || car.lapTrackLimits || state_ != RaceState::Green) {
+        return;
+    }
+    if (rng_.uniform() < kLapTrackLimitsChance * config_.lapTrackLimitsScale * std::pow(entries_[i].aggression, 4.0)) {
+        car.lapTrackLimits = true;
+        ++stats_.trackLimitOffences;
+    }
 }
 
 std::vector<double> Sim::qualifyingBestTimes(std::vector<double>* setAt) const {
@@ -333,6 +432,56 @@ std::vector<int> Sim::qualifyingOrder() const {
     std::iota(rank.begin(), rank.end(), 0);
     rankQualifying(rank);
     return rank;
+}
+
+// B2.5.4 b: grid drops are added up per car. Up to the limit a penalised car's slot is its qualifying position
+// plus the places; two on one slot: the slower qualifier keeps it, the other goes directly ahead. The cars
+// without a penalty fill the free slots in qualifying order. Over the limit: behind all others (among
+// themselves in qualifying order).
+std::vector<int> Sim::startingGrid() const {
+    const std::vector<int> order = qualifyingOrder();
+    const int n = static_cast<int>(order.size());
+    std::vector<int> drop(cars_.size(), 0);
+    for (const Verdict& verdict : verdicts_) {
+        if (verdict.penalty == Penalty::GridDrop && verdict.car >= 0) {
+            drop[static_cast<std::size_t>(verdict.car)] += verdict.places;
+        }
+    }
+    std::vector<int> back;
+    for (int i : order) {
+        if (drop[static_cast<std::size_t>(i)] > config_.rules.gridPenaltyBackOfGridAbove) {
+            back.push_back(i);
+        }
+    }
+    const int front = n - static_cast<int>(back.size());
+    std::vector<int> slots(static_cast<std::size_t>(front), -1);
+    for (int pos = n - 1; pos >= 0; --pos) { // slowest qualifier first: it keeps a shared slot
+        const int i = order[static_cast<std::size_t>(pos)];
+        const int places = drop[static_cast<std::size_t>(i)];
+        if (places == 0 || places > config_.rules.gridPenaltyBackOfGridAbove) {
+            continue;
+        }
+        int slot = std::min(pos + places, front - 1);
+        while (slot >= 0 && slots[static_cast<std::size_t>(slot)] >= 0) {
+            --slot; // directly ahead
+        }
+        if (slot < 0) {
+            slot = static_cast<int>(std::find(slots.begin(), slots.end(), -1) - slots.begin());
+        }
+        slots[static_cast<std::size_t>(slot)] = i;
+    }
+    std::size_t next = 0;
+    for (int i : order) {
+        if (drop[static_cast<std::size_t>(i)] != 0) {
+            continue;
+        }
+        while (slots[next] >= 0) {
+            ++next;
+        }
+        slots[next] = i;
+    }
+    slots.insert(slots.end(), back.begin(), back.end());
+    return slots;
 }
 
 void Sim::fillQualifyingSnapshot() {

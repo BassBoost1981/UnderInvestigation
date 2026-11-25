@@ -6,6 +6,7 @@ namespace uisim::detail {
 // The pit lane runs alongside the main straight, from the pit entry to the exit after the line (M5).
 inline constexpr double kPitLateral = -5.0;       // snapshot lateral units: 20 m right of the racing line
 inline constexpr double kPitExitAfterLine = 300.0;
+inline constexpr double kFollowGap = 12.0; // metres: closer than this a car is blocked unless overtaking
 
 // Qualifying (M13.3).
 inline constexpr double kQualifyingSlowLapFraction = 0.75; // out and in laps: this share of the reference speed

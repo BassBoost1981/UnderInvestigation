@@ -69,7 +69,8 @@ if(UISIM_BUILD_TESTS)
         tests/test_season.cpp
         tests/test_career.cpp
         tests/test_hearing.cpp
-        tests/test_qualifying.cpp)
+        tests/test_qualifying.cpp
+        tests/test_qualifying_incidents.cpp)
     target_link_libraries(uisim_tests PRIVATE uisim uisim_datadir doctest::doctest)
 
     enable_testing()

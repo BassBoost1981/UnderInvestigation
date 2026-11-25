@@ -16,10 +16,22 @@ constexpr double kFollowUpCost = 0.15;
 constexpr double kHeavyRainCostPer10Min = 0.5; // safety lost per 10 minutes of racing in standing water
 constexpr double kReviewScore = 0.5;    // a verdict scoring less than this is clearly wrong (right of review)
 constexpr double kOverturnedCost = 5.0; // points of the overall rating per verdict set aside
+constexpr double kGridPlacesPerStep = 3.0; // grid drops: this many places too many or too few cost one step
 
-int severity(Penalty penalty) { return static_cast<int>(penalty); }
+// Steps of severity. The race penalties count in their order; the session verdicts (M13.5) sit on the same
+// scale above a reprimand: deleting the lap like 5 s, a grid drop like 10 s.
+int severity(Penalty penalty) {
+    switch (penalty) {
+    case Penalty::DeleteLap:
+        return 2;
+    case Penalty::GridDrop:
+        return 3;
+    default:
+        return static_cast<int>(penalty);
+    }
+}
 
-double score(const ExpectedVerdict& expected, int givenCar, Penalty given) {
+double score(const ExpectedVerdict& expected, int givenCar, Penalty given, int givenPlaces) {
     const int party = severity(given) > 0 ? givenCar : -1; // "no action" has no party
     const int level = party < 0 ? 0 : severity(given);
     const int expectedLevel = severity(expected.penalty);
@@ -27,7 +39,11 @@ double score(const ExpectedVerdict& expected, int givenCar, Penalty given) {
         return std::max(0.0, 1.0 - kScorePerSeverityStep * level);
     }
     if (party == expected.car) {
-        return std::max(0.0, 1.0 - kScorePerSeverityStep * std::abs(level - expectedLevel));
+        double steps = std::abs(level - expectedLevel);
+        if (given == Penalty::GridDrop && expected.penalty == Penalty::GridDrop) {
+            steps += std::abs(givenPlaces - expected.places) / kGridPlacesPerStep;
+        }
+        return std::max(0.0, 1.0 - kScorePerSeverityStep * steps);
     }
     if (party < 0) {
         return std::max(0.0, 1.0 - kScorePerSeverityStep * expectedLevel); // let off too lightly
@@ -47,6 +63,11 @@ int role(const Incident& incident, int car, Penalty penalty) {
 
 // A jump start earlier than this is a clear advantage: 10 s instead of 5 s (sim, B5.11).
 constexpr double kFalseStartSerious = 0.2;
+// Qualifying (M13.5, sim): held up this long is a grid drop, this long a reprimand, less no action.
+constexpr double kImpedingGridDropSeconds = 2.0;
+constexpr double kImpedingReprimandSeconds = 0.8;
+// Single yellow on a timed lap: more than this share of the free pace (in %) is not slowing down.
+constexpr double kYellowLiftedEnough = 97.0;
 
 ExpectedVerdict expectedVerdict(const Incident& incident) {
     using Type = Incident::Type;
@@ -96,6 +117,16 @@ ExpectedVerdict expectedVerdict(const Incident& incident) {
         return {incident.car, Penalty::FiveSeconds};
     case Type::UnsafeRelease: // 5 s (unsafe_release_penalty_seconds), 10 s if it nearly ended in contact
         return {incident.car, incident.measure < 10.0 ? Penalty::TenSeconds : Penalty::FiveSeconds};
+    case Type::Impeding: // B4.1.1: places as the stewards see fit (data/rules: qualifying_impeding_grid_drop)
+        if (incident.measure >= kImpedingGridDropSeconds) {
+            return {incident.car, Penalty::GridDrop, RaceRules{}.qualifyingImpedingGridDrop};
+        }
+        return incident.measure >= kImpedingReprimandSeconds ? ExpectedVerdict{incident.car, Penalty::Warning}
+                                                              : ExpectedVerdict{};
+    case Type::LapTrackLimits: // B1.9.4: the lap time is deleted
+        return {incident.car, Penalty::DeleteLap};
+    case Type::YellowFlagLap: // B1.8.4: a driver must slow down for a single yellow; did not lift enough: lap deleted
+        return incident.measure > kYellowLiftedEnough ? ExpectedVerdict{incident.car, Penalty::DeleteLap} : ExpectedVerdict{};
     }
     return {};
 }
@@ -115,9 +146,10 @@ RaceRating rateRace(const Sim& sim) {
             r.decided = true;
             r.givenCar = verdict->car;
             r.givenPenalty = verdict->penalty;
+            r.givenPlaces = verdict->places;
             ++rating.decided;
         }
-        r.score = score(r.expected, r.givenCar, r.givenPenalty);
+        r.score = score(r.expected, r.givenCar, r.givenPenalty, r.givenPlaces);
         r.heard = incident.heard;
         r.overturned = r.decided && !r.heard && r.score < kReviewScore;
         rating.overturned += r.overturned ? 1 : 0;
@@ -165,7 +197,7 @@ RaceRating rateRace(const Sim& sim) {
     const double share = raceTime > 0.0 ? sim.neutralisedTime() / raceTime : 0.0;
     double quality = 1.0 - std::max(0.0, share - kAcceptedNeutralisation) * 3.0;
     for (const Verdict& verdict : sim.verdicts()) {
-        if (verdict.afterRace) {
+        if (verdict.afterRace && !sim.snapshot().qualifying) { // after a session the stewards have time (M13.5)
             quality -= kAfterRaceDecisionCost;
         }
     }

@@ -26,7 +26,8 @@ Favour favourable(EvidenceKind kind, bool attacker, Incident::Type type) {
     case EvidenceKind::DefenderMove:
         return attacker ? Favour::Higher : Favour::Lower;
     case EvidenceKind::Measure:
-        return type == Incident::Type::UnsafeRelease ? Favour::Higher : Favour::Lower; // a bigger gap was safer
+        // A bigger gap was safer; otherwise less is better (less too fast, held up less, slower under yellow).
+        return type == Incident::Type::UnsafeRelease ? Favour::Higher : Favour::Lower;
     case EvidenceKind::Breach:
         break;
     }
@@ -45,6 +46,8 @@ std::vector<Evidence> evidenceOf(const Incident& incident) {
     case Type::TrackLimits:
     case Type::FalseStart:
     case Type::GridPosition:
+    case Type::Impeding:      // seconds held up (M13.5)
+    case Type::YellowFlagLap: // % of the free pace in the yellow sector
         return {{EvidenceKind::Measure, incident.measure}};
     case Type::Accident:
         return {};

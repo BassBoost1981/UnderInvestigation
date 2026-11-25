@@ -4,7 +4,7 @@
 
 namespace uisim { class Sim; }
 
-enum class EUISimPenalty : uint8 { None, Warning, FiveSeconds, TenSeconds, DriveThrough, StopAndGo, Disqualification };
+enum class EUISimPenalty : uint8 { None, Warning, FiveSeconds, TenSeconds, DriveThrough, StopAndGo, Disqualification, DeleteLap, GridDrop }; // last two: qualifying (M13.5)
 
 // Unreal-side copies of the core snapshot (see core/include/uisim/Snapshot.h).
 // One set of tyres (core Stint, M12.7): fitted after StartLap laps, used for Laps laps (current set: so far).
@@ -103,7 +103,8 @@ enum class EUISimIncidentType : uint8
 	PitEntryClosed, // Car == OtherCar, entered the closed pit lane
 	WetTyreRule, // Car == OtherCar, left the mandated wet tyres behind the SC
 	FalseStart,  // Car == OtherCar, moved before the start signal (B5.11), Measure = seconds early
-	GridPosition // Car == OtherCar, outside the grid box at the start signal (B5.11), Measure = metres
+	GridPosition, // Car == OtherCar, outside the grid box at the start signal (B5.11), Measure = metres
+	Impeding, LapTrackLimits, YellowFlagLap // qualifying (M13.5), not shown before 13.8
 };
 
 struct FUISimIncident

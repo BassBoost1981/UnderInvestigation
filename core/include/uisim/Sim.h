@@ -51,6 +51,12 @@ struct RaceConfig {
     // A qualifying session instead of a race (M13.3): three segments with elimination (B2.4.2), always dry,
     // `laps` and `grid` unused. Its result, qualifyingOrder(), is the `grid` of the race. On its own random stream.
     bool qualifying = false;
+    // Qualifying incidents (M13.5), each 0 = none. Chance that a car on a slow lap does not move over at once
+    // for a car pushing behind it (impeding, per encounter); chance that a driver on a timed lap does not lift
+    // enough for a single yellow (per lap); scale of running wide at a track-limits corner on a timed lap.
+    double impedingChance = 0.025;
+    double yellowIgnoreChance = 0.3;
+    double lapTrackLimitsScale = 1.0;
 };
 
 struct RaceStats {
@@ -98,6 +104,7 @@ struct Command {
     int incidentId = 0;      // IssueVerdict, HoldHearing
     int car = -1;            // IssueVerdict: entry index penalised, -1 = no one; InjectAccident: car
     Penalty penalty = Penalty::None; // IssueVerdict only
+    int places = 0;          // IssueVerdict with GridDrop: grid places (M13.5)
     AccidentType accident = AccidentType::Spin; // InjectAccident only
     bool wetTyres = false;   // SafetyCarStart, Restart: wet-weather tyres compulsory behind the SC (B6.3.7)
     bool standing = false;   // Restart, RecallSafetyCar after SafetyCarStart: standing start from the grid (B5.15.4, B5.10.8)
@@ -122,7 +129,8 @@ struct Verdict {
     int car = -1; // entry index penalised, -1 = no one (no further action)
     Penalty penalty = Penalty::None;
     double time = 0.0;   // race time of the decision
-    bool afterRace = false;
+    bool afterRace = false; // after the flag; in a session: after its end
+    int places = 0;      // GridDrop only
 };
 
 // Something race control may investigate. The ground truth (blame) is what
@@ -144,7 +152,11 @@ struct Incident {
         PitEntryClosed,           // otherCar == car; entered the pit lane while the entry was closed (B1.6.4 b, M8.3)
         WetTyreRule,              // otherCar == car; left the mandated wet tyres behind the SC (B6.3.7, M9.4)
         FalseStart,               // otherCar == car; moved before the start signal (B5.11), measure = seconds early (M10.3)
-        GridPosition              // otherCar == car; outside the grid box at the start signal (B5.11), measure = metres (M10.3)
+        GridPosition,             // otherCar == car; outside the grid box at the start signal (B5.11), measure = metres (M10.3)
+        // Qualifying (M13.5):
+        Impeding,                 // car on a slow lap held up otherCar on a pushing lap (B4.1.1); measure = seconds held up
+        LapTrackLimits,           // otherCar == car; left the track on the timed lap `lap` (B1.8.6, B1.9.4)
+        YellowFlagLap             // otherCar == car; timed lap `lap` through a single yellow (B1.8.4); measure = % of free pace there
     };
     int id = 0;          // 1-based, in order of occurrence
     Type type = Type::Collision;
@@ -156,6 +168,7 @@ struct Incident {
     double measure = 0.0; // ground truth detail: speeding km/h over the limit, unsafe release gap in metres
     bool heard = false;        // the stewards held a hearing (HoldHearing): no right of review afterwards (M11.5)
     double hearingUntil = 0.0; // race time until which the hearing keeps the verdict waiting
+    int lap = -1;              // LapTrackLimits, YellowFlagLap: index into Sim::qualifyingLaps(), -1 = none
     // Collision only, what the blame came from (evidence for a hearing, M11.4):
     double turnInGap = 0.0;    // metres the attacker was behind at turn-in
     double attackerPush = 0.0; // 0..1, how hard the attacker went for it
@@ -168,8 +181,9 @@ struct QualifyingLap {
     int segment = 0;     // 0-based
     double time = 0.0;   // lap time
     double setAt = 0.0;  // session time at the end of the lap; with equal times the earlier one is ahead (B2.4.3)
-    bool valid = true;   // false: deleted (through double yellow, B1.8.4, M13.4)
+    bool valid = true;   // false: deleted (through double yellow, B1.8.4, M13.4; by a verdict, M13.5)
     bool throughYellow = false; // passed a single yellow sector: the stewards may judge it (13.5)
+    bool trackLimits = false;   // left the track on this lap: the stewards may delete it (B1.9.4, 13.5)
 };
 
 // Marshal radio to race control (M6.5). Structured; the presentation layer words it.
@@ -222,6 +236,11 @@ public:
     // Qualifying (M13.3): every timed lap in the order set, and the classification as entry indices, first place first.
     const std::vector<QualifyingLap>& qualifyingLaps() const { return qualifyingLaps_; }
     std::vector<int> qualifyingOrder() const;
+    // Qualifying (M13.5): the grid of the race, the classification with the grid drops of all verdicts so far
+    // (B2.5.4 b). lockGrid() at the start of the race: from then on the session takes no more verdicts.
+    std::vector<int> startingGrid() const;
+    void lockGrid() { gridLocked_ = true; }
+    bool gridLocked() const { return gridLocked_; }
     double neutralisedTime() const { return neutralisedTime_; } // seconds under VSC, SC or red flag
     // Rain at a race time as this race's weather will bring it (forecast, M9.7); 0 in a dry race.
     double forecastRain(double time) const { return rainAt(config_.weather, time, weatherShift_, weatherScale_); }
@@ -328,6 +347,12 @@ private:
         bool lapYellow = false;         // the lap under way passed a single / double yellow sector (M13.4)
         bool lapDoubleYellow = false;
         bool runInterrupted = false;    // called in by the red flag before the run was over: it gets the run back
+        // Qualifying incidents (M13.5).
+        double yellowLift = 0.0;        // speed factor in single yellow on this lap, 0 = not drawn yet (rules value)
+        bool lapTrackLimits = false;    // left the track on the lap under way
+        int impedeFor = -1;             // pushing car this slow car last met behind it (one draw per encounter)
+        double impedeLeft = 0.0;        // seconds it still does not move over for that car
+        double impedeHeld = 0.0;        // seconds that car has been held up so far
     };
 
     struct SafetyCar {
@@ -401,6 +426,10 @@ private:
     void qualifyingRedFlag();
     void qualifyingRestart();
     bool qualifyingAccepts(Command::Type type) const;
+    void qualifyingTraffic(int slow, int fast); // a pushing car closed up behind a slow one (M13.5)
+    void updateImpeding();
+    void qualifyingYellow(int car);       // a car on a timed lap entered a single yellow sector
+    void qualifyingTrackLimits(int car);  // a car at a track-limits corner on a timed lap
     bool qualifyingBreak() const; // between segments or after the last: no car on the track
     std::vector<double> qualifyingBestTimes(std::vector<double>* setAt = nullptr) const; // [car * segments + segment], 0 = none
     void rankQualifying(std::vector<int>& rank) const;
@@ -469,6 +498,7 @@ private:
     double lastReleaseClock_ = 0.0; // segment clock when the last car left its garage
     double outLapEstimate_ = 0.0;   // seconds from the garage to the line; later than this no lap can be begun
     std::vector<QualifyingLap> qualifyingLaps_;
+    bool gridLocked_ = false; // the race has started: no more verdicts in the session (M13.5)
 };
 
 } // namespace uisim

@@ -212,9 +212,16 @@ std::vector<int> runQualifying(const Track& track, const std::vector<Entry>& ent
                                        [](const QualifyingLap& lap) { return !lap.valid; });
     std::printf("Timed laps: %zu (deleted %lld), session time %s\n", sim.qualifyingLaps().size(),
                 static_cast<long long>(deleted), formatTime(sim.snapshot().time).c_str());
-    std::printf("Accidents in the session: %d (spins %d, follow-ups %d)\n\n", sim.stats().accidents, sim.stats().spins,
+    std::printf("Accidents in the session: %d (spins %d, follow-ups %d)\n", sim.stats().accidents, sim.stats().spins,
                 sim.stats().followUpAccidents);
-    return sim.qualifyingOrder();
+    auto count = [&](Incident::Type type) {
+        return static_cast<long long>(std::count_if(sim.incidents().begin(), sim.incidents().end(),
+                                                    [&](const Incident& incident) { return incident.type == type; }));
+    };
+    std::printf("Incidents in the session: %zu (impeding %lld, track limits %lld, yellow %lld), none judged\n\n",
+                sim.incidents().size(), count(Incident::Type::Impeding), count(Incident::Type::LapTrackLimits),
+                count(Incident::Type::YellowFlagLap));
+    return sim.startingGrid();
 }
 
 } // namespace

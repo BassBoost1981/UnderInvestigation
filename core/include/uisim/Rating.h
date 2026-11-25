@@ -11,6 +11,7 @@ namespace uisim {
 struct ExpectedVerdict {
     int car = -1; // entry index, -1 = no further action (racing incident)
     Penalty penalty = Penalty::None;
+    int places = 0; // GridDrop only
 };
 ExpectedVerdict expectedVerdict(const Incident& incident);
 
@@ -20,6 +21,7 @@ struct IncidentRating {
     bool decided = false;
     int givenCar = -1;
     Penalty givenPenalty = Penalty::None;
+    int givenPlaces = 0; // GridDrop only
     double score = 0.0; // 0..1
     bool heard = false; // decided after a hearing
     // Right of review (ISC 14, M11.5): decided without a hearing and clearly wrong. The evidence the
@@ -31,7 +33,7 @@ struct IncidentRating {
 struct RaceRating {
     double fairness = 1.0;    // verdicts vs ground truth, undecided incidents count as "no action" (undecided accidents without contact not at all)
     double consistency = 1.0; // similar incidents got similar verdicts
-    double raceQuality = 1.0; // little neutralisation, no decisions after the flag
+    double raceQuality = 1.0; // little neutralisation, no decisions after the flag (in a session: decisions after it cost nothing)
     double safety = 1.0;      // accident sites protected quickly, no follow-up accidents
     double overall = 100.0;   // 0..100: 35 % fairness, 15 % consistency, 30 % safety, 20 % race quality
     int accidentSites = 0;
