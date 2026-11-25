@@ -142,6 +142,7 @@ TEST_CASE("Rules file loads with the documented defaults") {
     CHECK(rules.qualifyingMinTimePercent == 107.0);         // B2.4.3 b i
     CHECK(rules.qualifyingImpedingGridDrop == 3);           // stewards' practice
     CHECK(rules.gridPenaltyBackOfGridAbove == 15);          // B2.5.4 b
+    CHECK(rules.penaltyPointsQualifyingImpeding == 1);      // M13.6, not checked
 }
 
 TEST_CASE("Invalid marshal sector is rejected") {

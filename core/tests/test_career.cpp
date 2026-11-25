@@ -107,6 +107,7 @@ void checkSame(const Career& a, const Career& b) {
         const CareerRace& y = b.races[k];
         CHECK(x.name == y.name);
         CHECK(x.podium == y.podium);
+        CHECK(x.pole == y.pole);
         CHECK(x.suspended == y.suspended);
         REQUIRE(x.penaltyPoints.size() == y.penaltyPoints.size());
         for (std::size_t p = 0; p < x.penaltyPoints.size(); ++p) {
@@ -359,7 +360,7 @@ TEST_CASE("Penalty points expire after a season's worth of races and carry over 
     CHECK(second.racesDriven == 4);
 }
 
-TEST_CASE("A save file of the old format is refused (M11.6)") {
+TEST_CASE("Save files of the older formats are refused (M11.6, M13.6)") {
     const std::vector<Entry> entries = grid();
     const SeasonCalendar calendar = calendarOf(2, 5);
     const std::filesystem::path file = saveFile("uisim_career_old_format.json");
@@ -368,18 +369,21 @@ TEST_CASE("A save file of the old format is refused (M11.6)") {
     saveCareer(file, career);
     const Career loaded = loadCareer(file, calendar, entries);
     CHECK(loaded.penaltyPoints[1] == 3);
-    // The same file with the format of M10.5.
+    // The same file with the formats of M10.5 and M11.6.
     std::ifstream in(file);
-    std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    const std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
     in.close();
-    const std::size_t at = content.find("\"format\": 2");
+    const std::size_t at = content.find("\"format\": 3");
     REQUIRE(at != std::string::npos);
-    content.replace(at, 11, "\"format\": 1");
-    {
-        std::ofstream out(file);
-        out << content;
+    for (const char* old : {"\"format\": 1", "\"format\": 2"}) {
+        std::string changed = content;
+        changed.replace(at, 11, old);
+        {
+            std::ofstream out(file);
+            out << changed;
+        }
+        CHECK_THROWS(loadCareer(file, calendar, entries));
     }
-    CHECK_THROWS(loadCareer(file, calendar, entries));
     std::filesystem::remove(file);
 }
 
@@ -392,4 +396,168 @@ TEST_CASE("The podium names the reserve when a suspended driver's car finished (
     CHECK(podiumName(entries, race, 1) == reserveDriver(entries[3]).name);
     CHECK(podiumName(entries, race, 1) != entries[3].name);
     CHECK(podiumName(entries, race, 2) == entries[7].name);
+}
+
+// ---------------------------------------------------------------------------------------------
+// M13.6: a weekend in the career is a qualifying and the race.
+
+namespace {
+
+// A qualifying with shorter segments, so a weekend test does not take long.
+RaceRules weekendRules() {
+    RaceRules rules = loadedRules();
+    rules.qualifyingSegmentMinutes = {8, 7, 6};
+    return rules;
+}
+
+struct Weekend {
+    Sim qualifying;
+    Sim race;
+    std::vector<int> grid;
+};
+
+void runToEnd(Sim& sim) {
+    for (long steps = 0; !sim.finished() && steps < 2'000'000; ++steps) {
+        sim.step();
+    }
+    REQUIRE(sim.finished());
+}
+
+// After the end of a session: a hearing and a verdict on every incident, then the step that applies them.
+void judgeAll(Sim& sim, const Judge& judge) {
+    for (const Incident& incident : std::vector<Incident>(sim.incidents())) {
+        if (judge) {
+            Command hearing;
+            hearing.type = Command::Type::HoldHearing;
+            hearing.incidentId = incident.id;
+            sim.command(hearing);
+            judge(sim, incident);
+        }
+    }
+    sim.step();
+}
+
+// Qualifying, the grid after all verdicts, the race from it, booked as one weekend.
+Weekend runWeekend(Career& career, const SeasonCalendar& calendar, const std::vector<Entry>& entries, const RaceRules& rules,
+                   const Judge& session = {}, const Judge& race = {}) {
+    Sim qualifying = makeCareerQualifying(career, calendar, kData, entries, rules);
+    runToEnd(qualifying);
+    judgeAll(qualifying, session);
+    std::vector<int> grid = qualifying.startingGrid();
+    qualifying.lockGrid();
+    Sim sim = makeCareerRace(career, calendar, kData, entries, rules, grid);
+    runToEnd(sim);
+    judgeAll(sim, race);
+    finishCareerRace(career, calendar, sim, entries, rules, &qualifying);
+    return {std::move(qualifying), std::move(sim), std::move(grid)};
+}
+
+// The stand-in for a session: three places for impeding, the lap deleted otherwise.
+void sessionJudge(Sim& sim, const Incident& incident) {
+    Command c = verdict(incident.id, incident.car,
+                        incident.type == Incident::Type::Impeding ? Penalty::GridDrop : Penalty::DeleteLap);
+    c.places = incident.type == Incident::Type::Impeding ? 3 : 0;
+    sim.command(c);
+}
+
+int countOf(const Sim& sim, Incident::Type type) {
+    return static_cast<int>(std::count_if(sim.incidents().begin(), sim.incidents().end(),
+                                          [&](const Incident& incident) { return incident.type == type; }));
+}
+
+} // namespace
+
+TEST_CASE("Penalty points for the incidents of a qualifying (M13.6)") {
+    const RaceRules rules = loadedRules();
+    CHECK(penaltyPointsFor(Incident::Type::Impeding, rules) == rules.penaltyPointsQualifyingImpeding);
+    CHECK(penaltyPointsFor(Incident::Type::YellowFlagLap, rules) == rules.penaltyPointsYellowFlag);
+    CHECK(penaltyPointsFor(Incident::Type::LapTrackLimits, rules) == 0); // as track limits in the race
+}
+
+TEST_CASE("A weekend: the reserve qualifies, the race starts from the session's grid, pole and one rating are booked (M13.6)") {
+    const std::vector<Entry> entries = grid();
+    const RaceRules rules = weekendRules();
+    const SeasonCalendar calendar = calendarOf(2, 5);
+    Career career = newCareer(calendar, entries, 5);
+    career.suspended = {4};
+    const Weekend w = runWeekend(career, calendar, entries, rules, sessionJudge);
+
+    // A suspension holds for the whole weekend; both sessions have the same drivers in the same order.
+    REQUIRE(w.qualifying.entries().size() == entries.size());
+    REQUIRE(w.race.entries().size() == entries.size());
+    CHECK(w.qualifying.entries()[4].name == reserveDriver(entries[4]).name);
+    for (std::size_t k = 0; k < entries.size(); ++k) {
+        CHECK(w.race.entries()[k].name == w.qualifying.entries()[k].name);
+        CHECK(w.race.entries()[k].skill == w.qualifying.entries()[k].skill); // a dry race: the same form of the day
+        CHECK(w.race.entries()[k].teamPace == w.qualifying.entries()[k].teamPace);
+    }
+
+    // The race starts from the grid after the verdicts.
+    CHECK(w.grid == w.qualifying.startingGrid());
+    for (const CarState& car : w.race.snapshot().cars) {
+        const auto slot = std::find(w.grid.begin(), w.grid.end(), car.entryIndex) - w.grid.begin();
+        CHECK(car.gridPosition == slot + 1);
+    }
+    const int impeding = countOf(w.qualifying, Incident::Type::Impeding);
+    INFO("qualifying incidents ", w.qualifying.incidents().size(), ", impeding ", impeding);
+    REQUIRE(impeding > 0);
+    CHECK(w.grid != w.qualifying.qualifyingOrder()); // the grid drops moved someone
+
+    // Pole, one rating over both sessions.
+    const CareerRace& race = career.races.back();
+    CHECK(race.pole == w.qualifying.qualifyingOrder().front());
+    CHECK(poleName(entries, race) == w.qualifying.entries()[race.pole].name);
+    const RaceRating weekend = rateWeekend(w.qualifying, w.race);
+    const RaceRating alone = rateRace(w.race);
+    CHECK(race.overall == weekend.overall);
+    CHECK(race.incidents == static_cast<int>(w.qualifying.incidents().size() + w.race.incidents().size()));
+    CHECK(race.decided == static_cast<int>(w.qualifying.incidents().size())); // the race was not judged
+    CHECK(weekend.raceQuality == alone.raceQuality);
+    CHECK(weekend.accidentSites == rateRace(w.qualifying).accidentSites + alone.accidentSites);
+    for (std::size_t k = 0; k < weekend.incidents.size(); ++k) {
+        CHECK(weekend.incidents[k].qualifying == (k < w.qualifying.incidents().size()));
+    }
+
+    // Penalty points: one per grid drop for impeding, none for a deleted lap, none for the reserve's regular driver.
+    std::vector<int> points(entries.size(), 0);
+    for (const Incident& incident : w.qualifying.incidents()) {
+        if (incident.type == Incident::Type::Impeding && incident.car != 4) {
+            points[static_cast<std::size_t>(incident.car)] += rules.penaltyPointsQualifyingImpeding;
+        }
+    }
+    CHECK(career.penaltyPoints == points);
+}
+
+TEST_CASE("Saving, loading and going on gives the same season with weekends (M13.6)") {
+    const std::vector<Entry> entries = grid();
+    const RaceRules rules = weekendRules();
+    SeasonCalendar calendar = calendarOf(3, 5);
+    calendar.races[1].weather = "shower.json"; // the qualifying stays dry
+    auto fresh = [&] {
+        Career career = newCareer(calendar, entries, 23);
+        career.penaltyPoints.assign(entries.size(), 11); // a grid drop for impeding suspends
+        career.penaltyPoints[0] = 12;
+        return career;
+    };
+
+    Career through = fresh();
+    for (int k = 0; k < 3; ++k) {
+        runWeekend(through, calendar, entries, rules, sessionJudge, strict);
+    }
+    REQUIRE(careerFinished(through, calendar));
+
+    const std::filesystem::path file = saveFile("uisim_career_weekend_test.json");
+    Career firstHalf = fresh();
+    runWeekend(firstHalf, calendar, entries, rules, sessionJudge, strict);
+    CHECK_FALSE(firstHalf.suspended.empty());
+    saveCareer(file, firstHalf);
+    Career resumed = loadCareer(file, calendar, entries);
+    checkSame(resumed, firstHalf);
+    runWeekend(resumed, calendar, entries, rules, sessionJudge, strict);
+    runWeekend(resumed, calendar, entries, rules, sessionJudge, strict);
+    checkSame(resumed, through);
+    for (const CareerRace& race : through.races) {
+        CHECK(race.pole >= 0);
+    }
+    std::filesystem::remove(file);
 }

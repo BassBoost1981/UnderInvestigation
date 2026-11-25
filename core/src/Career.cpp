@@ -13,7 +13,7 @@ namespace {
 
 using nlohmann::json;
 
-constexpr int kSaveFormat = 2; // 2 (M11.6): age of every penalty point, races driven; older files are refused
+constexpr int kSaveFormat = 3; // 2 (M11.6): age of every penalty point, races driven; 3 (M13.6): pole; older files are refused
 constexpr double kReserveSkill = 0.994; // a reserve driver against the regular one
 
 // path.string() throws on Windows for non-ASCII paths; go through UTF-8.
@@ -53,8 +53,12 @@ int penaltyPointsFor(Incident::Type type, const RaceRules& rules) {
         return rules.penaltyPointsOvertakingNeutralised;
     case Type::OvertakeUnderRedFlag:
         return rules.penaltyPointsRedFlag;
+    case Type::Impeding:
+        return rules.penaltyPointsQualifyingImpeding;
+    case Type::YellowFlagLap:
+        return rules.penaltyPointsYellowFlag;
     default:
-        return 0; // pit lane, track limits, tyres, start, blue flags: no penalty points
+        return 0; // pit lane, track limits (also on a timed lap), tyres, start, blue flags: no penalty points
     }
 }
 
@@ -107,6 +111,14 @@ std::string podiumName(const std::vector<Entry>& entries, const CareerRace& race
     return contains(race.suspended, entry) ? reserveDriver(regular).name : regular.name;
 }
 
+std::string poleName(const std::vector<Entry>& entries, const CareerRace& race) {
+    if (race.pole < 0) {
+        return {};
+    }
+    const Entry& regular = entries.at(race.pole);
+    return contains(race.suspended, race.pole) ? reserveDriver(regular).name : regular.name;
+}
+
 Career nextSeason(const Career& career, const SeasonCalendar& calendar, const std::vector<Entry>& entries) {
     Career next = newCareer(calendar, entries, career.seed + 1);
     next.penaltyPoints = career.penaltyPoints;
@@ -116,8 +128,10 @@ Career nextSeason(const Career& career, const SeasonCalendar& calendar, const st
     return next;
 }
 
-Sim makeCareerRace(const Career& career, const SeasonCalendar& calendar, const std::filesystem::path& dataDir,
-                   const std::vector<Entry>& entries, const RaceRules& rules) {
+namespace {
+
+// The drivers of the next weekend, in the order of careerRaceEntries.
+std::vector<Entry> weekendDrivers(const Career& career, const SeasonCalendar& calendar, const std::vector<Entry>& entries) {
     if (careerFinished(career, calendar)) {
         throw std::out_of_range("The season is over");
     }
@@ -125,11 +139,23 @@ Sim makeCareerRace(const Career& career, const SeasonCalendar& calendar, const s
     for (int entry : careerRaceEntries(career)) {
         racing.push_back(contains(career.suspended, entry) ? reserveDriver(entries.at(entry)) : entries.at(entry));
     }
-    return makeSeasonRace(calendar, career.nextRace, career.seed, dataDir, racing, rules);
+    return racing;
+}
+
+} // namespace
+
+Sim makeCareerQualifying(const Career& career, const SeasonCalendar& calendar, const std::filesystem::path& dataDir,
+                         const std::vector<Entry>& entries, const RaceRules& rules) {
+    return makeSeasonQualifying(calendar, career.nextRace, career.seed, dataDir, weekendDrivers(career, calendar, entries), rules);
+}
+
+Sim makeCareerRace(const Career& career, const SeasonCalendar& calendar, const std::filesystem::path& dataDir,
+                   const std::vector<Entry>& entries, const RaceRules& rules, const std::vector<int>& grid) {
+    return makeSeasonRace(calendar, career.nextRace, career.seed, dataDir, weekendDrivers(career, calendar, entries), rules, grid);
 }
 
 void finishCareerRace(Career& career, const SeasonCalendar& calendar, const Sim& sim, const std::vector<Entry>& entries,
-                      const RaceRules& rules) {
+                      const RaceRules& rules, const Sim* qualifying) {
     if (careerFinished(career, calendar)) {
         throw std::logic_error("The season is over");
     }
@@ -137,12 +163,19 @@ void finishCareerRace(Career& career, const SeasonCalendar& calendar, const Sim&
         throw std::logic_error("The race has not finished");
     }
     const std::vector<int> racing = careerRaceEntries(career);
-    if (sim.entries().size() != racing.size()) {
+    if (sim.entries().size() != racing.size() || sim.snapshot().qualifying) {
         throw std::logic_error("The race does not belong to this career");
+    }
+    if (qualifying && (!qualifying->snapshot().qualifying || !qualifying->finished() ||
+                       qualifying->entries().size() != racing.size())) {
+        throw std::logic_error("The qualifying does not belong to this race");
     }
     CareerRace race;
     race.name = calendar.races[career.nextRace].name;
     race.suspended = career.suspended;
+    if (qualifying) {
+        race.pole = racing[static_cast<std::size_t>(qualifying->qualifyingOrder().front())];
+    }
 
     RaceResult result = classifyRace(sim, rules);
     for (RaceResultLine& line : result.lines) {
@@ -161,7 +194,13 @@ void finishCareerRace(Career& career, const SeasonCalendar& calendar, const Sim&
         ages.resize(static_cast<std::size_t>(std::max(0, career.penaltyPoints[entry])), raceNumber);
     }
 
-    const RaceRating rating = rateRace(sim);
+    const RaceRating rating = qualifying ? rateWeekend(*qualifying, sim) : rateRace(sim);
+    std::vector<const Incident*> incidents; // in the order of rating.incidents
+    for (const Sim* session : {qualifying, &sim}) {
+        for (std::size_t k = 0; session && k < session->incidents().size(); ++k) {
+            incidents.push_back(&session->incidents()[k]);
+        }
+    }
     race.overall = rating.overall;
     race.fairness = rating.fairness;
     race.consistency = rating.consistency;
@@ -180,10 +219,11 @@ void finishCareerRace(Career& career, const SeasonCalendar& calendar, const Sim&
         }
         const int car = decision.overturned ? decision.expected.car : decision.givenCar;
         const Penalty penalty = decision.overturned ? decision.expected.penalty : decision.givenPenalty;
-        if (penalty == Penalty::None || penalty == Penalty::Warning || car < 0 || car >= static_cast<int>(racing.size())) {
-            continue;
+        if (penalty == Penalty::None || penalty == Penalty::Warning || penalty == Penalty::DeleteLap || car < 0 ||
+            car >= static_cast<int>(racing.size())) {
+            continue; // deleting a lap is no penalty (B1.9.4)
         }
-        const int points = penaltyPointsFor(sim.incidents()[k].type, rules);
+        const int points = penaltyPointsFor(incidents[k]->type, rules);
         if (points > 0) {
             const int entry = racing[car];
             if (contains(race.suspended, entry)) {
@@ -241,6 +281,7 @@ void saveCareer(const std::filesystem::path& path, const Career& career) {
         }
         races.push_back({{"name", race.name},
                          {"podium", race.podium},
+                         {"pole", race.pole},
                          {"suspended", race.suspended},
                          {"penalty_points", points},
                          {"overall", race.overall},
@@ -305,6 +346,10 @@ Career loadCareer(const std::filesystem::path& path, const SeasonCalendar& calen
             CareerRace race;
             race.name = r.at("name").get<std::string>();
             race.podium = r.at("podium").get<std::vector<int>>();
+            race.pole = r.at("pole").get<int>();
+            if (race.pole < -1 || race.pole >= static_cast<int>(entries.size())) {
+                throw std::runtime_error(where + "the pole does not fit the entry list");
+            }
             race.suspended = r.at("suspended").get<std::vector<int>>();
             for (const json& p : r.at("penalty_points")) {
                 race.penaltyPoints.push_back({p.at("entry").get<int>(), p.at("points").get<int>()});

@@ -176,7 +176,7 @@ std::vector<Entry> seasonRaceEntries(const std::vector<Entry>& entries, std::uin
 }
 
 Sim makeSeasonRace(const SeasonCalendar& calendar, int index, std::uint64_t seasonSeed, const std::filesystem::path& dataDir,
-                   const std::vector<Entry>& entries, const RaceRules& rules) {
+                   const std::vector<Entry>& entries, const RaceRules& rules, const std::vector<int>& grid) {
     if (index < 0 || index >= static_cast<int>(calendar.races.size())) {
         throw std::out_of_range("Season has no race " + std::to_string(index));
     }
@@ -189,8 +189,23 @@ Sim makeSeasonRace(const SeasonCalendar& calendar, int index, std::uint64_t seas
     if (!race.weather.empty()) {
         config.weather = loadWeather(dataDir / "weather" / race.weather);
     }
+    config.grid = grid;
     std::vector<Entry> racing = seasonRaceEntries(entries, seasonSeed, index, track, !race.weather.empty());
     return Sim(std::move(track), std::move(racing), config);
+}
+
+Sim makeSeasonQualifying(const SeasonCalendar& calendar, int index, std::uint64_t seasonSeed,
+                         const std::filesystem::path& dataDir, const std::vector<Entry>& entries, const RaceRules& rules) {
+    if (index < 0 || index >= static_cast<int>(calendar.races.size())) {
+        throw std::out_of_range("Season has no race " + std::to_string(index));
+    }
+    Track track = loadTrack(dataDir / "tracks" / calendar.races[index].track);
+    RaceConfig config;
+    config.rules = rules;
+    config.seed = seasonRaceSeed(seasonSeed, index);
+    config.qualifying = true;
+    std::vector<Entry> drivers = seasonRaceEntries(entries, seasonSeed, index, track, false);
+    return Sim(std::move(track), std::move(drivers), config);
 }
 
 } // namespace uisim

@@ -182,6 +182,7 @@ RaceRules loadRules(const std::filesystem::path& path) {
         rules.qualifyingMinTimePercent = number("qualifying_min_time_percent");
         rules.qualifyingImpedingGridDrop = integer("qualifying_impeding_grid_drop");
         rules.gridPenaltyBackOfGridAbove = integer("grid_penalty_back_of_grid_above");
+        rules.penaltyPointsQualifyingImpeding = integer("penalty_points_qualifying_impeding");
         return rules;
     } catch (const json::exception& e) {
         throw std::runtime_error("Bad rules data in " + displayName(path) + ": " + e.what());

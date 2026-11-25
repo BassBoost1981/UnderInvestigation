@@ -395,6 +395,12 @@
       "verified": false,
       "note": "Unnecessarily impeding another driver or stopping on the circuit in a lap-time session: the stewards may delete lap times or drop the driver as many grid positions as they consider appropriate; normally investigated after the session. The regulations give no number. Three places is recent stewards' practice and could not be checked against the Penalty Guidelines on 2026-11-24."
     },
+    "penalty_points_qualifying_impeding": {
+      "value": 1,
+      "source": "Stewards' practice (impeding in a lap-time session, B4.1.1); 2026 F1 Penalty Guidelines not checked",
+      "verified": false,
+      "note": "Goes with a grid drop for impeding. Recent stewards' practice is one point with a three-place drop; the Penalty Guidelines could not be checked on 2026-11-25. Sim: a grid drop for a lap through a single yellow carries the yellow-flag points, deleting a lap carries none (it is not a penalty, B1.9.4), track limits none as in the race."
+    },
     "grid_penalty_back_of_grid_above": {
       "value": 15,
       "source": "F1 SR 2026 Section B (Iss 09, 2026-10-01), B2.5.4 b",

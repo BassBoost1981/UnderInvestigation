@@ -3,7 +3,8 @@
 //                     [--grid CODE,CODE,...]   (M13.2: starting grid by driver code, pole first)
 //                     [--qualifying]           (M13.3: a qualifying session first; its result is the grid)
 //        uisim_runner --season file.json [--seed S] [--entries file.json] [--career save.json] [--races N]
-//                     [--verdicts none|expected|heard]   (M10.4/M10.5: a season, optionally continued from a save file)
+//                     [--verdicts none|expected|heard]   (M10.4/M10.5: a season, optionally continued from a save file;
+//                                                         M13.6: every weekend is a qualifying and the race)
 
 #include "uisim/DataDir.h"
 #include "uisim/Career.h"
@@ -67,15 +68,72 @@ void printNames(const char* title, const std::vector<int>& list, const std::vect
 
 // Runs the races of the calendar as a career and prints the championship after each one.
 // With a career file the season continues from it and is saved after every race (M10.5).
+// Every weekend is a qualifying, then the race from its grid (M13.6).
 // `verdicts`: a stand-in player gives every incident the verdict the ground truth asks for, at once during
-// the race ("expected"), or after the flag and after a hearing of each incident ("heard", M12.9: the same
+// the session ("expected"), or after its end and after a hearing of each incident ("heard", M12.9: the same
 // steps as the Unreal script command `standin`, which steps the finished sim after every command).
 enum class VerdictMode { None, Expected, Heard };
+
+Command expectedCommand(const Incident& incident) {
+    const ExpectedVerdict expected = expectedVerdict(incident);
+    Command c;
+    c.type = Command::Type::IssueVerdict;
+    c.incidentId = incident.id;
+    c.car = expected.car;
+    c.penalty = expected.penalty;
+    c.places = expected.places; // grid drop (M13.5)
+    return c;
+}
+
+// Drives a session to its end with the stand-in player, then lets the commands at the end count.
+// Returns false if it did not finish within `maxSteps`.
+bool runSession(Sim& sim, long maxSteps, VerdictMode verdicts) {
+    std::size_t judged = 0;
+    auto judge = [&] {
+        for (; verdicts == VerdictMode::Expected && judged < sim.incidents().size(); ++judged) {
+            sim.command(expectedCommand(sim.incidents()[judged]));
+        }
+    };
+    for (long steps = 0; !sim.finished() && steps < maxSteps; ++steps) {
+        sim.step();
+        judge();
+    }
+    if (!sim.finished()) {
+        return false;
+    }
+    judge();
+    if (verdicts == VerdictMode::Heard) {
+        for (const Incident& incident : std::vector<Incident>(sim.incidents())) {
+            const bool decided = std::any_of(sim.verdicts().begin(), sim.verdicts().end(),
+                                             [&](const Verdict& v) { return v.incidentId == incident.id; });
+            if (decided) {
+                continue;
+            }
+            Command hearing;
+            hearing.type = Command::Type::HoldHearing;
+            hearing.incidentId = incident.id;
+            sim.command(hearing);
+            sim.step();
+            sim.command(expectedCommand(incident));
+            sim.step();
+        }
+    }
+    sim.step(); // verdicts on incidents raised at the flag still count
+    return true;
+}
+
+// Ticks a qualifying needs at most: the clock plus the laps completed after it and the break, per segment.
+long qualifyingSteps(const RaceRules& rules) {
+    double seconds = 0.0;
+    for (int minutes : rules.qualifyingSegmentMinutes) {
+        seconds += minutes * 60.0 + 600.0;
+    }
+    return static_cast<long>(seconds / Sim::kDt);
+}
 
 int runSeason(const std::filesystem::path& seasonPath, const std::filesystem::path& entriesPath,
               const std::filesystem::path& dataDir, std::uint64_t seed, const std::filesystem::path& careerPath,
               int maxRaces, VerdictMode verdicts) {
-    const bool expectedVerdicts = verdicts == VerdictMode::Expected;
     const SeasonCalendar calendar = loadSeason(seasonPath);
     const std::vector<Entry> entries = loadEntries(entriesPath);
     const RaceRules rules = loadRules(dataDir / "rules" / "fia-f1-2026.json");
@@ -88,61 +146,34 @@ int runSeason(const std::filesystem::path& seasonPath, const std::filesystem::pa
     }
     for (int run = 0; !careerFinished(career, calendar) && (maxRaces <= 0 || run < maxRaces); ++run) {
         const int k = career.nextRace;
-        Sim sim = makeCareerRace(career, calendar, dataDir, entries, rules);
-        const int laps = sim.snapshot().totalLaps;
-        const long maxSteps = static_cast<long>(laps) * 600 * 20;
-        std::size_t judged = 0;
-        auto judge = [&] {
-            for (; expectedVerdicts && judged < sim.incidents().size(); ++judged) {
-                const Incident& incident = sim.incidents()[judged];
-                const ExpectedVerdict expected = expectedVerdict(incident);
-                Command c;
-                c.type = Command::Type::IssueVerdict;
-                c.incidentId = incident.id;
-                c.car = expected.car;
-                c.penalty = expected.penalty;
-                sim.command(c);
-            }
-        };
-        for (long steps = 0; !sim.finished() && steps < maxSteps; ++steps) {
-            sim.step();
-            judge();
+        Sim qualifying = makeCareerQualifying(career, calendar, dataDir, entries, rules);
+        if (!runSession(qualifying, qualifyingSteps(rules), verdicts)) {
+            std::fprintf(stderr, "Qualifying %d did not finish within the step limit\n", k + 1);
+            return 1;
         }
-        if (!sim.finished()) {
+        const std::vector<int> grid = qualifying.startingGrid();
+        qualifying.lockGrid(); // the race starts: the session takes no more verdicts
+        Sim sim = makeCareerRace(career, calendar, dataDir, entries, rules, grid);
+        const int laps = sim.snapshot().totalLaps;
+        if (!runSession(sim, static_cast<long>(laps) * 600 * 20, verdicts)) {
             std::fprintf(stderr, "Race %d did not finish within the step limit\n", k + 1);
             return 1;
         }
-        judge();
-        if (verdicts == VerdictMode::Heard) {
-            for (const Incident& incident : std::vector<Incident>(sim.incidents())) {
-                const bool decided = std::any_of(sim.verdicts().begin(), sim.verdicts().end(),
-                                                 [&](const Verdict& v) { return v.incidentId == incident.id; });
-                if (decided) {
-                    continue;
-                }
-                Command hearing;
-                hearing.type = Command::Type::HoldHearing;
-                hearing.incidentId = incident.id;
-                sim.command(hearing);
-                sim.step();
-                const ExpectedVerdict expected = expectedVerdict(incident);
-                Command verdict;
-                verdict.type = Command::Type::IssueVerdict;
-                verdict.incidentId = incident.id;
-                verdict.car = expected.car;
-                verdict.penalty = expected.penalty;
-                sim.command(verdict);
-                sim.step();
-            }
-        }
-        sim.step(); // verdicts on incidents raised at the flag still count
-        finishCareerRace(career, calendar, sim, entries, rules);
+        finishCareerRace(career, calendar, sim, entries, rules, &qualifying);
         if (!careerPath.empty()) {
             saveCareer(careerPath, career);
         }
         const CareerRace& race = career.races.back();
         std::printf("\nRace %d: %s (%s, %d laps, %.1f km)\n", k + 1, race.name.c_str(), sim.track().name().c_str(), laps,
                     laps * sim.track().length() / 1000.0);
+        int qualifyingDecided = 0;
+        for (const Incident& incident : qualifying.incidents()) {
+            qualifyingDecided += std::any_of(qualifying.verdicts().begin(), qualifying.verdicts().end(),
+                                             [&](const Verdict& v) { return v.incidentId == incident.id; });
+        }
+        std::printf("  Pole %s, qualifying incidents %zu (decided %d), grid %s\n", uisim::poleName(entries, race).c_str(),
+                    qualifying.incidents().size(), qualifyingDecided,
+                    grid == qualifying.qualifyingOrder() ? "as qualified" : "changed by grid drops");
         for (std::size_t p = 0; p < race.podium.size(); ++p) {
             std::printf("  %zu. %-18s %s\n", p + 1, uisim::podiumName(entries, race, p).c_str(), entries[race.podium[p]].team.c_str());
         }
@@ -174,11 +205,7 @@ std::vector<int> runQualifying(const Track& track, const std::vector<Entry>& ent
     config.qualifying = true;
     config.grid.clear();
     Sim sim(track, entries, config);
-    double seconds = 0.0;
-    for (int minutes : config.rules.qualifyingSegmentMinutes) {
-        seconds += minutes * 60.0 + 600.0; // the clock plus the laps completed after it and the break
-    }
-    const long maxSteps = static_cast<long>(seconds / Sim::kDt);
+    const long maxSteps = qualifyingSteps(config.rules);
     for (long steps = 0; !sim.finished() && steps < maxSteps; ++steps) {
         sim.step();
     }

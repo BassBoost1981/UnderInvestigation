@@ -131,18 +131,38 @@ ExpectedVerdict expectedVerdict(const Incident& incident) {
     return {};
 }
 
-RaceRating rateRace(const Sim& sim) {
+namespace {
+
+// One incident of the rated weekend with the session it happened in.
+struct Rated {
+    const Incident* incident;
+    const Sim* session;
+};
+
+// The rating of a race, or of a weekend when `qualifying` is given (M13.6): the incidents and accident
+// sites of both sessions count, race quality comes from the race alone.
+RaceRating rate(const Sim* qualifying, const Sim& sim) {
     RaceRating rating;
-    const auto& incidents = sim.incidents();
+    std::vector<Rated> incidents;
+    for (const Sim* session : {qualifying, &sim}) {
+        if (session) {
+            for (const Incident& incident : session->incidents()) {
+                incidents.push_back({&incident, session});
+            }
+        }
+    }
     double total = 0.0;
     int rated = 0;
-    for (const Incident& incident : incidents) {
+    for (const Rated& entry : incidents) {
+        const Incident& incident = *entry.incident;
+        const std::vector<Verdict>& verdicts = entry.session->verdicts();
         IncidentRating r;
         r.incidentId = incident.id;
+        r.qualifying = entry.session == qualifying;
         r.expected = expectedVerdict(incident);
-        const auto verdict = std::find_if(sim.verdicts().begin(), sim.verdicts().end(),
+        const auto verdict = std::find_if(verdicts.begin(), verdicts.end(),
             [&](const Verdict& v) { return v.incidentId == incident.id; });
-        if (verdict != sim.verdicts().end()) {
+        if (verdict != verdicts.end()) {
             r.decided = true;
             r.givenCar = verdict->car;
             r.givenPenalty = verdict->penalty;
@@ -169,16 +189,17 @@ RaceRating rateRace(const Sim& sim) {
     int consistent = 0;
     for (std::size_t a = 0; a < incidents.size(); ++a) {
         for (std::size_t b = a + 1; b < incidents.size(); ++b) {
+            const Incident& ia = *incidents[a].incident;
+            const Incident& ib = *incidents[b].incident;
             const IncidentRating& ra = rating.incidents[a];
             const IncidentRating& rb = rating.incidents[b];
-            if (!ra.decided || !rb.decided || incidents[a].type != incidents[b].type ||
-                std::abs(incidents[a].blame - incidents[b].blame) > kSimilarBlame) {
+            if (!ra.decided || !rb.decided || ia.type != ib.type || std::abs(ia.blame - ib.blame) > kSimilarBlame) {
                 continue;
             }
             ++pairs;
             // Verdicts may differ only as much as the truth justifies (a threshold can lie between them).
             auto difference = [&](int carA, Penalty penA, int carB, Penalty penB) {
-                const int sides = role(incidents[a], carA, penA) == role(incidents[b], carB, penB) ? 0 : 2;
+                const int sides = role(ia, carA, penA) == role(ib, carB, penB) ? 0 : 2;
                 return sides + std::abs(severity(penA) - severity(penB));
             };
             const int given = difference(ra.givenCar, ra.givenPenalty, rb.givenCar, rb.givenPenalty);
@@ -205,17 +226,22 @@ RaceRating rateRace(const Sim& sim) {
 
     // Safety: how fast each accident site got a sufficient flag, minus follow-up accidents.
     double reaction = 0.0;
-    for (const Accident& accident : sim.accidents()) {
-        if (accident.causedBy != 0) {
-            ++rating.followUpAccidents;
+    for (const Sim* session : {qualifying, &sim}) {
+        if (!session) {
+            continue;
         }
-        if (accident.type == AccidentType::Spin) {
-            continue; // a spun car drives on: nothing to protect
-        }
-        ++rating.accidentSites;
-        if (accident.protectedAfter >= 0.0) {
-            reaction += std::clamp((kZeroReactionTime - accident.protectedAfter) / (kZeroReactionTime - kFullReactionTime),
-                                   0.0, 1.0);
+        for (const Accident& accident : session->accidents()) {
+            if (accident.causedBy != 0) {
+                ++rating.followUpAccidents;
+            }
+            if (accident.type == AccidentType::Spin) {
+                continue; // a spun car drives on: nothing to protect
+            }
+            ++rating.accidentSites;
+            if (accident.protectedAfter >= 0.0) {
+                reaction += std::clamp((kZeroReactionTime - accident.protectedAfter) / (kZeroReactionTime - kFullReactionTime),
+                                       0.0, 1.0);
+            }
         }
     }
     const double reactionScore = rating.accidentSites > 0 ? reaction / rating.accidentSites : 1.0;
@@ -230,5 +256,11 @@ RaceRating rateRace(const Sim& sim) {
     rating.overall = std::max(0.0, rating.overall - kOverturnedCost * rating.overturned);
     return rating;
 }
+
+} // namespace
+
+RaceRating rateRace(const Sim& sim) { return rate(nullptr, sim); }
+
+RaceRating rateWeekend(const Sim& qualifying, const Sim& race) { return rate(&qualifying, race); }
 
 } // namespace uisim

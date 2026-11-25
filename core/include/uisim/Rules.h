@@ -82,6 +82,7 @@ struct RaceRules {
     double qualifyingMinTimePercent = 107.0;         // B2.4.3 b i: Q1 only
     int qualifyingImpedingGridDrop = 3;              // B4.1.1, B1.9.4: no number in the rule; stewards' practice
     int gridPenaltyBackOfGridAbove = 15;             // B2.5.4 b
+    int penaltyPointsQualifyingImpeding = 1;         // stewards' practice (Penalty Guidelines not checked): with a grid drop for impeding
 };
 
 } // namespace uisim

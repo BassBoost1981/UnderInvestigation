@@ -17,6 +17,7 @@ ExpectedVerdict expectedVerdict(const Incident& incident);
 
 struct IncidentRating {
     int incidentId = 0;
+    bool qualifying = false; // in a weekend rating: the incident is from the qualifying (ids repeat across sessions)
     ExpectedVerdict expected;
     bool decided = false;
     int givenCar = -1;
@@ -44,5 +45,8 @@ struct RaceRating {
     std::vector<IncidentRating> incidents;
 };
 RaceRating rateRace(const Sim& sim);
+// One rating for a weekend (M13.6): incidents and accident sites of both sessions, race quality from the race.
+// Incidents in `incidents` come qualifying first, each session in its own order.
+RaceRating rateWeekend(const Sim& qualifying, const Sim& race);
 
 } // namespace uisim

@@ -26,9 +26,10 @@ struct CareerPenaltyPoints {
 struct CareerRace {
     std::string name;
     std::vector<int> podium;    // entries in places 1 to 3
+    int pole = -1;              // fastest in the qualifying (M13.6), before grid drops; -1 = race without qualifying
     std::vector<int> suspended; // entries that sat this race out
     std::vector<CareerPenaltyPoints> penaltyPoints; // imposed in this race, in order of the verdicts
-    // The player's rating (Rating.h).
+    // The player's rating (Rating.h), over the weekend when it had a qualifying (rateWeekend).
     double overall = 0.0;
     double fairness = 0.0;
     double consistency = 0.0;
@@ -73,21 +74,32 @@ Entry reserveDriver(const Entry& regular);
 // Name of the driver in `place` (0-based) on the podium of a finished race: the reserve's name
 // when that car was driven by the reserve of a suspended driver.
 std::string podiumName(const std::vector<Entry>& entries, const CareerRace& race, std::size_t place);
+// Name of the driver on pole, the same way; empty for a race without qualifying.
+std::string poleName(const std::vector<Entry>& entries, const CareerRace& race);
 
 // The career after its last race, ready for the next season on the same calendar: fresh
 // championships and the next seed; penalty points and a pending suspension carry over.
 Career nextSeason(const Career& career, const SeasonCalendar& calendar, const std::vector<Entry>& entries);
 
+// A weekend (M13.6) is makeCareerQualifying, then makeCareerRace with the qualifying's startingGrid()
+// (after its lockGrid()), then finishCareerRace with both. Without a qualifying it is a race as before.
+
+// Builds the qualifying of the next weekend (makeSeasonQualifying), with the same reserve drivers as the race:
+// a suspension holds for the whole weekend.
+Sim makeCareerQualifying(const Career& career, const SeasonCalendar& calendar, const std::filesystem::path& dataDir,
+                         const std::vector<Entry>& entries, const RaceRules& rules);
+
 // Builds the next race of the career (track, weather, laps and seed as in makeSeasonRace),
-// with reserve drivers in the cars of the suspended drivers.
+// with reserve drivers in the cars of the suspended drivers. `grid` as in makeSeasonRace.
 Sim makeCareerRace(const Career& career, const SeasonCalendar& calendar, const std::filesystem::path& dataDir,
-                   const std::vector<Entry>& entries, const RaceRules& rules);
+                   const std::vector<Entry>& entries, const RaceRules& rules, const std::vector<int>& grid = {});
 
 // Books a finished race built by makeCareerRace: championship points, the rating, penalty points
-// for every penalty the player imposed (none with "no action" or a warning), then the
+// for every penalty the player imposed (none with "no action", a warning or a deleted lap), then the
 // suspensions for the following race (at the limit; the limit is then taken off the licence).
+// With the weekend's `qualifying`: the pole, one rating over both sessions and its penalty points too.
 void finishCareerRace(Career& career, const SeasonCalendar& calendar, const Sim& sim, const std::vector<Entry>& entries,
-                      const RaceRules& rules);
+                      const RaceRules& rules, const Sim* qualifying = nullptr);
 
 // Save file (JSON), written between races. Loading checks that the file fits the calendar
 // and the entry list; both throw std::runtime_error with the file name on failure.

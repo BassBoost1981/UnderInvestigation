@@ -81,8 +81,14 @@ std::vector<Entry> seasonRaceEntries(const std::vector<Entry>& entries, std::uin
                                      bool rain);
 
 // Builds race `index` of the calendar: track and weather from `dataDir`, laps from the race distance,
-// the entries with their form of the day.
+// the entries with their form of the day. `grid`: the starting grid (RaceConfig::grid), empty = by pace.
 Sim makeSeasonRace(const SeasonCalendar& calendar, int index, std::uint64_t seasonSeed, const std::filesystem::path& dataDir,
-                   const std::vector<Entry>& entries, const RaceRules& rules);
+                   const std::vector<Entry>& entries, const RaceRules& rules, const std::vector<int>& grid = {});
+
+// The qualifying of race `index` (M13.6): same track, seed and entries in the same order as the race,
+// always dry (DESIGN.md 8.8), so the form of the day leaves out the liking for rain. Its startingGrid()
+// is the `grid` of makeSeasonRace.
+Sim makeSeasonQualifying(const SeasonCalendar& calendar, int index, std::uint64_t seasonSeed,
+                         const std::filesystem::path& dataDir, const std::vector<Entry>& entries, const RaceRules& rules);
 
 } // namespace uisim
